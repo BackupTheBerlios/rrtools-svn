@@ -1,0 +1,171 @@
+#include "bamcontrol.h"
+#include "bameditor.h"
+
+
+BEGIN_EVENT_TABLE(CBamControl, wxVListBox)
+	EVT_MOUSE_EVENTS(CBamControl::OnMouseEvent)
+	EVT_KEY_DOWN(CBamControl::OnKeyDown)
+END_EVENT_TABLE()
+
+
+
+CBamControl::CBamControl(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size,
+					   long style, const wxString& name) : CODListBox(parent, id, pos, size, style, name)
+{
+	stdBitmap = NULL;
+	selBitmap = NULL;
+	cbmImage = NULL;
+	m_selRow = -1;
+	m_selCol = -1;
+	memset(charPositions, 0, sizeof(charPositions));
+	SetItemCount(0);
+}
+
+
+CBamControl::~CBamControl(void)
+{
+}
+
+
+void CBamControl::OnDrawItem(wxDC &dc, const wxRect &rect, size_t n)const
+{
+	wxMemoryDC tempDC;
+	int track, sector;
+
+	((CBamControl*)this)->MapSector(n << 4, &track, &sector);
+
+	wxString output;
+	wxString selected;
+	for (int i = 0; i < 16; i++)
+	{
+		if (track > cbmImage->GetNumTracks())
+			break;
+
+		if (cbmImage->IsSectorFree(track, sector))
+			output.Append(0x57);
+		else
+			output.Append(0x51);
+		if (m_selectedSectors.Index((track << 16) + sector) == wxNOT_FOUND)		// is the sector selected ?
+			selected.Append('0');
+		else
+			selected.Append('1');
+		if ((sector + 1) < CCbmImageBase::GetSectorCount(track, cbmImage->GetImageType()))
+			sector++;
+		else
+		{
+			track++;
+			sector = 0;
+		}
+	}
+
+	int len = output.Len();
+	for (int i = 0; i < len; i++)
+	{
+		byte pi = output.GetChar(i);
+		if ((m_selRow == (int)n && m_selCol == i) || selected.GetChar(i) == '1')
+			tempDC.SelectObject(*selBitmap);
+		else
+			tempDC.SelectObject(*stdBitmap);
+		dc.Blit(i * charWidth + rect.x, rect.y, charWidth, charHeigth, &tempDC, charPositions[pi]->x, charPositions[pi]->y);
+	}
+}
+
+
+void CBamControl::Clear()
+{
+	wxVListBox::Clear();
+}
+
+
+void CBamControl::SetImage(CCbmImageBase *image)
+{
+	int nBits = 0;
+	int numTracks;
+
+	cbmImage = image;
+	
+	numTracks = cbmImage->GetNumTracks();
+	for (int i = 1; i <= numTracks; i++)
+	{
+		nBits += CCbmImageBase::GetSectorCount(i, cbmImage->GetImageType());
+	}
+	SetItemCount(nBits / 16);
+	if ((nBits % 16) > 0)
+		SetItemCount(nBits / 16 + 1);
+}
+
+
+void CBamControl::OnMouseEvent(wxMouseEvent& event)
+{
+	int track, sector;
+
+	if (event.LeftIsDown())
+	{
+		size_t first = GetFirstVisibleLine();	// First visible row
+		int sel = event.m_y / 8;				// selected row (relative to first visible)
+		SetSelection(sel);
+		m_selRow = sel + first;					// absolute row
+		m_selCol = event.m_x / 8;
+		if (m_selCol > 16)
+			m_selCol = -1;						// Reset, when outside the editable region
+		Refresh();
+		ScrollToLine(first);
+
+		MapSector((m_selRow << 4) + m_selCol, &track, &sector);
+
+		wxString str;
+		str.Printf(_T("%d, %d"), track, sector);
+		if (m_selCol != -1)
+		{
+			m_selTrack = track;
+			m_selSector = sector;
+		}
+		else
+			m_selTrack = m_selSector = -1;
+
+		((CBamEditor*)GetParent())->m_trackSector->SetLabel(str);
+	}
+	event.Skip();
+}
+
+
+void CBamControl::OnKeyDown(wxKeyEvent& event)
+{
+	event.Skip();
+}
+
+
+void CBamControl::MapSector(int absSector, int *destTrack, int *destSector)
+{
+	int track = 1;
+
+	while (absSector > 16)
+	{
+		if (absSector < CCbmImageBase::GetSectorCount(track, cbmImage->GetImageType()))
+			break;
+		absSector -= CCbmImageBase::GetSectorCount(track, cbmImage->GetImageType());
+		track++;
+	}
+	*destTrack = track;
+	*destSector = absSector;
+}
+
+
+void CBamControl::AddFileSector(DWORD trackSector)
+{
+	m_selectedSectors.Add(trackSector);
+	m_selCol = -1;
+	m_selRow = -1;			// Reset the manual selection
+}
+
+void CBamControl::ClearFileSectors()
+{
+	m_selectedSectors.Clear();
+}
+
+
+void CBamControl::GetCbmSelection(int *track, int *sector)
+{
+	*track = m_selTrack;
+	*sector = m_selSector;
+}
