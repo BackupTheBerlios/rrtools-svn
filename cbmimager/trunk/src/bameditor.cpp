@@ -28,7 +28,7 @@
 
 ////@begin includes
 #include "bameditor.h"
-#include "hexeditor.h"
+#include "trackeditor.h"
 #include "cbmimager_id.h"
 ////@end includes
 
@@ -52,6 +52,8 @@ BEGIN_EVENT_TABLE( CBamEditor, wxDialog )
 	EVT_CLOSE( CBamEditor::OnClose )
 	EVT_CONTEXT_MENU( CBamEditor::OnContextMenu )
 	EVT_MENU(CMD_EDIT_SECTOR, CBamEditor::OnContextMenuEvent)
+	EVT_MENU(CMD_EDIT_DIR, CBamEditor::OnContextMenuEvent)
+	EVT_BAMCONTROL_SELECTION_EVENT(wxID_ANY, CBamEditor::OnSectorSelected)
 
 END_EVENT_TABLE()
 
@@ -204,12 +206,18 @@ void CBamEditor::OnContextMenu(wxContextMenuEvent& event)
 	if (event.m_id == ID_BAMCONTROL)		// sender was the BAM-Control ?
 	{
 		m_BamList->GetCbmSelection(&track, &sector);
-		if (track > 0 && sector >= 0)
+		if (track > 0 && sector >= 0)		// valid selection ?
 		{
 			wxMenu menu(0);
 			menu.Append(CMD_EDIT_SECTOR, wxT("Edit Sector"));
 			m_BamList->PopupMenu(&menu);
 		}
+	}
+	else if (event.m_id == ID_ODLISTBOX)
+	{
+		wxMenu menu(0);
+		menu.Append(CMD_EDIT_DIR, wxT("Edit Directory"));
+		m_BamList->PopupMenu(&menu);
 	}
 }
 
@@ -217,25 +225,26 @@ void CBamEditor::OnContextMenu(wxContextMenuEvent& event)
 void CBamEditor::OnContextMenuEvent(wxCommandEvent& event)
 {
 	int track, sector;
+	CTrackEditor dlg(this);
 
 	switch (event.m_id)
 	{
 		case CMD_EDIT_SECTOR:
 			m_BamList->GetCbmSelection(&track, &sector);
-			CCbmSector *sec = cbmImage->GetSector(track, sector);
-			CHexEditor dlg(this);
-			wxString label;
-			label.Printf(wxT("Hex Editor - Editing Track / Sector : %d, %d"), track, sector);
-			dlg.SetLabel(label);
-			dlg.GetHexControl()->SetCBMCharset(cbmCharset, charsetLength);
-			dlg.GetHexControl()->SetData(sec->GetRawSector(), 256);
-			if (dlg.ShowModal() == wxID_OK)
-			{
-				cbmImage->WriteSector(sec);
-			}
-			delete sec;
+			dlg.SetCbmImage(cbmImage);
+			dlg.SetCbmCharset(cbmCharset, charsetLength);
+			dlg.SetStartInfo(track, sector);
+			dlg.ShowModal();
 			break;
+		case CMD_EDIT_DIR:
+			track = cbmImage->GetBam()->GetNextTrack();
+			sector = cbmImage->GetBam()->GetNextSector();
+			dlg.SetCbmImage(cbmImage);
+			dlg.SetCbmCharset(cbmCharset, charsetLength);
+			dlg.SetStartInfo(track, sector);
+			dlg.ShowModal();
 	}
+	ReadCbmDirectory();				// perhaps we made changes in the directory, so update it
 }
 
 
@@ -354,6 +363,19 @@ void CBamEditor::OnFileSelected(wxCommandEvent& event)
 	m_BamList->ClearFileSectors();
 	m_BamList->Refresh();
 	event.Skip();
+}
+
+
+void CBamEditor::OnSectorSelected(wxCommandEvent& event)
+{
+	int track, sector;
+
+	m_BamList->GetCbmSelection(&track, &sector);
+	wxString label;
+	label.Printf(_T("%d, %d"), track, sector);
+	m_trackSector->SetLabel(label);
+
+	wxUnusedVar(event);
 }
 
 

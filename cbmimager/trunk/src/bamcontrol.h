@@ -14,6 +14,19 @@
 typedef unsigned long DWORD;
 #endif
 
+
+// Define Event for Sector-Selection
+DECLARE_EXPORTED_EVENT_TYPE(, wxEVT_BAMCONTROL_SELECTION_EVENT, 0)
+
+#define EVT_BAMCONTROL_SELECTION_EVENT(id, fn) \
+	DECLARE_EVENT_TABLE_ENTRY( \
+		wxEVT_BAMCONTROL_SELECTION_EVENT, id, wxID_ANY, \
+		(wxObjectEventFunction)(wxEventFunction) wxStaticCastEvent( wxCommandEventFunction, &fn ), \
+		(wxObject *) NULL \
+	),
+
+
+
 WX_DEFINE_ARRAY(DWORD, FileSectors);
 
 

@@ -1,5 +1,4 @@
 #pragma once
-#include <wx/vlbox.h>
 
 #include "odlistbox.h"
 

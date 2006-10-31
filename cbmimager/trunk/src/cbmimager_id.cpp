@@ -2,7 +2,7 @@
 #include "cbmimager_id.h"
 
 
-// new event type for odlistbox drags
+// new event type for odlistbox drags and selections
 DEFINE_EVENT_TYPE(wxEVT_ODLISTBOX_DRAG_EVENT)
 DEFINE_EVENT_TYPE(wxEVT_ODLISTBOX_SELECTION_EVENT)
 

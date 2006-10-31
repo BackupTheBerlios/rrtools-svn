@@ -2,6 +2,16 @@
 #include "bameditor.h"
 
 
+// Custom selection event
+DEFINE_EVENT_TYPE(wxEVT_BAMCONTROL_SELECTION_EVENT)
+
+BEGIN_DECLARE_EVENT_TYPES()
+	DECLARE_EVENT_TYPE(wxEVT_BAMCONTROL_SELECTION_EVENT, wxID_ANY)
+END_DECLARE_EVENT_TYPES()
+
+
+
+
 BEGIN_EVENT_TABLE(CBamControl, wxVListBox)
 	EVT_MOUSE_EVENTS(CBamControl::OnMouseEvent)
 	EVT_KEY_DOWN(CBamControl::OnKeyDown)
@@ -113,17 +123,21 @@ void CBamControl::OnMouseEvent(wxMouseEvent& event)
 
 		MapSector((m_selRow << 4) + m_selCol, &track, &sector);
 
-		wxString str;
-		str.Printf(_T("%d, %d"), track, sector);
-		if (m_selCol != -1)
+		// check for valid selection
+		if (track <= cbmImage->GetNumTracks() && sector < CCbmImageBase::GetSectorCount(track, cbmImage->GetImageType()))
 		{
-			m_selTrack = track;
-			m_selSector = sector;
+			if (m_selCol != -1)
+			{
+				m_selTrack = track;
+				m_selSector = sector;
+				wxCommandEvent eventCBMSel(wxEVT_BAMCONTROL_SELECTION_EVENT);
+				wxPostEvent( this, eventCBMSel);		// Send Sector-Selected Event
+			}
+			else
+				m_selTrack = m_selSector = -1;
 		}
 		else
 			m_selTrack = m_selSector = -1;
-
-		((CBamEditor*)GetParent())->m_trackSector->SetLabel(str);
 	}
 	event.Skip();
 }
@@ -131,6 +145,48 @@ void CBamControl::OnMouseEvent(wxMouseEvent& event)
 
 void CBamControl::OnKeyDown(wxKeyEvent& event)
 {
+	if (event.m_keyCode == 32)				// Space ?
+	{
+		if (m_selTrack > 0 && m_selSector >= 0)
+		{
+			if (cbmImage->IsSectorFree(m_selTrack, m_selSector))		// Toggle Sector allocation
+				cbmImage->AllocateSector(m_selTrack, m_selSector);
+			else
+				cbmImage->FreeSector(m_selTrack, m_selSector);
+			Refresh();
+		}
+	}
+	else if (event.m_keyCode >= 316 && event.m_keyCode <= 319)		// Cursor Keys ?
+	{
+		if (event.m_keyCode == 316 && m_selCol > 0)					// Left
+		{
+			m_selCol --;
+		}
+		else if (event.m_keyCode == 318 && m_selCol < 15)			// Right
+		{
+			m_selCol++;
+		}
+		else if (event.m_keyCode == 317 && m_selRow > 0)			// Up
+		{
+			m_selRow--;
+			if (m_selRow < (int)GetFirstVisibleLine())
+				ScrollToLine(m_selRow);
+		}
+		else if (event.m_keyCode == 319 && (int)GetItemCount() > (m_selRow + 1))	// Down
+		{
+			m_selRow++;
+			if ((m_selRow + 1) >= (int)GetVisibleEnd())
+				ScrollToLine(GetFirstVisibleLine() + 1);
+		}
+		MapSector((m_selRow << 4) + m_selCol, &m_selTrack, &m_selSector);			// Update Track/Sector
+
+		RefreshLine(GetSelection());
+		RefreshLine(GetSelection() + 1);
+		RefreshLine(GetSelection() - 1);		// don't refresh the whole list !
+		SetSelection(m_selRow);
+		wxCommandEvent eventCBMSel(wxEVT_BAMCONTROL_SELECTION_EVENT);
+		wxPostEvent( this, eventCBMSel);		// Send Sector-Selected Event
+	}
 	event.Skip();
 }
 
@@ -139,7 +195,7 @@ void CBamControl::MapSector(int absSector, int *destTrack, int *destSector)
 {
 	int track = 1;
 
-	while (absSector > 16)
+	while (absSector > 16)	// we're showing 16 Sectors in a row
 	{
 		if (absSector < CCbmImageBase::GetSectorCount(track, cbmImage->GetImageType()))
 			break;

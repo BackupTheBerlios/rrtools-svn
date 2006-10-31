@@ -319,7 +319,7 @@ void CBMImager::OnMenuextrasEditFile(wxCommandEvent& event)
 	}
 	catch (char *text)
 	{
-		wxMessageDialog* dialog = new wxMessageDialog(this, wxString::FromAscii(text), wxT("CBMImager"), wxOK);
+		wxMessageDialog* dialog = new wxMessageDialog(this, wxString::FromAscii(text), wxT("CBMImager"), wxOK | wxICON_ERROR);
 		dialog->ShowModal();
 		dialog->Destroy();
 		return;
@@ -350,6 +350,7 @@ void CBMImager::OnMenuextrasEditBam(wxCommandEvent& event)
 	dlg.SetCbmCharset(cbmRomCharset, CBM_ROMCHARSET_LENGTH);
 	dlg.SetCbmImage(cbmImage);
 	dlg.ShowModal();
+	ReadCbmDirectory();				// perhaps we made changes in the directory, so update it
 }
 
 
@@ -567,7 +568,7 @@ void CBMImager::OnListboxfilesDClick( wxCommandEvent& event )
 					cbmImage->InitBAM(sec->GetTrack(), sec->GetSector());			// Restore previous BAM
 					delete sec;
 					bamStack.RemoveAt(bamStack.GetCount() -1);
-					wxMessageDialog* dialog = new wxMessageDialog(this, wxString::FromAscii(text), wxT("CBMImager"), wxOK);
+					wxMessageDialog* dialog = new wxMessageDialog(this, wxString::FromAscii(text), wxT("CBMImager"), wxOK | wxICON_ERROR);
 					dialog->ShowModal();
 					dialog->Destroy();
 					return;
@@ -840,7 +841,7 @@ void CBMImager::ReadCbmDirectory()
 	}
 	catch (char* text)
 	{
-		wxMessageDialog* dialog = new wxMessageDialog(NULL, wxString::FromAscii(text), wxT("CBMImager"), wxOK);
+		wxMessageDialog* dialog = new wxMessageDialog(NULL, wxString::FromAscii(text), wxT("CBMImager"), wxOK | wxICON_ERROR);
 		dialog->ShowModal();
 		dialog->Destroy();
 		return;
@@ -905,7 +906,7 @@ void CBMImager::AddFile(wxString& filename)
 	if (!cbmImage->GetNextFreeSector(1, 0, &track, &sector))
 	{
 		wxMessageDialog* dialog = new wxMessageDialog(this,
-			wxT("Disk full"), wxT("CBMImager"), wxOK);
+			wxT("Disk full"), wxT("CBMImager"), wxOK | wxICON_ERROR);
 		dialog->ShowModal();
 		dialog->Destroy();
 		return;
@@ -919,13 +920,14 @@ void CBMImager::AddFile(wxString& filename)
 	catch (char *text)
 	{
 		wxMessageDialog* dialog = new wxMessageDialog(this,
-			wxString::FromAscii(text), wxT("CBMImager"), wxOK);
+			wxString::FromAscii(text), wxT("CBMImager"), wxOK | wxICON_ERROR);
 		dialog->ShowModal();
 		dialog->Destroy();
 		if (entry != NULL)
 			delete entry;
 		return;
 	}
+
 	entry->SetFileStartTrack(track);
 	entry->SetFileStartSector(sector);
 	readBytes = f.Read(&buffer[2], 254);
@@ -935,9 +937,10 @@ void CBMImager::AddFile(wxString& filename)
 		if (!cbmImage->AllocateSector(track, sector))
 		{
 			wxMessageDialog* dialog = new wxMessageDialog(this,
-				wxT("Disk full"), wxT("CBMImager"), wxOK);
+				wxT("Disk full"), wxT("CBMImager"), wxOK | wxICON_ERROR);
 			dialog->ShowModal();
 			dialog->Destroy();
+			entry->DeleteFile(cbmImage);			// delete incomplete File
 			delete entry;
 			return;
 		}
@@ -951,9 +954,10 @@ void CBMImager::AddFile(wxString& filename)
 			if (!cbmImage->GetNextFreeSector(track, sector, &newTrack, &newSector))
 			{
 				wxMessageDialog* dialog = new wxMessageDialog(this,
-					wxT("Disk full"), wxT("CBMImager"), wxOK);
+					wxT("Disk full"), wxT("CBMImager"), wxOK | wxICON_ERROR);
 				dialog->ShowModal();
 				dialog->Destroy();
+				entry->DeleteFile(cbmImage);		// delete incomplete File
 				delete entry;
 				return;
 			}
@@ -1003,7 +1007,7 @@ void CBMImager::ExtractFile(CCbmDirectoryEntry *entry, wxString& fileName)
 		catch (char *text)
 		{
 			wxMessageDialog* dialog = new wxMessageDialog(this,
-				wxString::FromAscii(text), wxT("CBMImager"), wxOK);
+				wxString::FromAscii(text), wxT("CBMImager"), wxOK | wxICON_ERROR);
 			dialog->ShowModal();
 			dialog->Destroy();
 			break;
@@ -1071,7 +1075,7 @@ void CBMImager::OnEvent(wxCommandEvent& event)
 							}
 							catch (char* text)
 							{
-								wxMessageDialog* dialog = new wxMessageDialog(NULL, wxString::FromAscii(text), wxT("CBMImager"), wxOK);
+								wxMessageDialog* dialog = new wxMessageDialog(NULL, wxString::FromAscii(text), wxT("CBMImager"), wxOK | wxICON_ERROR);
 								dialog->ShowModal();
 								dialog->Destroy();
 								continue;
@@ -1151,7 +1155,7 @@ void CBMImager::OnEvent(wxCommandEvent& event)
 				if (prevEntry != NULL && prevEntry->GetFileType() != CBM_DEL)		// Previous Entry must be of type DEL
 				{
 					wxMessageDialog* dialog = new wxMessageDialog(this,
-						wxT("Previous Entry must be of type DEL !"), wxT("CBMImager - can't shift up"), wxOK);
+						wxT("Previous Entry must be of type DEL !"), wxT("CBMImager - can't shift up"), wxOK | wxICON_ERROR);
 					dialog->ShowModal();
 					dialog->Destroy();
 					return;
@@ -1190,7 +1194,7 @@ void CBMImager::OnEvent(wxCommandEvent& event)
 					else
 					{
 						wxMessageDialog* dialog = new wxMessageDialog(this,
-							wxT("Failed to create Directory"), wxT("CBMImager"), wxOK);
+							wxT("Failed to create Directory"), wxT("CBMImager"), wxOK | wxICON_ERROR);
 						dialog->ShowModal();
 						dialog->Destroy();
 					}

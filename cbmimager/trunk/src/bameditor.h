@@ -26,6 +26,7 @@
 
 
 #define CMD_EDIT_SECTOR		1
+#define CMD_EDIT_DIR		2
 
 /*!
  * Forward declarations
@@ -85,6 +86,9 @@ public:
 	void OnClose(wxCloseEvent& event);
 	void OnContextMenu(wxContextMenuEvent& event);
 	void OnContextMenuEvent(wxCommandEvent& event);
+
+	void OnSectorSelected(wxCommandEvent& event);
+
 ////@end CBamEditor event handler declarations
 
 ////@begin CBamEditor member function declarations
