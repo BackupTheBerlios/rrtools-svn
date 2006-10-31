@@ -323,7 +323,6 @@ bool CCbmDirectory::SearchFile(CCbmImageBase *image, const char *fileName, bool 
 	CCbmDirectory *subDir = NULL;
 	char acBuffer[17];
 
-
 	try
 	{
 		for (i = 0; i < (int)dirEntries.Count(); i++)
