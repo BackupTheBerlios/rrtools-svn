@@ -28,6 +28,7 @@
 			src/renamedialog.cpp
 			src/renamedisk.cpp
 			src/selectimage.cpp
+			src/trackeditor.cpp
 			src/Logic/cbmdirectory.cpp
 			src/Logic/cbmdirectoryentry.cpp
 			src/Logic/cbmsector.cpp
