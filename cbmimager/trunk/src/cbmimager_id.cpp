@@ -1,6 +1,9 @@
 
 #include "cbmimager_id.h"
 
+#if WXWIN_COMPATIBILITY_EVENT_TYPES
+#error "CBMImager needs new event types"
+#endif
 
 // new event type for odlistbox drags and selections
 DEFINE_EVENT_TYPE(wxEVT_ODLISTBOX_DRAG_EVENT)
