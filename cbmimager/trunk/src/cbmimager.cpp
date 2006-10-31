@@ -166,7 +166,7 @@ void CBMImager::Init()
  */
 
 void CBMImager::CreateControls()
-{    
+{
 	long style;
 	wxSize size;
 	wxLog *ptOldLogTarget;
@@ -297,6 +297,8 @@ void CBMImager::OnMenuextrasEditFile(wxCommandEvent& event)
 	int sel;
 	int fileLength;
 	unsigned long cookie = 0;
+	char acBuffer[17];
+
 
 	sel = m_FileList->GetFirstSelected(cookie);
 	if (sel == wxNOT_FOUND)
@@ -326,7 +328,9 @@ void CBMImager::OnMenuextrasEditFile(wxCommandEvent& event)
 	}
 	CHexEditor dlg(this);
 	wxString label;
-	label.Printf(wxT("Hex Editor - Editing File : %s"), entry->GetFileName());
+
+	CCbmImageBase::PET2ASCII(entry->GetFileName(), 0, 16, acBuffer);
+	label = wxT("Hex Editor - Editing File : ") + wxString::FromAscii(acBuffer);
 	dlg.SetLabel(label);
 	dlg.GetHexControl()->SetCBMCharset(cbmRomCharset, CBM_ROMCHARSET_LENGTH);
 	dlg.GetHexControl()->SetData(buffer, fileLength);
