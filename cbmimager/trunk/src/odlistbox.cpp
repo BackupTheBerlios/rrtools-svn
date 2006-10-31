@@ -17,22 +17,52 @@ END_EVENT_TABLE()
 CODListBox::CODListBox(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size,
 					   long style, const wxString& name) : wxVListBox(parent, id, pos, size, style, name)
 {
-	stdBitmap = NULL;
-	selBitmap = NULL;
-	memset(charPositions, 0, sizeof(charPositions));
 	SetItemCount(0);
 	dragX = -1;
 	dragY = -1;
+
+	createMirrorMap();
+
+	// set the standard colors
+	tBrushStdBackground.SetColour(*wxWHITE);
+	tBrushStdForeground.SetColour(*wxBLACK);
+	tBrushSelBackground.SetColour(*wxBLUE);
+	tBrushSelForeground.SetColour(*wxWHITE);
 }
+
+
+void CODListBox::createMirrorMap(void)
+{
+	int iByteCnt;
+	int iBitCnt;
+	byte bShift;
+	byte bRes;
+
+
+	iByteCnt = 0;
+	do
+	{
+		bShift = (byte)iByteCnt;
+		iBitCnt = 0;
+		do
+		{
+			bRes <<= 1;
+			bRes |= bShift&1;
+			bShift >>= 1;
+			abMirrorTab[iByteCnt] = bRes;
+		} while( ++iBitCnt<8 );
+	} while( ++iByteCnt<256 );
+}
+
 
 CODListBox::~CODListBox(void)
 {
 	for (int i = 0; i < 256; i++)
-		if (charPositions[i] != NULL)
-			delete charPositions[i];
+//		if (charPositions[i] != NULL)
+//			delete charPositions[i];
 	Clear();
-	delete selBitmap;
-	delete stdBitmap;
+//	delete selBitmap;
+//	delete stdBitmap;
 }
 
 
@@ -63,82 +93,161 @@ void CODListBox::OnDrawBackground(wxDC& dc, const wxRect& rect, size_t n)const
 void CODListBox::OnDrawItem(wxDC &dc, const wxRect &rect, size_t n)const
 {
 	wxMemoryDC tempDC;
+	wxString *text;
+	int len;
+	int i;
+	byte pi;
+
 
 	if (n >= items.Count())
 		return;
 
 	if (this->IsSelected(n))
-		tempDC.SelectObject(*selBitmap);
-	else
-		tempDC.SelectObject(*stdBitmap);
-	wxString *text = ((CODListBox*)this)->GetItem(n);
-	int len = text->Len();
-	for (int i = 0; i < len; i++)
 	{
-		byte pi = text->GetChar(i);
+		tempDC.SelectObject(selBitmap);
+	}
+	else
+	{
+		tempDC.SelectObject(stdBitmap);
+	}
+
+	text = GetItem(n);
+	len = text->Len();
+	for (i = 0; i < len; i++)
+	{
+		pi = text->GetChar(i);
 		if (pi >= 64 && pi < 128)
 			pi -= 64;
 		if (pi >= 192)			// TODO: ARGH !! Can we get this easier ??
 			pi -= 64;
 		if (pi >= 64)
 			pi -= 64;
-		dc.Blit(i * charWidth + rect.x, rect.y, charWidth, charHeigth, &tempDC, charPositions[pi]->x, charPositions[pi]->y);
+		dc.Blit(i * charWidth + rect.x, rect.y, charWidth, charHeigth, &tempDC, pi<<3, 0);
 	}
+	tempDC.SelectObject(wxNullBitmap);
 }
 
 
 bool CODListBox::SetCBMCharset(byte *buffer, int nLength)
 {
-	int i, x, y, t;
-	byte currentValue;
-	byte color;
-	byte currentChar;
-	byte bit;
-	int nStart = nLength % 2048;
+	byte *pbInputCharset, *pbOrderedCharset;
+	wxBitmap unmaskedStd;
+	wxBitmap unmaskedSel;
+	wxMask *maskStd;
+	wxMask *maskSel;
+	wxMemoryDC srcDC;
+	wxMemoryDC dstDC;
+	int iScreenDepth;
+	int iXCnt, iYCnt;
+	byte bCharsetByte;
 
-	// when omitting the last parameter (bit-depth), the program crashes under Win ( at "PixelData data(*stdBitmap)" )
-	stdBitmap = new wxBitmap(8 * 32, 8 * 8, 24);		// 32 Chars per Row, 8 Rows height
-	wxMemoryDC memDC;
-	memDC.SelectObject(*stdBitmap);
-	memDC.Clear();
-	memDC.SelectObject(wxNullBitmap);
 
-	typedef wxPixelData<wxBitmap, wxNativePixelFormat> PixelData;
-	PixelData data(*stdBitmap);
-	if (!data)
-		return false;
-	PixelData::Iterator p(data);
-
-	currentChar = 0;
-	for (i = nStart; i < nStart + 2048; i++)
+	// allocate memory
+	pbInputCharset = (byte*)malloc(0x0800);
+	if( pbInputCharset==NULL )
 	{
-		x = (i - nStart) & 0xff;
-		y = ((i - nStart) >> 8) * 8;
-		charPositions[currentChar++] = new wxPoint(x, y);
-		for (t = 0; t < 8; t++)
-		{
-			currentValue = buffer[i + t];
-			for (bit = 128; bit > 0; bit >>= 1)
-			{
-				if ((currentValue & bit) == bit)
-					color = 0;
-				else
-					color = 255;
-				p.MoveTo(data, x, y);
-				p.Red() = color;
-				p.Green() = color;
-				p.Blue() = color;
-				x++;
-			}
-			y++;
-			x -= 8;
-		}
-		i += 7;
+		return false;
 	}
+	pbOrderedCharset = (byte*)malloc(0x0800);
+	if( pbOrderedCharset==NULL )
+	{
+		free( pbInputCharset );
+		return false;
+	}
+
+	// construct input charset
+	switch( nLength )
+	{
+	case 2048:
+	case 4096:
+		// complete charset, no startaddress
+		memcpy(pbInputCharset, buffer, 2048);
+		break;
+	case 2050:
+	case 4098:
+		// complete charset with startaddress
+		memcpy(pbInputCharset, buffer+2, 2048);
+		break;
+	default:
+		free(pbInputCharset);
+		free(pbOrderedCharset);
+		break;
+	}
+
+	// convert charset to bitmap order
+	for(iYCnt=0; iYCnt<8; ++iYCnt)
+	{
+		for(iXCnt=0; iXCnt<256; ++iXCnt)
+		{
+			bCharsetByte  = pbInputCharset[iYCnt+(iXCnt<<3)];
+			bCharsetByte ^= 0xff;
+			bCharsetByte  = abMirrorTab[bCharsetByte];
+			pbOrderedCharset[iXCnt+(iYCnt<<8)] = bCharsetByte;
+		}
+	}
+
+	// get current screen depth
+	iScreenDepth = wxDisplayDepth();
+
+	// create a bitmap from the byte array
+	wxBitmap charsetBitmapMono((const char*)pbOrderedCharset, 0x0800, 8, 1);
+
+	// free the byte arrays
+	free(pbInputCharset);
+	free(pbOrderedCharset);
+
+	// create 2 masks from the bitmap
+	maskStd = new wxMask(charsetBitmapMono);
+	maskSel = new wxMask(charsetBitmapMono);
+
+	unmaskedStd = wxBitmap(0x0800, 8, iScreenDepth);
+	unmaskedSel = wxBitmap(0x0800, 8, iScreenDepth);
+
+	stdBitmap = wxBitmap(0x0800, 8, iScreenDepth);
+	selBitmap = wxBitmap(0x0800, 8, iScreenDepth);
+
+
+	srcDC.SelectObject(unmaskedStd);
+	srcDC.SetBackground(tBrushStdForeground);
+	srcDC.Clear();
+	srcDC.SelectObject(wxNullBitmap);
+
+	srcDC.SelectObject(unmaskedSel);
+	srcDC.SetBackground(tBrushSelForeground);
+	srcDC.Clear();
+	srcDC.SelectObject(wxNullBitmap);
+
+	unmaskedStd.SetMask(maskStd);
+	unmaskedSel.SetMask(maskSel);
+
+	// clear the destination standard bitmap
+	dstDC.SelectObject(stdBitmap);
+	dstDC.SetBackground(tBrushStdBackground);
+	dstDC.Clear();
+	dstDC.SelectObject(wxNullBitmap);
+
+	// clear the destination selected bitmap
+	dstDC.SelectObject(selBitmap);
+	dstDC.SetBackground(tBrushSelBackground);
+	dstDC.Clear();
+	dstDC.SelectObject(wxNullBitmap);
+
+	// blit the standard bitmap
+	srcDC.SelectObject(unmaskedStd);
+	dstDC.SelectObject(stdBitmap);
+	dstDC.Blit(0, 0, 0x0800, 8, &srcDC, 0, 0, wxCOPY, true);
+	srcDC.SelectObject(wxNullBitmap);
+	dstDC.SelectObject(wxNullBitmap);
+
+	srcDC.SelectObject(unmaskedSel);
+	dstDC.SelectObject(selBitmap);
+	dstDC.Blit(0, 0, 0x0800, 8, &srcDC, 0, 0, wxCOPY, true);
+	srcDC.SelectObject(wxNullBitmap);
+	dstDC.SelectObject(wxNullBitmap);
 
 	charWidth = 8;
 	charHeigth = 8;
-	BuildSelectionBitmap();
+
 	return true;
 }
 
@@ -163,45 +272,6 @@ bool CODListBox::SetCBMCharset(char *fileName)
 }
 
 
-void CODListBox::BuildSelectionBitmap()
-{
-	int x, y;
-
-
-	this->selBitmap = new wxBitmap(stdBitmap->GetWidth(), stdBitmap->GetHeight(), stdBitmap->GetDepth());
-	// Make a copy of the Bitmap
-	wxMemoryDC oldDC;
-	wxMemoryDC newDC;
-	oldDC.SelectObject(*stdBitmap);		// Select original Bitmap
-	newDC.SelectObject(*selBitmap);		// Select empty Bitmap
-	newDC.Blit(0, 0, stdBitmap->GetWidth(), stdBitmap->GetHeight(), &oldDC, 0, 0);	// Paint original over empty
-	newDC.SelectObject(wxNullBitmap);
-	oldDC.SelectObject(wxNullBitmap);
-	
-	// Set the white Colors of selBitmap to blue (selected Items will be painted with this bitmap)
-	typedef wxPixelData<wxBitmap, wxNativePixelFormat> PixelData;
-	PixelData data(*selBitmap);
-	if (!data)
-		return;
-
-	int height = data.GetHeight();
-	int width = data.GetWidth();
-	PixelData::Iterator p(data);
-	for (y = 0; y < height; y++)
-	{
-		for (x = 0; x < width; x++)
-		{
-			p.MoveTo(data, x, y);
-			if (p.Red() == 255 && p.Green() == 255 && p.Blue() == 255)
-			{
-				p.Red() = 64;
-				p.Green() = 136;
-			}
-		}
-	}
-}
-
-
 void CODListBox::AddItem(wxString *text, CCbmDirectoryEntry *dirEntry)
 {
 	items.Add(new wxString(*text));		// Clone the string
@@ -216,12 +286,12 @@ void CODListBox::AddItem(wxString text, CCbmDirectoryEntry *dirEntry)
 }
 
 
-wxString *CODListBox::GetItem(int index)
+wxString *CODListBox::GetItem(int index) const
 {
 	return (wxString*)items[index];
 }
 
-CCbmDirectoryEntry* CODListBox::GetEntry(int index)
+CCbmDirectoryEntry* CODListBox::GetEntry(int index) const
 {
 	return entries[index];
 }
@@ -244,6 +314,11 @@ void CODListBox::OnMouseEvent(wxMouseEvent& event)
 		// only start dragging, if we have moved the mouse some pixels
 		if (abs(dragX - event.m_x) > 4 || abs(dragY - event.m_y) > 4)
 		{
+			wxMask *ptMask;
+			bool fOk;
+
+			ptMask = stdBitmap.GetMask();
+			fOk = stdBitmap.Ok();
 			wxCommandEvent eventODLDrag(wxEVT_ODLISTBOX_DRAG_EVENT);
 			wxPostEvent( this, eventODLDrag);
 			dragX = -1;

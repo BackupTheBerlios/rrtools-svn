@@ -15,13 +15,10 @@ END_EVENT_TABLE()
 CHexControl::CHexControl(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size,
 					   long style, const wxString& name) : CODListBox(parent, id, pos, size, style, name)
 {
-	stdBitmap = NULL;
-	selBitmap = NULL;
 	m_data = NULL;
 	m_dataLength = 0;
 	m_selRow = -1;
 	m_selCol = -1;
-	memset(charPositions, 0, sizeof(charPositions));
 	SetItemCount(0);
 }
 
@@ -84,10 +81,10 @@ void CHexControl::OnDrawItem(wxDC &dc, const wxRect &rect, size_t n)const
 		if (pi >= 64)
 			pi -= 64;
 		if (m_selRow == (int)n && (m_colHex == i || m_colAscii == i))
-			tempDC.SelectObject(*selBitmap);
+			tempDC.SelectObject(selBitmap);
 		else
-			tempDC.SelectObject(*stdBitmap);
-		dc.Blit(i * charWidth + rect.x, rect.y, charWidth, charHeigth, &tempDC, charPositions[pi]->x, charPositions[pi]->y);
+			tempDC.SelectObject(stdBitmap);
+		dc.Blit(i * charWidth + rect.x, rect.y, charWidth, charHeigth, &tempDC, pi<<3, 0, wxSET, true);
 	}
 }
 

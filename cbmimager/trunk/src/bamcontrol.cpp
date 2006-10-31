@@ -22,12 +22,9 @@ END_EVENT_TABLE()
 CBamControl::CBamControl(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size,
 					   long style, const wxString& name) : CODListBox(parent, id, pos, size, style, name)
 {
-	stdBitmap = NULL;
-	selBitmap = NULL;
 	cbmImage = NULL;
 	m_selRow = -1;
 	m_selCol = -1;
-	memset(charPositions, 0, sizeof(charPositions));
 	SetItemCount(0);
 }
 
@@ -73,10 +70,10 @@ void CBamControl::OnDrawItem(wxDC &dc, const wxRect &rect, size_t n)const
 	{
 		byte pi = output.GetChar(i);
 		if ((m_selRow == (int)n && m_selCol == i) || selected.GetChar(i) == '1')
-			tempDC.SelectObject(*selBitmap);
+			tempDC.SelectObject(selBitmap);
 		else
-			tempDC.SelectObject(*stdBitmap);
-		dc.Blit(i * charWidth + rect.x, rect.y, charWidth, charHeigth, &tempDC, charPositions[pi]->x, charPositions[pi]->y);
+			tempDC.SelectObject(stdBitmap);
+		dc.Blit(i * charWidth + rect.x, rect.y, charWidth, charHeigth, &tempDC, pi<<3, 0);
 	}
 }
 

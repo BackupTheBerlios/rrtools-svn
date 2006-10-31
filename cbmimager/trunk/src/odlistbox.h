@@ -33,27 +33,35 @@ public:
 
 	bool SetCBMCharset(byte *buffer, int nLength);
 	bool SetCBMCharset(char *fileName);
-	void BuildSelectionBitmap();
 
 	void AddItem(wxString *text, CCbmDirectoryEntry *dirEntry);
 	void AddItem(wxString text, CCbmDirectoryEntry *dirEntry);
-	wxString *GetItem(int index);
-	CCbmDirectoryEntry *GetEntry(int index);
+	wxString *GetItem(int index) const;
+	CCbmDirectoryEntry *GetEntry(int index) const;
 
 	void OnItemSelected(wxCommandEvent& event);
 
 	virtual void OnMouseEvent(wxMouseEvent& event);
-    
+
+private:
+	void createMirrorMap(void);
+	byte abMirrorTab[0x0100];
+
 protected:
-	wxBitmap *stdBitmap;			// Source of BitmapCharset (items are displayed in normal state)
-	wxBitmap *selBitmap;			// items are selected in selected State
+	wxBitmap stdBitmap;			// Source of BitmapCharset (items are displayed in normal state)
+	wxBitmap selBitmap;			// items are selected in selected State
 	int charsPerRow;				// Number of chars per Row
 	int charHeigth;					// Height of each char
 	int charWidth;					// Height of each char
-	wxPoint *charPositions[256];	// Position of each char in the Bitmap
+//	wxPoint *charPositions[256];	// Position of each char in the Bitmap
 	ItemArray items;				// Stores the Items of the ListBox
 	EntryArray entries;				// Stores the DirectoryEntries for each item
 	int dragX, dragY;				// to slow down the start of the drag-process
+
+	wxBrush tBrushStdBackground;
+	wxBrush tBrushStdForeground;
+	wxBrush tBrushSelBackground;
+	wxBrush tBrushSelForeground;
 
 	DECLARE_EVENT_TABLE()
 };
