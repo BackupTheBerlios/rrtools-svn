@@ -29,6 +29,32 @@ CCbmImageBase* CCbmImageBase::Create(CbmImageType type)
 	}
 }
 
+wxString CCbmImageBase::PET2String(const unsigned char *text, int startOffset, int length)
+{
+	wxString str;
+	const unsigned char *pcCnt, *pcEnd;
+	unsigned char bPetscii;
+	char cAscii;
+
+
+	// get pointer to start and end of the PETSCII string
+	pcCnt = text + startOffset;
+	pcEnd = pcCnt + length;
+
+	// convert all bytes to ascii
+	while( pcCnt<pcEnd )
+	{
+		bPetscii = *(pcCnt++);
+		if (bPetscii == 160)				// $A0
+			break;
+		cAscii = bPetscii;
+
+		str += cAscii;
+	}
+
+	return str;
+}
+
 char* CCbmImageBase::PET2ASCII(const unsigned char *text, int startOffset, int length, char* dest)
 {
 	static byte temp[64];		// TODO: prevent buffer overrun

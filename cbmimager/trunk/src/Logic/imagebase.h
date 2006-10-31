@@ -49,6 +49,7 @@ public:
 	wxString GetImagePath();
 
 	static CCbmImageBase *Create(CbmImageType type);
+	static wxString PET2String(const unsigned char *text, int startOffset, int length);
 	static char* PET2ASCII(const unsigned char *text, int startOffset, int length, char* dest);
 	static unsigned char* ASCII2PET(const char *text, int length, unsigned char* dest);
 	static int GetSectorCount(int trackNumber, CbmImageType imageType);

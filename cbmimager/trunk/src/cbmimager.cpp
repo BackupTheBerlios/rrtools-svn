@@ -297,7 +297,6 @@ void CBMImager::OnMenuextrasEditFile(wxCommandEvent& event)
 	int sel;
 	int fileLength;
 	unsigned long cookie = 0;
-	char acBuffer[17];
 
 
 	sel = m_FileList->GetFirstSelected(cookie);
@@ -329,8 +328,7 @@ void CBMImager::OnMenuextrasEditFile(wxCommandEvent& event)
 	CHexEditor dlg(this);
 	wxString label;
 
-	CCbmImageBase::PET2ASCII(entry->GetFileName(), 0, 16, acBuffer);
-	label = wxT("Hex Editor - Editing File : ") + wxString::FromAscii(acBuffer);
+	label = wxT("Hex Editor - Editing File : ") + CCbmImageBase::PET2String(entry->GetFileName(), 0, 16);
 	dlg.SetLabel(label);
 	dlg.GetHexControl()->SetCBMCharset(cbmRomCharset, CBM_ROMCHARSET_LENGTH);
 	dlg.GetHexControl()->SetData(buffer, fileLength);
@@ -690,18 +688,13 @@ void CBMImager::OnODListDrag(wxCommandEvent& event)
 			wxString str;
 			wxString ext;
 			wxString sIllChars;
-			char acBuffer[17];
 			int iCnt;
 			wxFileName fileName;
 			int i;
 
 
 			// convert the filename to a string
-			CCbmImageBase::PET2ASCII(entry->GetFileName(), 0, 16, acBuffer);
-			for(iCnt=0; iCnt<16; ++iCnt)
-			{
-				str += acBuffer[iCnt];
-			}
+			str = CCbmImageBase::PET2String(entry->GetFileName(), 0, 16);
 
 			// get the forbidden chars for a filename
 			sIllChars = fileName.GetForbiddenChars();
@@ -1123,9 +1116,12 @@ void CBMImager::OnEvent(wxCommandEvent& event)
 			if (sel != wxNOT_FOUND)
 			{
 				unsigned char aucBuffer[17];
-				char acBuffer[17];
+				wxString sFileName;
+
+
 				CCbmDirectoryEntry *entry = m_FileList->GetEntry(sel);
-				CRenameDialog dialog(this, wxString::FromAscii(CCbmImageBase::PET2ASCII(entry->GetFileName(), 0, 16, acBuffer)));
+				sFileName = CCbmImageBase::PET2String(entry->GetFileName(), 0, 16);
+				CRenameDialog dialog(this, sFileName);
 				if (dialog.ShowModal() == wxID_OK)
 				{
 					entry->SetFileName(CCbmImageBase::ASCII2PET(dialog.GetText().mb_str(), 16, aucBuffer));
@@ -1138,10 +1134,17 @@ void CBMImager::OnEvent(wxCommandEvent& event)
 			if (m_FileList->GetSelectedCount() == 1)		// should always be 1, because this is checked in OnContextMenu()
 			{
 				unsigned char aucBuffer[17];
-				char acBuffer[17];
+				wxString sDiskName;
+				wxString sDiskId;
+
+
+				sDiskName = CCbmImageBase::PET2String(cbmDir->GetDiskName(), 0, 16);
+				sDiskId = CCbmImageBase::PET2String(cbmDir->GetDiskID(), 0, 5);
+
 				CRenameDisk dlg(this);
-				dlg.m_DiskName->SetValue(wxString::FromAscii(CCbmImageBase::PET2ASCII(cbmDir->GetDiskName(), 0, 16, acBuffer)));
-				dlg.m_DiskID->SetValue(wxString::FromAscii(CCbmImageBase::PET2ASCII(cbmDir->GetDiskID(), 0, 5, acBuffer)));
+				dlg.m_DiskName->SetValue(sDiskName);
+				dlg.m_DiskID->SetValue(sDiskId);
+
 				if (dlg.ShowModal() == wxID_OK)
 				{
 					cbmImage->SetDiskName(CCbmImageBase::ASCII2PET(dlg.m_DiskName->GetValue().mb_str(), 16, aucBuffer));

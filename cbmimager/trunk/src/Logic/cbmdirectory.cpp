@@ -321,7 +321,7 @@ bool CCbmDirectory::SearchFile(CCbmImageBase *image, const char *fileName, bool 
 	int i;
 	bool result = false;
 	CCbmDirectory *subDir = NULL;
-	char acBuffer[17];
+
 
 	try
 	{
@@ -338,8 +338,7 @@ bool CCbmDirectory::SearchFile(CCbmImageBase *image, const char *fileName, bool 
 			else
 			{
 				wxString name;
-				CCbmImageBase::PET2ASCII(entry->GetFileName(), 0, 16, acBuffer);
-				name = wxString::FromAscii(acBuffer);
+				name = CCbmImageBase::PET2String(entry->GetFileName(), 0, 16);
 				if (partial)
 				{
 					if (name.Contains(wxString::FromAscii(fileName)) == 1)
