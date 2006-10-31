@@ -43,37 +43,49 @@ void CHexControl::OnDrawItem(wxDC &dc, const wxRect &rect, size_t n)const
 {
 	wxMemoryDC tempDC;
 	int startIndex;
+	wxString output;
+	wxString bTemp;
+	int i;
+	int len;
+	byte pi;
+
 
 	if (m_dataLength == 0)
+	{
 		return;
+	}
 
 	((CHexControl*)this)->UpdateColPositions();
 
 	startIndex = n * 8;
-	wxString output;
-	output.Printf(_T("%04X  "), startIndex);
-	for (int i = 0; i < 8; i++)
+	output.Printf(wxT("%04X  "), startIndex);
+	for (i = 0; i < 8; i++)
 	{
 		if (startIndex + i >= m_dataLength)
+		{
 			break;
-		wxString bTemp;
-		bTemp.Printf(_T("%02X "), m_data[startIndex + i]);
+		}
+		bTemp.Printf(wxT("%02X "), m_data[startIndex + i]);
 		output.Append(bTemp);
 	}
 	while (output.Len() < 31)
+	{
 		output.Append(_T(" "));
+	}
 
-	for (int i = 0; i < 8; i++)
+	for (i = 0; i < 8; i++)
 	{
 		if (startIndex + i >= m_dataLength)
+		{
 			break;
+		}
 		output.Append(m_data[startIndex + i]);
 	}
 
-	int len = output.Len();
-	for (int i = 0; i < len; i++)
+	len = output.Len();
+	for (i = 0; i < len; i++)
 	{
-		byte pi = output.GetChar(i);
+		pi = output.GetChar(i);
 		if (pi >= 64 && pi < 128)
 			pi -= 64;
 		if (pi >= 192)			// TODO: ARGH !! Can we get this easier ??
@@ -81,10 +93,14 @@ void CHexControl::OnDrawItem(wxDC &dc, const wxRect &rect, size_t n)const
 		if (pi >= 64)
 			pi -= 64;
 		if (m_selRow == (int)n && (m_colHex == i || m_colAscii == i))
+		{
 			tempDC.SelectObject(selBitmap);
+		}
 		else
+		{
 			tempDC.SelectObject(stdBitmap);
-		dc.Blit(i * charWidth + rect.x, rect.y, charWidth, charHeigth, &tempDC, pi<<3, 0, wxSET, true);
+		}
+		dc.Blit(i * charWidth + rect.x, rect.y, charWidth, charHeigth, &tempDC, pi<<3, 0);
 	}
 }
 
