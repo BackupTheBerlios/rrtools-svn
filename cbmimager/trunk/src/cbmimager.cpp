@@ -649,7 +649,7 @@ void CBMImager::OnContextMenu(wxContextMenuEvent& event)
 			menu.Enable(CMD_ADD_FILES, false);
 		}
 		// Directorys can't be extracted
-		if (m_FileList->IsSelected(i) && m_FileList->GetEntry(i) != NULL && m_FileList->GetEntry(i)->GetFileType() != CBM_DIR)
+		if (m_FileList->IsSelected(i) && m_FileList->GetEntry(i) != NULL && m_FileList->GetEntry(i)->GetFileType() == CBM_DIR)
 		{
 			menu.Enable(CMD_EXTRACT_FILES, false);
 		}
