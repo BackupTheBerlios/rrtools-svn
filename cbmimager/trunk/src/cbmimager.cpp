@@ -666,11 +666,11 @@ void CBMImager::OnODListDrag(wxCommandEvent& event)
 	unsigned long cookie = 0;
 	int sel;
 	CCbmDirectoryEntry *entry = NULL;
+	wxString sTempDir;
+
 
 	wxUnusedVar(event);
 
-	wxStandardPaths *stdPaths = (wxStandardPaths*)&wxStandardPaths::Get();
-	wxString dir = stdPaths->GetDataDir();
 	wxFileDataObject fData;
 	
 	sel = m_FileList->GetFirstSelected(cookie);
@@ -678,7 +678,7 @@ void CBMImager::OnODListDrag(wxCommandEvent& event)
 	{
 		return;						// Nothing to Drag
 	}
-	
+
 	itemUnderCursor = -1;
 	while (sel != wxNOT_FOUND)
 	{
@@ -692,6 +692,29 @@ void CBMImager::OnODListDrag(wxCommandEvent& event)
 			wxFileName fileName;
 			int i;
 
+
+			// does a temp dir already exist?
+			if( sTempDir.IsEmpty()==true )
+			{
+				// no -> create a new temp file
+				fileName.AssignTempFileName(wxT("CBMImager_"));
+				// test result
+				if( fileName.IsOk()==false )
+				{
+					// failed to create the temp file, cannot drag anything
+					return;
+				}
+				// delete the temp file
+				wxRemoveFile(fileName.GetFullPath());
+				// remove any extension of the temp file name
+				fileName.ClearExt();
+				// set the filename as a new directory element
+				fileName.AppendDir( fileName.GetName() );
+				// get the complete path
+				sTempDir = fileName.GetPath();
+				// create the new directory
+				wxMkdir(sTempDir);
+			}
 
 			// convert the filename to a string
 			str = CCbmImageBase::PET2String(entry->GetFileName(), 0, 16);
@@ -708,7 +731,7 @@ void CBMImager::OnODListDrag(wxCommandEvent& event)
 
 			ext = wxString::FromAscii(entry->GetFileTypeString());
 
-			fileName.Assign(dir, str, ext);
+			fileName.Assign(sTempDir, str, ext);
 			wxString fname = fileName.GetFullPath().Trim();
 			ExtractFile(entry, fileName.GetFullPath().Trim());
 			fData.AddFile(fname);
