@@ -36,7 +36,7 @@ void CODListBox::createMirrorMap(void)
 	int iByteCnt;
 	int iBitCnt;
 	byte bShift;
-	byte bRes;
+	byte bRes = 0;
 
 
 	iByteCnt = 0;
@@ -180,7 +180,10 @@ bool CODListBox::SetCBMCharset(byte *buffer, int nLength)
 		for(iXCnt=0; iXCnt<256; ++iXCnt)
 		{
 			bCharsetByte  = pbInputCharset[iYCnt+(iXCnt<<3)];
+
+#ifndef __WIN32__								// don't invert the charset on Win32 systems (my personal flavor)
 			bCharsetByte ^= 0xff;
+#endif
 			bCharsetByte  = abMirrorTab[bCharsetByte];
 			pbOrderedCharset[iXCnt+(iYCnt<<8)] = bCharsetByte;
 		}
