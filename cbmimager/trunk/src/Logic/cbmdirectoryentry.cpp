@@ -1,6 +1,12 @@
 
 #include "cbmdirectoryentry.h"
 
+#include "wx/wx.h"
+
+
+WX_DEFINE_ARRAY(DWORD, FileSectors);
+
+
 
 CCbmDirectoryEntry::~CCbmDirectoryEntry(void)
 {
@@ -15,9 +21,11 @@ CCbmDirectoryEntry::CCbmDirectoryEntry()
 	startSector = 255;
 	startTrack = 0;
 	closedProperly = true;
+	scratchProtected = false;
 	fileType = NULL;
 	fileName[0] = 0;
 }
+
 
 /// <summary>
 /// Creates a new DirectoryEntry from Sector-Data at the specified offset
@@ -27,6 +35,7 @@ CCbmDirectoryEntry::CCbmDirectoryEntry()
 CCbmDirectoryEntry::CCbmDirectoryEntry(CCbmImageBase *image, CCbmSector *sectorData, int startOffset)
 {
 	int track, sector;
+	bool cont = true;
 
 	diskImage = image;
 	dirTrack = sectorData->GetTrack();
@@ -45,15 +54,26 @@ CCbmDirectoryEntry::CCbmDirectoryEntry(CCbmImageBase *image, CCbmSector *sectorD
 	track = startTrack;
 	sector = startSector;
 	blocksUsedReal = 0;
-	while (track > 0)
+
+	FileSectors sectorArray;
+	while (track > 0 && cont)
 	{
+		sectorArray.Add((track << 16) + sector);
 		CCbmSector *sec = image->GetSector(track, sector);
 		track = sec->GetNextTrack();
 		sector = sec->GetNextSector();
+		if (sectorArray.Index((track << 16) + sector) != wxNOT_FOUND)	// circular link encountered
+		{
+			cont = false;
+			sec->SetNextTrack(0);
+			sec->SetNextSector(255);
+			image->WriteSector(sec);				// Fix the Link to prevent freezing when deleting or extracting the file
+		}
 		delete sec;
 		blocksUsedReal++;
 	}
 }
+
 
 void CCbmDirectoryEntry::SetFileType(byte type)
 {
@@ -83,6 +103,7 @@ void CCbmDirectoryEntry::SetFileType(byte type)
 			break;
 	}
 	closedProperly = (typeCode & CBM_CLOSED) != 0;
+	scratchProtected = (typeCode & CBM_PROTECTED) != 0;
 }
 
 
@@ -140,7 +161,7 @@ void CCbmDirectoryEntry::DeleteFile(CCbmImageBase *image)
 	startTrack = 0;
 	startSector = 255;
 	SetFileType(CBM_DEL + CBM_CLOSED);
-	fileName[0] = 0;
+	memset(fileName, '-', 16);								// Set Filename to "----------------"
 	Write(image);
 }
 
@@ -308,9 +329,19 @@ bool CCbmDirectoryEntry::GetClosedProperly()
 	return closedProperly;
 }
 
+bool CCbmDirectoryEntry::GetScratchProtected()
+{
+	return scratchProtected;
+}
+
 void CCbmDirectoryEntry::SetClosedProperly(bool value)
 {
 	closedProperly = value;
+}
+
+void CCbmDirectoryEntry::SetScratchProtected(bool value)
+{
+	scratchProtected = value;
 }
 
 

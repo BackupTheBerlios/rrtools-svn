@@ -18,6 +18,7 @@ typedef enum CBMFileType
 	CBM_USR = 3,
 	CBM_REL = 4,
 	CBM_DIR = 6,
+	CBM_PROTECTED = 0x40,
 	CBM_CLOSED = 0x80
 };
 
@@ -96,8 +97,10 @@ public:
 	void SetBlocksUsed(int value);
 
 	bool GetClosedProperly();
-
 	void SetClosedProperly(bool value);
+
+	bool GetScratchProtected();
+	void SetScratchProtected(bool value);
 
 	int GetEntryIndex();
 
@@ -118,6 +121,7 @@ private:
 	char* fileType;
 	byte typeCode;
 	bool closedProperly;
+	bool scratchProtected;
 	int offsetInImage;				// Offset in the D64 Image, where the current Entry begins
 	int startTrack, startSector;	// Track / Sector of File
 	int dirTrack, dirSector;		// Track / Sector of the Directory, where this entry resides

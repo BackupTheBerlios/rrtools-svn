@@ -878,6 +878,11 @@ void CBMImager::ReadCbmDirectory()
 		item.Append(wxT("\" "));
 		item.Append(wxString::FromAscii(entry->GetFileTypeString()));
 
+		if (entry->GetScratchProtected())
+		{
+			item.Append(wxT("<"));
+		}
+
 		if (!entry->GetClosedProperly())
 		{
 			item.Append(wxT("*"));
