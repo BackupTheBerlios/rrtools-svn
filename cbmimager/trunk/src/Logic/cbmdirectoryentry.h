@@ -116,12 +116,15 @@ public:
 	// Allows moving the Entry in the specified Image to the specified position
 	void SetImageOffset(CCbmImageBase *diskImage, int dirTrack, int dirSector, int entryOffset);
 
+	bool WasCircularLinked();
+
 private:
 	CCbmImageBase *diskImage;
 	char* fileType;
 	byte typeCode;
 	bool closedProperly;
 	bool scratchProtected;
+	bool circularLinked;
 	int offsetInImage;				// Offset in the D64 Image, where the current Entry begins
 	int startTrack, startSector;	// Track / Sector of File
 	int dirTrack, dirSector;		// Track / Sector of the Directory, where this entry resides

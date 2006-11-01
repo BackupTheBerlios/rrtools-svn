@@ -65,6 +65,7 @@ CCbmDirectoryEntry::CCbmDirectoryEntry(CCbmImageBase *image, CCbmSector *sectorD
 		if (sectorArray.Index((track << 16) + sector) != wxNOT_FOUND)	// circular link encountered
 		{
 			cont = false;
+			circularLinked = true;					// mark file as bad
 			sec->SetNextTrack(0);
 			sec->SetNextSector(255);
 			image->WriteSector(sec);				// Fix the Link to prevent freezing when deleting or extracting the file
@@ -380,3 +381,8 @@ void CCbmDirectoryEntry::SetImageOffset(CCbmImageBase *diskImage, int dirTrack, 
 	offsetInImage = diskImage->GetSectorOffset(dirTrack, dirSector) + entryOffset;
 }
 
+
+bool CCbmDirectoryEntry::WasCircularLinked()
+{
+	return circularLinked;
+}

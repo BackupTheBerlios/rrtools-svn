@@ -243,8 +243,8 @@ void CBMImager::CreateControls()
 	//wxLog::SetLogLevel(wxLog::wxLOG_Verbose);
 
 
-	wxLogMessage(_("Welcome to CBMImager Vx.y"));
-	wxLogMessage(_("(c) 2006 Uncle Tom/DRM."));
+	wxLogMessage(_("Welcome to CBMImager V 0.1"));
+	wxLogMessage(_("(w) 2006 Uncle Tom/DRM + Doc Bacardi/DRM."));
 
 	m_FileList->SetCBMCharset(cbmRomCharset, CBM_ROMCHARSET_LENGTH);
 
@@ -821,6 +821,7 @@ void CBMImager::ReadCbmDirectory()
 {
 	const unsigned char *pcString;
 	int iCnt;
+	wxArrayString badFiles;						// for storing the names of "bad" files
 
 	if (cbmImage == NULL)
 		return;
@@ -888,9 +889,40 @@ void CBMImager::ReadCbmDirectory()
 			item.Append(wxT("*"));
 		}
 		m_FileList->AddItem(item, entry);
+
+		// Check for bad files and store their names
+		if (entry->WasCircularLinked())
+		{
+			badFiles.Add(wxString::FromAscii((char*)entry->GetFileName()));
+		}
 	}
 	str.Printf(wxT("%d BLOCKS FREE"), cbmImage->GetBlocksFree());
 	m_FileList->AddItem(str, NULL);
+
+	// Display a message, when bad files were encountered
+	if (badFiles.Count() > 0)
+	{
+		wxString msg;
+		msg.Printf(wxT("WARNING: Circular link detected in following File(s) :"));
+		for (i = 0; i < (int)badFiles.Count(); i++)
+		{
+#ifdef __WIN32__
+			msg.Append(wxString::FromAscii("\r\n"));		// Newline
+#else
+			msg.Append(wxString::FromAscii("\r"));			// is this correct ?
+#endif
+			msg.Append(badFiles[i]);
+		}
+#ifdef __WIN32__
+		msg.Append(wxString::FromAscii("\r\n"));		// Newline
+#else
+		msg.Append(wxString::FromAscii("\r"));			// is this correct ?
+#endif
+		msg.Append(wxT("This may be a corrupted Image. The error is fixed, you should re-save this file"));
+		wxMessageDialog* dialog = new wxMessageDialog(this, msg, wxT("CBMImager"), wxOK | wxICON_WARNING);
+		dialog->ShowModal();
+		dialog->Destroy();
+	}
 }
 
 
