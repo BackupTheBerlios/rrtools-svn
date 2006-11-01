@@ -341,7 +341,7 @@ void CBamEditor::ReadCbmDirectory()
 
 void CBamEditor::OnFileSelected(wxCommandEvent& event)
 {
-	DWORD *fileSectors;
+	unsigned long *fileSectors;
 
 	int sel = m_FileList->GetSelection();
 	if (sel != wxNOT_FOUND)
@@ -379,9 +379,9 @@ void CBamEditor::OnSectorSelected(wxCommandEvent& event)
 }
 
 
-int CBamEditor::GetFileSectors(CCbmDirectoryEntry *entry, DWORD **buffer)
+int CBamEditor::GetFileSectors(CCbmDirectoryEntry *entry, unsigned long **buffer)
 {
-	DWORD *fileSectors = new DWORD[entry->GetBlocksUsedReal()];		// Allocate list
+	unsigned long *fileSectors = new unsigned long[entry->GetBlocksUsedReal()];		// Allocate list
 	int i = 0, track, sector;
 	track = entry->GetFileStartTrack();
 	sector = entry->GetFileStartSector();

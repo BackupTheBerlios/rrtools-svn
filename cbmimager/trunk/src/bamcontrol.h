@@ -10,9 +10,6 @@
 
 #define ID_BAMCONTROL 10011
 
-#ifdef __UNIX__
-typedef unsigned long DWORD;
-#endif
 
 
 // Define Event for Sector-Selection
@@ -27,7 +24,7 @@ DECLARE_EXPORTED_EVENT_TYPE(, wxEVT_BAMCONTROL_SELECTION_EVENT, 0)
 
 
 
-WX_DEFINE_ARRAY(DWORD, FileSectors);
+WX_DEFINE_ARRAY(unsigned long, FileSectors);
 
 
 class CBamControl :
@@ -49,7 +46,7 @@ public:
 	void SetImage(CCbmImageBase *image);
 	// Maps an absolute SectorNumber to the "real" track and sector
 	void MapSector(int absSector, int *track, int *sector);
-	void AddFileSector(DWORD trackSector);
+	void AddFileSector(unsigned long trackSector);
 	void ClearFileSectors();
 	void GetCbmSelection(int *track, int *sector);
 

@@ -119,6 +119,8 @@ public:
 	bool WasCircularLinked();
 
 private:
+	void Init(void);
+
 	CCbmImageBase *diskImage;
 	char* fileType;
 	byte typeCode;

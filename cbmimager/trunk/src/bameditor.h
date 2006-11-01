@@ -106,7 +106,7 @@ public:
 	void SetCbmCharset(byte* buffer, int nLength);
 	void ReadCbmDirectory();
 	CBamControl *GetBamControl();
-	int GetFileSectors(CCbmDirectoryEntry *entry, DWORD **buffer);
+	int GetFileSectors(CCbmDirectoryEntry *entry, unsigned long **buffer);
 
 ////@begin CBamEditor member variables
     CBamControl* m_BamList;

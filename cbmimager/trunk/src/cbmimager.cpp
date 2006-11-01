@@ -845,6 +845,9 @@ void CBMImager::ReadCbmDirectory()
 	const unsigned char *pcString;
 	int iCnt;
 	wxArrayString badFiles;						// for storing the names of "bad" files
+	int iEntryCnt;
+	int i;
+
 
 	if (cbmImage == NULL)
 		return;
@@ -888,8 +891,8 @@ void CBMImager::ReadCbmDirectory()
 		str.Printf(wxT("0 \"..\""));
 		m_FileList->AddItem(str, NULL);
 	}
-	int cnt = cbmDir->GetEntryCount();
-	for (int i = 0; i < cnt; i++)
+	iEntryCnt = cbmDir->GetEntryCount();
+	for (i = 0; i < iEntryCnt; i++)
 	{
 		CCbmDirectoryEntry *entry = cbmDir->GetEntry(i);
 		wxString item;
@@ -932,14 +935,14 @@ void CBMImager::ReadCbmDirectory()
 #ifdef __WIN32__
 			msg.Append(wxString::FromAscii("\r\n"));		// Newline
 #else
-			msg.Append(wxString::FromAscii("\r"));			// is this correct ?
+			msg.Append(wxString::FromAscii("\n"));			// is this correct ?
 #endif
 			msg.Append(badFiles[i]);
 		}
 #ifdef __WIN32__
 		msg.Append(wxString::FromAscii("\r\n"));		// Newline
 #else
-		msg.Append(wxString::FromAscii("\r"));			// is this correct ?
+		msg.Append(wxString::FromAscii("\n"));			// is this correct ?
 #endif
 		msg.Append(wxT("This may be a corrupted Image. The error is fixed, you should re-save this file"));
 		wxMessageDialog* dialog = new wxMessageDialog(this, msg, wxT("CBMImager"), wxOK | wxICON_WARNING);

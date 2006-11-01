@@ -4,7 +4,7 @@
 #include "wx/wx.h"
 
 
-WX_DEFINE_ARRAY(DWORD, FileSectors);
+WX_DEFINE_ARRAY(unsigned long, FileSectors);
 
 
 
@@ -16,14 +16,7 @@ CCbmDirectoryEntry::~CCbmDirectoryEntry(void)
 // Creates an empty Directory-Entry
 CCbmDirectoryEntry::CCbmDirectoryEntry()
 {
-	blocksUsed = 0;
-	blocksUsedReal = 0;
-	startSector = 255;
-	startTrack = 0;
-	closedProperly = true;
-	scratchProtected = false;
-	fileType = NULL;
-	fileName[0] = 0;
+	Init();
 }
 
 
@@ -36,6 +29,10 @@ CCbmDirectoryEntry::CCbmDirectoryEntry(CCbmImageBase *image, CCbmSector *sectorD
 {
 	int track, sector;
 	bool cont = true;
+
+
+	Init();
+
 
 	diskImage = image;
 	dirTrack = sectorData->GetTrack();
@@ -73,6 +70,25 @@ CCbmDirectoryEntry::CCbmDirectoryEntry(CCbmImageBase *image, CCbmSector *sectorD
 		delete sec;
 		blocksUsedReal++;
 	}
+}
+
+
+void CCbmDirectoryEntry::Init(void)
+{
+	blocksUsed = 0;
+	blocksUsedReal = 0;
+	dirSector = startSector = 255;
+	dirTrack = startTrack = 0;
+	closedProperly = true;
+	scratchProtected = false;
+	circularLinked = false;
+	fileType = NULL;
+	fileName[0] = 0;
+
+	entryIndex = -1;
+	entryStartOffset = -1;
+	offsetInImage = 0;
+	typeCode = 0;
 }
 
 

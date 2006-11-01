@@ -204,7 +204,7 @@ void CBamControl::MapSector(int absSector, int *destTrack, int *destSector)
 }
 
 
-void CBamControl::AddFileSector(DWORD trackSector)
+void CBamControl::AddFileSector(unsigned long trackSector)
 {
 	m_selectedSectors.Add(trackSector);
 	m_selCol = -1;
