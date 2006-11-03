@@ -1,0 +1,49 @@
+<?xml version="1.0" ?>
+
+<makefile>
+	<include file="presets/wx.bkl"/>
+	<include file="presets/simple.bkl"/>
+
+	<set var="BUILDDIR">output</set>
+
+	<exe id="CBMImager" template="wx">
+		<app-type>gui</app-type>
+		<debug-info>on</debug-info> 
+		<dirname>bin</dirname>
+		<include>src</include>
+		<include>src/Logic</include>
+		<sources>
+			src/app_resources.cpp
+			src/bamcontrol.cpp
+			src/bameditor.cpp
+			src/cbmimager.cpp
+			src/cbmimager_id.cpp
+			src/cbmimagerapp.cpp
+			src/filednd.cpp
+			src/filesearcher.cpp
+			src/hexcontrol.cpp
+			src/hexeditor.cpp
+			src/newimage.cpp
+			src/odlistbox.cpp
+			src/renamedialog.cpp
+			src/renamedisk.cpp
+			src/selectimage.cpp
+			src/trackeditor.cpp
+			src/Logic/cbmdirectory.cpp
+			src/Logic/cbmdirectoryentry.cpp
+			src/Logic/cbmsector.cpp
+			src/Logic/d16image.cpp
+			src/Logic/d64image.cpp
+			src/Logic/dfiimage.cpp
+			src/Logic/imagebase.cpp
+		</sources>
+		<if cond="PLATFORM_WIN32=='1'">
+			<define>__WIN32__</define>
+		</if>
+		<if cond="PLATFORM_UNIX=='1'">
+			<define>__UNIX__</define>
+		</if>
+	</exe>
+
+</makefile>
+
