@@ -1,0 +1,211 @@
+              
+LE3 = $E3
+LFB = $FB
+LFC = $FC
+LFD = $FD
+LFE = $FE
+LFF = $FF
+
+;--------------------------------------
+      
+Depack:
+	JSR LC0AC
+	STA LC0C8+1
+	JSR LC0AC
+	STA LC0C8+2
+	JSR LC0AC
+	STA LC0AB
+	JSR LC0AC
+	STA LC082+1
+	LDY #$0
+	STY LC02C+1
+LC029:
+	JSR LC0AC
+LC02C:
+	LDY #$0
+	STA Table,Y
+	INC LC02C+1
+	CPY #$62
+	BNE LC029
+LC038:
+	LDX #$0
+LC03F:
+	JSR LC0F9
+	TAY
+LC043:
+	JSR LC0AC
+	JSR LC0C8
+	DEY
+	BNE LC043
+LC04C:
+	JSR LC0FB
+	STA LFB
+LC051:
+	LDY #$20
+	JSR LC0FB
+	PHA
+	TAY
+	CPY #$2
+	BNE LC05D
+LC05C:
+	DEX
+LC05D:
+	JSR LC0D7
+	DEY
+	BEQ LC088
+LC063:
+	DEY
+	BNE LC068
+LC066:
+	ADC #$9
+LC068:
+	TAY
+LC069:
+	LDX Table+$40,Y
+	JSR LC0DA
+	ADC Table+$4d,Y
+	TAX
+	LDA LFD
+	ADC #$0
+	CPY #$9
+	BCS LC086
+LC07B:
+	ADC Table+$5a,Y
+	BNE LC086
+LC080:
+	LDY #$8
+LC082:
+	CPX #$0
+	BEQ LC069
+LC086:
+	TAY
+	TXA
+LC088:
+	SEC
+	ADC LC0C8+1
+	STA LFE
+	TYA
+	ADC LC0C8+2
+	STA LFF
+	PLA
+	TAX
+	LDY #$0
+	LDA (LFE),Y
+	DEC LFF
+LC09C:
+	JSR LC0C8
+	DEY
+	LDA (LFE),Y
+	DEX
+	BNE LC09C
+LC0A5:
+	DEC LFB
+	BNE LC051
+LC0A9:
+	BEQ LC03F
+
+;--------------------------------------
+
+LC0AB:
+	.BYTE $0
+
+;--------------------------------------
+
+LC0AC:
+	PHP
+	inc 1
+	JSR GetByte
+	bcs Error
+	dec 1
+	PLP
+	RTS
+
+Error:
+	lda #$02
+	sta $d021
+Error0:
+	inc $d020
+	jmp Error0
+
+;--------------------------------------
+
+LC0C8:
+	STA $FFFF
+	LDA LC0C8+1
+	BNE LC0D3
+LC0D0:
+	DEC LC0C8+2
+LC0D3:
+	DEC LC0C8+1
+	RTS
+
+;--------------------------------------
+
+LC0D7:
+	INX
+	INX
+LC0D9:
+	INX
+LC0DA:
+	LDA #$0
+	STA LFC
+	STA LFD
+	TXA
+	BEQ LC0F8
+LC0E3:
+	ASL LC0AB
+	BNE LC0EF
+LC0E8:
+	JSR LC0AC
+	ROL
+	STA LC0AB
+LC0EF:
+	ROL LFC
+	ROL LFD
+	DEX
+	BNE LC0E3
+LC0F6:
+	LDA LFC
+LC0F8:
+	RTS
+
+;--------------------------------------
+
+LC0F9:
+	LDY #$0
+LC0FB:
+	INY
+	JSR LC0D9
+	BEQ LC0FB
+LC101:
+	CPY #$31
+	BEQ LC10F
+LC105:
+	LDX Table-1,Y
+	JSR LC0DA
+	ADC Table-1+$10,Y
+	RTS
+LC10F:
+	PLA
+	PLA
+	RTS
+
+;--------------------------------------
+
+Table:
+	.DB 0,0,0,0,0,0,0,0
+	.DB 0,0,0,0,0,0,0,0
+	.DB 0,0,0,0,0,0,0,0
+	.DB 0,0,0,0,0,0,0,0
+	.DB 0,0,0,0,0,0,0,0
+	.DB 0,0,0,0,0,0,0,0
+	.DB 0,0,0,0,0,0,0,0
+	.DB 0,0,0,0,0,0,0,0
+	.DB 0,0,0,0,0,0,0,0
+	.DB 0,0,0,0,0,0,0,0
+	.DB 0,0,0,0,0,0,0,0
+	.DB 0,0,0,0,0,0,0,0
+	.DB 0,0,0
+
+;--------------------------------------
+

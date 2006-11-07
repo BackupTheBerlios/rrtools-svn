@@ -1,0 +1,14 @@
+SubDir TOP demo simple ;
+
+#--------------------------------------
+
+AddProjectFiles Jamfile ;
+AddProjectFiles dload.cfg simple.src ;
+AddProjectFiles readme.txt ;
+AddProjectFiles test.prg ;
+
+#--------------------------------------
+
+Demo simple : [ FGristFiles test.prg ] ;
+
+#--------------------------------------

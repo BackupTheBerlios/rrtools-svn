@@ -1,0 +1,249 @@
+;--------------------------------------
+;
+; TLoad 1581
+;
+;--------------------------------------
+
+T81LdS:
+    .PSEUDOPC $0300
+
+    .(	;*** T81 ***
+
+
+LdTrk		= $0f
+LdSec		= $10
+LdDp		= $4001
+LdZp		= 11
+LdBSLo          = $0600
+LdBSHi          = $0700
+
+;--------------------------------------
+
+LdDGet:
+	ldy #3
+LdDGet0:
+	lda #4		; 2
+LdDGet1:
+	bit LdDp	; 4
+	.SAFEBRA(beq,LdDGet1)	; 2
+	lda LdDp	; 4
+	lsr		; 2
+	rol LdZp	; 5
+			;---
+			;19
+
+	lda #4		; 2
+LdDGet2:
+	bit LdDp	; 4
+	.SAFEBRA(bne,LdDGet2)	; 2
+	lda LdDp	; 4
+	lsr		; 2
+	rol LdZp	; 5
+			;---
+			;19
+	dey
+	.SAFEBRA(bpl,LdDGet0)
+	lda LdZp
+	rts
+
+
+LdBSend:
+	lda LdBSLo,x
+	sta LdDp
+LdBSend0:
+	bit LdDp
+	.SAFEBRA(bpl,LdBSend0)           ;bpl LdBSend0
+	asl
+	and #$0a
+	sta LdDp
+LdBSend1:
+	bit LdDp
+	.SAFEBRA(bmi,LdBSend1)           ;bmi LdBSend1
+	lda LdBSHi,x
+	sta LdDp
+LdBSend2:
+	bit LdDp
+	.SAFEBRA(bpl,LdBSend2)           ;bpl LdBSend2
+	asl
+	and #$0a
+	sta LdDp
+LdBSend3:
+	bit LdDp
+	.SAFEBRA(bmi,LdBSend3)           ;bmi LdBSend3
+	rts
+
+LdTab1:
+	.SAFETABLE_START
+	.DB $0f,$07,$0d,$05,$0b,$03,$09,$01
+	.DB $0e,$06,$0c,$04,$0a,$02,$08,$00
+	.SAFETABLE_END
+
+;--------------------------------------
+
+@0T81_LdrStart:
+	ldy #0
+LdMkTab2:
+	ldx #$10
+LdMkMod:
+	lda LdTab1
+LdMkTab1:
+	sta LdBSHi,y
+	iny
+	dex
+	bne LdMkTab1
+	inc LdMkMod+1
+	tya
+	bne LdMkTab2
+LdMkTab4:
+	lda LdTab1,x
+	sta LdBSLo,y
+	dex
+	bpl LdMkTab3
+	ldx #$0f
+LdMkTab3:
+	dey
+	bne LdMkTab4
+
+
+restart:
+	ldx #2		; motor off
+	lda #$8a
+	jsr $FF54
+	lda #0
+	sta $26		; dos motor off flag
+	lda #8
+	sta LdDp
+	jsr idlLoop
+continue:
+	lda #0
+	sta LdDp
+	jsr LdDGet
+	tax
+	jsr LdDGet
+	cpx #0
+	bne Ld1
+	tay
+	beq Ld2
+	dey
+	bne restart
+@0T81_PatchFD:
+	ldx $022B		; will be patched for FD by DLoad.src
+                                ;(ldx $0054)
+	lda #3                  ; will be patched for FD by DLoad.src
+                                ;(lda $56)
+Ld1:
+	cpx $022c               ; will be patched for FD by DLoad.src
+                                ;(cpx $0051)
+	bcs LdErr
+	;cmp $75, cmp $52 (can be 0 -> no bcs )
+	;bcs LdErr
+
+	stx LdTrk
+	sta LdSec
+	lda $4000
+	and #$9F
+	ora #$40
+	sta $4000
+	ldx #2
+	lda #$80
+	jsr $FF54
+	lda 4			; FD does not give return-code in accu
+	cmp #2
+	bcs LdErr
+LdSend:
+	bit LdDp
+	.SAFEBRA(bmi,LdSend)		;bmi LdSend
+	ldy #0
+	ldx #0
+	jsr LdBSend
+LdSLoop:
+	ldx $0500,y
+	jsr LdBSend
+	iny
+	bne LdSLoop
+	beq continue
+Ld2:
+	cli
+	rts
+
+LdErr:
+	ldx #1
+	jsr LdBSend
+LdrStartP:
+	bpl continue			; bra
+
+;--------------------------------------
+
+idlLoop:
+#ifdef LdFlag_LedFlash
+
+	Led:
+		ldy #$80
+	Led0:
+		lda $4000
+		and #$BF
+		ora #$20
+		sta $4000
+		lda #1
+		ldx #$2F
+	Led1:
+		bit LdDp
+		bne Led6
+		dex
+	Led2:
+		cpx #0
+		bne Led1
+		lda $4000
+		eor #$60
+		sta $4000
+		lda #1
+	Led3:
+		bit LdDp
+		bne Led6
+		dex
+		bpl Led3
+		dey
+		bne Led0
+		ldx Led2+1
+		lda LedDir
+		bne Led4
+		inx
+		cpx #$2F
+		bcc Led5
+	Led4:
+		dex
+		stx LedDir
+	Led5:
+		stx Led2+1
+		jmp Led
+
+	Led6:
+		rts
+
+	LedDir:
+		.DB 0
+
+#else
+
+		lda $4000
+		and #$BF
+                ora #$20
+		sta $4000
+
+		lda #1
+	atnw:
+		bit LdDp
+		beq atnw
+		rts
+
+#endif
+
+;--------------------------------------
+
+    .)	;*** T81 ***
+
+T81LdEnd:
+    .REALPC
+T81LdE:
+
+

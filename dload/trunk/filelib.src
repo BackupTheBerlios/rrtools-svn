@@ -1,0 +1,26 @@
+
+;--------------------------------------
+
+FileZp_SecAdr		= $b9
+FileZp_Device		= $ba
+FileZp_90		= $90
+
+;--------------------------------------
+
+File_SetName		= $ffbd
+File_Open		= $f3d5
+File_OpenSendName	= $f3fa
+File_Close		= $f642
+
+File_Listen		= $ffb1
+File_Talk		= $ffb4
+File_SecListen		= $ff93
+File_SecTalk		= $ff96
+File_UnListen		= $ffae
+File_UnTalk		= $ffab
+
+File_ReadByte		= $ffa5
+File_WriteByte		= $ffa8
+
+;--------------------------------------
+

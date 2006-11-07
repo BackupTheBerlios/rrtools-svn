@@ -1,0 +1,104 @@
+;--------------------------------------
+; DLoad
+;--------------------------------------
+
+#macro SAFEBRA(mne,dst)
+{
+	#if >(*+2) != >{dst}
+	#error "branch crosses page porder!"
+	#else
+	{mne} {dst}
+	#endif
+}
+
+#macro SAFETABLE_START
+{
+	__SAFETABLE_ADR__ := *
+}
+
+#macro SAFETABLE_END
+{
+	#if >* != >__SAFETABLE_ADR__
+	#error "table crosses page border!"
+	#endif
+}
+
+;--------------------------------------
+
+#include "dload.cfg"
+
+	.SETPET
+
+#segdef "code", $0800-$d000
+#segdef "zp", $02-$ff, zp
+
+#outfile @, "code", startadr
+
+	.segment "code"
+	* = LdCfgInitCodeStart
+
+	.segment "zp"
+	* = LdCfgInitZPStart
+
+;--------------------------------------
+
+#include "filelib.src"
+
+;--------------------------------------
+
+#include "dload.src"
+#include "iff.src"
+
+#include "i41.src"
+#ifndef LdFlag_7Xis41
+#include "i71.src"
+#endif
+#include "i81.src"
+#include "ihd.src"
+
+#include "ldcommon.src"
+#include "ldserial.src"
+#include "ld41.src"
+#include "ldhd.src"
+#include "ldmmc.src"
+
+#if (Ld41End-LdLoc > $0200 )
+#error "LdLoc + Ld41 larger than $200 bytes: ", Ld41End-LdLoc-$0200
+#endif
+
+#if (LdHDEnd-LdLoc > $0200 )
+#error "LdLoc + LdHD larger than $200 bytes: ", LdHDEnd-LdLoc-$0200
+#endif
+
+#if (LdMMCEnd-LdLoc > $0200 )
+#error "LdLoc + LdMMC larger than $200 bytes: ", LdMMCEnd-LdLoc-$0200
+#endif
+
+#include "t41.src"
+#ifndef LdFlag_7Xis41
+#include "t71.src"
+#endif
+#include "t81.src"
+#include "thd.src"
+
+;--------------------------------------
+; print some Info for this build
+
+#print "LdCommon size  :", LdCommonPsyEnd-LdCommonPsyStart
+#print "LdSerial size  :", LdSerialPsyEnd-LdSerialPsyStart
+#print "Ld41 size      :", Ld41End-LdSerialEnd
+#print "LdHD size      :", LdHDEnd-LdSerialEnd
+#print "LdMMC size     :", LdMMCEnd-LdCommonEnd
+#print "Ld41 total     :", Ld41End-LdLoc
+#print "LdHD total     :", LdHDEnd-LdLoc
+#print "LdMMC total    :", LdMMCEnd-LdLoc
+#print "T41 size       :", T41LdE-T41LdS
+#ifndef LdFlag_7Xis41
+#print "T71 size       :", T71LdE-T71LdS
+#endif
+#print "T81 size       :", T81LdE-T81LdS
+#print "THD size       :", THDLdE-THDLdS
+
+;--------------------------------------
+
+

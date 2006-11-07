@@ -1,0 +1,13 @@
+SubDir TOP demo decrunch_pucrunch_link ;
+
+#--------------------------------------
+
+AddProjectFiles Jamfile ;
+AddProjectFiles dload.cfg puc_ld.src pucdecrunch.src ;
+AddProjectFiles readme.txt ;
+
+#--------------------------------------
+
+Demo puc_ld : testpuc.prg ;
+
+#--------------------------------------

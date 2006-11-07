@@ -1,0 +1,14 @@
+SubDir TOP demo decrunch_abcruncher20 ;
+
+#--------------------------------------
+
+AddProjectFiles Jamfile ;
+AddProjectFiles ab20_d.src abdecrunch.src dload.cfg ;
+AddProjectFiles hackpack4.prg readme.txt ;
+AddProjectFiles test.prg ;
+
+#--------------------------------------
+
+Demo ab20_d : [ FGristFiles test.prg ] ;
+
+#--------------------------------------

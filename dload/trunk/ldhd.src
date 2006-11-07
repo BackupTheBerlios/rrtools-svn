@@ -1,0 +1,74 @@
+;--------------------------------------
+;
+; Loader CMD HD, CMD FD, 1581, 157x
+;
+;--------------------------------------
+
+LdHDPsyStart:
+    .PSEUDOPC LdSerialEnd
+
+    .(	;*** LdHD ***
+
+;--------------------------------------
+
+@0LdHDReadBlock:
+	jsr LdSerial_LdSendH
+        ldy #0
+        sty $dd00
+LdHDGet:
+	bit $dd00
+	bmi LdHDGet
+	jsr LdHDGByte
+	bne LdHDErr
+        ;tay
+LdHDGLoop:
+	jsr LdHDGByte
+	sta LdBf,y
+	iny
+	bne LdHDGLoop
+	ldx LdBf+1
+	lda LdBf
+	beq LdHDGet0
+	ldx #$FF
+LdHDGet0:
+	dex
+	stx LdChk
+	clc
+	rts
+
+LdHDErr:
+	sec
+	rts
+
+LdHDGByte:
+	ldx #8
+	lda $dd00
+	stx $dd00
+	lsr
+	lsr
+	ldx #0
+	eor $dd00
+	stx $dd00
+	lsr
+	lsr
+	ldx #8
+	eor $dd00
+	stx $dd00
+	lsr
+	lsr
+	sta LdGZp
+	ldx #0
+	lda $dd00
+	stx $dd00
+	and #$c0
+	eor LdGZp
+	rts
+
+;--------------------------------------
+
+    .)	;*** LdHD ***
+
+LdHDEnd:
+    .REALPC
+
+

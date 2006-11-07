@@ -1,0 +1,517 @@
+;--------------------------------------
+;
+; Loader MMC64
+;
+;--------------------------------------
+
+LdMMCPsyStart:
+    .PSEUDOPC LdCommonEnd
+
+    .(	;*** LdMMC ***
+
+;--------------------------------------
+; the MMC64 registers and some bit defs
+
+MMC64_Data			= $df10
+
+MMC64_Ctrl			= $df11
+MMC64_Ctrl_ExtRomActive		= $01
+MMC64_Ctrl_nCS			= $02
+MMC64_Ctrl_Clk8Mhz		= $04
+MMC64_Ctrl_ClockportDF20	= $08
+MMC64_Ctrl_FlashMode		= $10
+MMC64_Ctrl_DisableExtRom	= $20
+MMC64_Ctrl_ReadMode		= $40
+MMC64_Ctrl_DisableMMC		= $80
+
+MMC64_Status			= $df12
+MMC64_Status_Busy		= $01
+MMC64_Status_Game		= $02
+MMC64_Status_Exrom		= $04
+MMC64_Status_CardAway		= $08
+MMC64_Status_WriteProtect	= $10
+MMC64_Status_FlashMode		= $20
+
+MMC64_Id			= $df13
+
+;--------------------------------------
+
+MMC_IdleByte = $ff
+
+; normal mode
+;MMCBaseMode = MMC64_Ctrl_DisableExtRom
+
+; debugging mode
+MMCBaseMode = MMC64_Ctrl_ExtRomActive|MMC64_Ctrl_ClockportDF20
+
+;--------------------------------------
+
+LdMMC_ClusterHandlerPatchSize = $57
+
+@0LdMMC64_SkipClustersLo = LdGZp
+@0LdMMC64_SkipClustersHi = LdChk
+
+;--------------------------------------
+; X: track
+; Y: sector
+
+@0LdMMCReadBlock:
+    .(
+	; track 0 is special, it always results in the dirst dir block
+	txa
+	bne notDirBlock
+@0Patch_LdMMC64_DirTrack:
+	ldx #0
+@0Patch_LdMMC64_DirSec:
+	ldy #0
+notDirBlock:
+
+	; save number of blocks to skip
+	tya
+	sta LdMMC64_SkipClustersLo
+
+	; get block offset in the cluster
+@0Patch_LdMMC64_ClusterMask:
+	and #0
+	sta LdMMC64_SelfmodClusterOffset+1
+
+	; get number of clusters to skip
+	dex
+	txa
+@0Patch_LdMMC64_BlockClusterShift_0:
+	ldx #0
+shiftBlocks:
+	lsr
+	ror LdMMC64_SkipClustersLo
+	dex
+	bne shiftBlocks
+    .)
+
+@0LdMMC_ClusterHandlerPatchStart:
+	.DSB LdMMC_ClusterHandlerPatchSize, $ea
+@0LdMMC_ClusterHandlerPatchEnd:
+
+	; get first block of the new cluster
+@0LdMMC_getFirstBlock:
+    .(
+	; at this point both temp vars LdGZp and LdChk are 0
+
+	LdMMC64_FirstClusterBlock1 = LdGZp
+	LdMMC64_FirstClusterBlock2 = LdChk
+
+	; A: cluster lo
+	; X: cluster hi
+	stx LdMMC64_FirstClusterBlock1
+
+@0Patch_LdMMC64_BlockClusterShift_1:
+	ldx #0
+shiftBlock:
+	asl
+	rol LdMMC64_FirstClusterBlock1
+	rol LdMMC64_FirstClusterBlock2
+	dex
+	bne shiftBlock
+
+	; carry is always clear here
+@0Patch_LdMMC64_FirstDataBlock0:
+	adc #0
+	sta LdMMC64_PatchFirstClusterBlock0+1
+	lda LdMMC64_FirstClusterBlock1
+@0Patch_LdMMC64_FirstDataBlock1:
+	adc #0
+	sta LdMMC64_PatchFirstClusterBlock1+1
+	lda LdMMC64_FirstClusterBlock2
+@0Patch_LdMMC64_FirstDataBlock2:
+	adc #0
+	sta LdMMC64_PatchFirstClusterBlock2+1
+    .)
+
+@0LdMMC_sameCluster:
+	; add cluster offset to first block in cluster
+	clc
+@0LdMMC64_PatchFirstClusterBlock0:
+	lda #0
+LdMMC64_SelfmodClusterOffset:
+	adc #0
+	tay
+@0LdMMC64_PatchFirstClusterBlock1:
+	lda #0
+	adc #0
+	tax
+@0LdMMC64_PatchFirstClusterBlock2:
+	lda #0
+	adc #0
+
+	jsr LdMMC64_ReadBlock
+	ldx LdBf+1
+	lda LdBf
+	beq Get0
+	ldx #$ff
+Get0:
+	dex
+	stx LdChk
+@0MMC64_error:
+	rts
+
+
+; A: block 2
+; X: block 1
+; Y: block 0
+@0LdMMC64_ReadBlock:
+	pha
+
+	; init bus
+	lda #MMC_IdleByte
+	sta MMC64_Data
+
+	; select card
+	lda #MMCBaseMode|MMC64_Ctrl_Clk8Mhz
+	sta MMC64_Ctrl
+
+	; send command
+	lda #($40|$11)
+	sta MMC64_Data
+	pla
+	sta MMC64_Data
+	txa
+	sta MMC64_Data
+	tya
+	and #$fe
+	sta MMC64_Data
+	ldx #0
+	stx MMC64_Data	; address lsb
+	lda #MMC_IdleByte
+	; note: don't remove this sta, even if WaitForReply also sends
+	; MMC_IdleByte to MMC64_Data, or the result will be read too soon.
+	sta MMC64_Data	; cmd crc (not used, but must be MMC_IdleByte for some stupid cards)
+
+	; switch to read mode
+	lda #MMCBaseMode|MMC64_Ctrl_Clk8Mhz|MMC64_Ctrl_ReadMode
+	sta MMC64_Ctrl
+
+	; get response for command (0x00 = ok)
+	jsr LdMMC64_WaitForReply
+	dex
+	bne error
+	; x is 0 now
+
+	; wait for start of data (0xfe)
+	jsr LdMMC64_WaitForReply
+	inx
+	bne error
+	; x is 0 now
+
+	tya
+	lsr
+	bcc get0
+	jsr skipData
+get0:
+	lda MMC64_Data
+	sta LdBf,x
+	inx
+	bne get0
+	bcs get1
+	jsr skipData
+get1:
+
+	; ignore crc16
+	ldx #$fe
+	jsr skipData
+
+	lda #MMCBaseMode|MMC64_Ctrl_nCS|MMC64_Ctrl_Clk8Mhz
+	sta MMC64_Ctrl
+
+@0LdMMC64_LedOff:
+	; LedOff must return carry clear!
+@0LdMMC64_SwitchOff:
+	clc
+	rts
+
+skipData:
+	lda MMC64_Data
+	inx
+	bne skipData
+	rts
+
+
+;--------------------------------------
+; LdMMC64_WaitForReply
+;
+; Wait for a response from the MMC.
+;
+; Parameter:
+;   -
+;
+; Return:
+;   Akku: Response byte
+;
+
+; *** MUST NOT USE Y REG ***
+LdMMC64_WaitForReply:
+wait:
+	ldx MMC64_Data
+	inx
+	beq wait
+error:
+	sec
+	rts
+
+
+
+
+; shutup / wakeup routines only set $dd00 and $dd02 to
+; get the same results as the serial versions
+
+@0LdMMC64_ShutUp:
+#ifndef LdFlag_SetDD02
+	lda $dd02
+	eor #3
+	sta $dd00
+#endif
+	lda #3
+	sta $dd02
+	rts
+
+
+#ifndef LdFlag_SetDD02
+@0LdMMC64_WakeUp:
+	lda $dd00
+	and #3
+	eor #$3f
+	sta $dd02
+	lda #0
+	sta $dd00
+	rts
+#else
+@0LdMMC64_WakeUp = UnSetDD02_restoreDD02
+#endif
+
+    .)	;*** LdMMC ***
+
+LdMMCEnd:
+    .REALPC
+
+
+
+
+;--------------------------------------
+
+; cluster handler
+
+LdMMC64_ClusterHandlerStart_Plain:
+
+    .PSEUDOPC(LdMMC_ClusterHandlerPatchStart)
+
+    .(
+	sta LdMMC64_SkipClustersHi
+	; x is 0 here
+	; make LastFatBlock invalid
+	dex
+	stx LdMMC64_PatchLastFatBlock1+1
+
+	ldy LdMMC64_SkipClustersLo
+@0LdMMC64_PatchLastSkipClustersLo:
+	cpy #0
+	bne differentCluster
+@0LdMMC64_PatchLastSkipClustersHi:
+	cmp #0
+	beq LdMMC_sameCluster
+differentCluster:
+	sty LdMMC64_PatchLastSkipClustersLo+1
+	sta LdMMC64_PatchLastSkipClustersHi+1
+
+	; skip clusters, begin at first cluster
+@0Patch_LdMMC64_FirstClusterLo:
+	lda #0
+@0Patch_LdMMC64_FirstClusterHi:
+	ldx #0
+
+skipClusters:
+	; A: cluster lo
+	; X: cluster hi
+
+	; test number of clusters to skip
+	; zero -> no more clusters to skip, branch to 'LdMMC_getFirstBlock'
+	ldy LdMMC64_SkipClustersLo
+	bne clusterNot0
+	ldy LdMMC64_SkipClustersHi
+	beq LdMMC_getFirstBlock
+	dec LdMMC64_SkipClustersHi
+clusterNot0:
+	dec LdMMC64_SkipClustersLo
+
+	; get offset for FAT block and save it
+	asl
+	pha
+
+	; fat block adr bit#0 is in carry now, bit 1-8 are in x
+	txa
+	rol
+	; A: fat block adr bit 0-7, carry: bit 8
+
+	; save bit 8
+	php
+	clc
+@0Patch_LdMMC64_FATStartBlock0:
+	adc #0
+	tay
+	; get prev. saved processor status
+	pla
+	; extract carry bit
+	and #1
+@0Patch_LdMMC64_FATStartBlock1:
+	adc #0
+	tax
+@0Patch_LdMMC64_FATStartBlock2:
+	lda #0
+	adc #0
+
+@0LdMMC64_PatchLastFatBlock0:
+	cpy #0
+	bne newFatBlock
+@0LdMMC64_PatchLastFatBlock1:
+	cpx #0
+	clc
+	beq oldFatBlock
+
+	sty LdMMC64_PatchLastFatBlock0+1
+	stx LdMMC64_PatchLastFatBlock1+1
+
+newFatBlock:
+	jsr LdMMC64_ReadBlock
+oldFatBlock:
+	; restore offset for FAT block, this must be done before checking the result from readBlock to restore the stack
+	pla
+	tay
+	; test readBlock errorflag
+	bcs MMC64_error
+	; carry is clear here
+
+	; get offset inside fat block
+	lda LdBf,y
+	ldx LdBf+1,y
+
+	; more clusters to skip left?
+	bcc skipClusters	; bra
+    .)
+
+#if * > LdMMC_ClusterHandlerPatchEnd
+#error "LdMMC_ClusterHandler_Plain exceeds patch area, adapt LdMMC_ClusterHandlerSize to", *-LdMMC_ClusterHandlerPatchStart
+#endif
+
+#print "LdMMC_ClusterHandler_Plain", *-LdMMC_ClusterHandlerPatchStart
+    .REALPC
+
+LdMMC64_ClusterHandlerEnd_Plain:
+
+;--------------------------------------
+
+LdMMC64_ClusterHandlerStart_RR:
+
+    .PSEUDOPC(LdMMC_ClusterHandlerPatchStart)
+
+    .(
+	; x is 0 here
+	ldy LdMMC64_SkipClustersLo
+@0LdMMC64RR_PatchLastSkipClustersLo:
+	cpy #0
+	bne differentCluster
+@0LdMMC64RR_PatchLastSkipClustersHi:
+	cmp #0
+	beq LdMMC_sameCluster
+differentCluster:
+	sty LdMMC64RR_PatchLastSkipClustersLo+1
+	sta LdMMC64RR_PatchLastSkipClustersHi+1
+
+
+	; save skip clusters hi
+searchBank:
+	cpy #$fe/2
+	sbc #0
+	bcc setBank
+	pha
+	tya
+	sbc #$fe/2
+	tay
+	pla
+	inx
+	bne searchBank	; bra
+
+rrBankTable:
+	.DB %00100010
+	.DB %00101010
+	.DB %00110010
+	.DB %00111010
+
+setBank:
+	lda rrBankTable,x
+	sta $de00
+
+	; x is now 0-7
+egdelay:
+	inx
+	bne egdelay
+	stx LdMMC64_SkipClustersHi
+
+	tya
+	asl
+	tay
+
+	lda $de02,y
+	ldx $de03,y
+    .)
+
+#if * > LdMMC_ClusterHandlerPatchEnd
+#error "LdMMC_ClusterHandler_RR exceeds patch area, adapt LdMMC_ClusterHandlerSize to", *-LdMMC_ClusterHandlerPatchStart
+#endif
+
+#print "LdMMC_ClusterHandler_RR", *-LdMMC_ClusterHandlerPatchStart
+    .REALPC
+
+LdMMC64_ClusterHandlerEnd_RR:
+
+;--------------------------------------
+
+LdMMC64_ClusterHandlerStart_Cnt:
+
+    .PSEUDOPC(LdMMC_ClusterHandlerPatchStart)
+
+    .(
+LdMMC64Cnt_PatchArea_Start:
+	; x is 0 here
+	stx LdMMC64_SkipClustersHi
+
+	; add offset to start cluster
+	; save skip clusters hi
+	tax
+	; get skip clusters lo
+	lda LdMMC64_SkipClustersLo
+	clc
+	; add the start cluster lo
+@0Patch_LdMMC64Cnt_FirstClusterLo:
+	adc #0
+	; and save the value in y
+	tay
+	; restore skip cluster hi
+	txa
+	; and add start cluster hi
+@0Patch_LdMMC64Cnt_FirstClusterHi:
+	adc #0
+	; result hi must be in X
+	tax
+	; result lo must be in A
+	tya
+    .)
+
+#if * > LdMMC_ClusterHandlerPatchEnd
+#error "LdMMC_ClusterHandler_Cnt exceeds patch area, adapt LdMMC_ClusterHandlerSize to", *-LdMMC_ClusterHandlerPatchStart
+#endif
+
+#print "LdMMC_ClusterHandler_Cnt", *-LdMMC_ClusterHandlerPatchStart
+    .REALPC
+
+LdMMC64_ClusterHandlerEnd_Cnt:
+
+;--------------------------------------
+
+

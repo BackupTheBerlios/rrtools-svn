@@ -1,0 +1,528 @@
+;--------------------------------------
+;
+; TLoad 1571
+;
+;--------------------------------------
+
+T71LdS:
+    .PSEUDOPC $0300
+
+    .(	;*** T71 ***
+
+;--------------------------------------
+
+LdZp		= $06
+LdWFlag		= $07
+LdTrys		= $08
+LdTrk		= $09
+LdSec		= $0a
+LdATrk		= $0b
+LdPengu		= $0c
+
+LdHeadFlag	= $46
+
+ZpGcr0		= $52
+ZpGcr1		= $53
+ZpGcr2		= $54
+CheckSum	= $55
+
+LdXTmp		= $8b
+LdYTmp		= $8c
+
+LdDp		= $1800
+
+LdBSLo		= $0200
+LdBSHi          = $0700
+Buffer          = $0600
+
+;--------------------------------------
+
+#macro t71LdWBy
+{
+    .(
+Wait:
+	bvc Wait
+	clv
+    .)
+}
+
+;--------------------------------------
+
+LdReset:
+        lda #%00000000
+	sta $180f
+	jmp ($FFFC)
+
+Restart:
+        lda $1c00
+        and #$f3
+        sta $1c00       ;Motor and Led off
+        and #$10        ;New
+	sta LdPengu	;New
+	lda #$10	;hauptsache <>0
+	sta LdWFlag	;New
+
+	lda #8
+	sta LdDp
+	lda #1
+WaitHand:
+	bit LdDp
+	bne WaitHand
+LdGL0:
+	lda #0
+	sta LdDp
+	jsr LdDGet
+	tax
+	jsr LdDGet
+	cpx #0
+	bne Ld1
+	tay
+        beq LdReset
+        dey
+        bne Restart
+        ldx #18
+        lda #1
+Ld1:
+	stx LdTrk
+	sta LdSec
+
+@0T71_Patch70MaxTrk:
+	cpx #71
+	bcs LdErr
+	ldy #$20
+	cpx #36
+	ror LdHeadFlag
+	bpl Head0
+	cmp $942c-36,x
+	ldy #$24
+	bne LdChkSec
+Head0:
+	cmp $942c-1,x
+LdChkSec:
+LdPErr:
+        bcs LdErr
+	sty $180f
+
+        lda $1c00
+        and #$10
+        eor LdPengu            ;Changed? -> Akku == $10
+	ora LdWFlag            ;Protection Changed or Motor Warmup?
+	beq LdGl1              ;LdWFlag Rumdrehen
+        lda $1c00
+        ora #$0c
+        sta $1c00              ;Motor and Led on
+        and #$10               ;Get Protection
+	sta LdPengu
+	lda #0                 ;LdWFlag Rumdrehen
+	sta LdWFlag
+	lda $1c0c
+	ora #$0e
+        sta $1c0c
+LdWarm:
+	jsr LdSeek
+	bcs LdWarm
+LdGl1:
+	lda #5
+	sta LdTrys
+LdRead1:
+	dec LdTrys
+        bmi LdErr
+	jsr LdMoveH
+	jsr LdSRead
+        bcc LdRead0
+	jsr LdSeek
+	bcc LdRead1
+        bcs LdPErr
+
+
+LdRead0:
+        ldx #0
+	jsr SendChar
+	ldy #0
+LdSLoop:
+	ldx Buffer,y
+	jsr SendChar
+	iny
+	bne LdSLoop
+        jmp LdGL0       ; bra?
+
+LdErr:
+        ldx #1
+        jsr SendChar
+        jmp Restart
+
+;--------------------------------------
+
+LdMoveH:
+	lda LdATrk
+	cmp #36
+	bit LdHeadFlag
+	bcs LdMH5
+	bpl LdMH6
+	adc #35
+	bne LdMH6
+LdMH5:
+	bmi LdMH6
+	sbc #35
+LdMH6:
+	sec
+	sbc LdTrk
+	beq LdMHR
+	ldx #1
+	bcs LdMH1
+	eor #$ff
+	adc #1
+	dex
+LdMH1:
+	asl
+	sta LdYTmp
+	stx LdXTmp
+LdMH0:
+	lda LdXTmp
+	eor $1c00
+	sec
+	rol
+	and #3
+	eor $1c00
+	sta $1c00
+@0T71_Patch70Stepper:
+        ldy #12          ; x=0 oder 1
+Ld71Delay:
+        inx
+        bne Ld71Delay
+        dey
+        bne Ld71Delay
+        dec LdYTmp
+	bne LdMH0
+LdMHR:
+	lda LdTrk
+	sta LdATrk
+	cmp #36
+	bcc LdZ
+	sbc #35
+LdZ:
+	tax
+	lda $1c00
+	and #$9f
+	ora $9409-1,x
+	sta $1c00
+	rts
+
+;--------------------------------------
+
+LdSeek:
+	ldy #91
+LdSeek0:
+	dey
+        bmi LdSErr
+	jsr LdSync
+        bcs LdSErr
+        .t71LdWBy
+	lda $1c01
+	cmp #$52
+	bne LdSeek0
+LdBW1:
+        .t71LdWBy
+	lda $1c01
+	sta $25,X
+	inx
+	cpx #7
+	bcc LdBW1
+	jsr $F497
+	lda $16
+	eor $17
+	eor $18
+	eor $19
+	eor $1a
+        bne LdSErr
+	lda $18
+	sta LdATrk
+	lda $16
+	sta $12
+	lda $17
+	sta $13
+	clc
+	rts
+
+;--------------------------------------
+
+LdSRead:
+	jsr LdLF50A
+        bcs LdSErr
+
+	ldy #0
+	sty CheckSum
+
+        .t71LdWBy
+	lda $1c01
+	cmp #$55
+	bne LdSErr
+
+        .t71LdWBy
+	ldx $1c01
+	cpx #$c0
+	bcs LdSEnter
+LdSErr:
+	sec
+	rts
+
+LdSMainLoop:
+        .t71LdWBy
+	lda $1c01
+	sta ZpGcr0
+	and #$c0
+	ora ZpGcr2
+	tax
+	lda $9f0d,x
+	ora ZpGcr1
+	sta Buffer,y		;3
+	eor CheckSum
+	sta CheckSum
+	ldx ZpGcr0
+	iny
+	beq End
+LdSEnter:
+	lda $a10d,x
+	sta ZpGcr0
+	txa
+	lsr
+;51Z
+
+        .t71LdWBy
+	lda $1c01
+	sta ZpGcr1
+	and #$f0
+	adc #0
+	tax
+	lda $9f0f,x
+	ora ZpGcr0
+	sta Buffer,y		;0
+	eor CheckSum
+	sta CheckSum
+	iny
+	asl ZpGcr1
+;46Z
+
+        .t71LdWBy
+	lda $1c01
+	sta ZpGcr0
+	asl
+	lda ZpGcr1
+	and #%00011110
+	ror
+	tax
+	lda $9f1d,x
+	ldx ZpGcr0
+	ora $a20d,x
+	sta Buffer,y		;1
+	eor CheckSum
+	sta CheckSum
+	iny
+	txa
+	and #3
+	sta ZpGcr0
+;51Z
+
+        .t71LdWBy
+	lda $1c01
+	sta ZpGcr1
+	and #$e0
+	ora ZpGcr0
+	tax
+	lda $9f2a,x
+	ldx ZpGcr1
+	ora $a30d,x
+	sta Buffer,y		;2
+	eor CheckSum
+	sta CheckSum
+	iny
+;42Z
+
+        .t71LdWBy
+	ldx $1c01
+	lda $a00d,x
+	sta ZpGcr1
+	txa
+	and #7
+	sta ZpGcr2
+        jmp LdSMainLoop
+;25Z
+
+End:
+	lda $a10d,x
+	sta ZpGcr0
+	txa
+	lsr
+        .t71LdWBy
+	lda $1c01
+	and #$f0
+	adc #0
+	tax
+	lda $9f0f,x
+	ora ZpGcr0
+	eor CheckSum
+        bne LdErr2
+	clc
+	rts
+
+;--------------------------------------
+
+LdErr2:
+	sec
+	rts
+
+LdLF50A:
+	jsr LdLF510
+	bcs LdErr2
+LdSync:
+        bit $1c00
+        bmi LdSync
+	lda $1c01
+	clv
+	ldx #0
+	clc
+	rts
+
+LdLF510:
+	lda $12
+	sta $16
+	lda $13
+	sta $17
+	lda LdTrk
+	sta $18
+	lda LdSec
+	sta $19
+	eor $16
+	eor $17
+	eor $18
+	sta $1a
+	jsr $F934
+	ldy #90
+LdLF54E:
+	dey
+	bmi LdErr2
+	jsr LdSync
+	bcs LdErr2
+LdLF53D:
+        .t71LdWBy
+	lda $1c01
+	cmp $24,X
+	bne LdLF54E
+	inx
+        cpx #8
+        bcc LdLF53D     ; gaanz evtl. x=-8, dann hier bne
+	clc
+	rts
+
+;--------------------------------------
+
+LdDGet:
+	ldy #3
+LdDGet0:
+	lda #4		; 2
+LdDGet1:
+	bit LdDp	; 4
+	.SAFEBRA(beq,LdDGet1)	; 2
+	lda LdDp	; 4
+	lsr		; 2
+	rol LdZp	; 5
+			;---
+			;19
+
+	lda #4		; 2
+LdDGet2:
+	bit LdDp	; 4
+	.SAFEBRA(bne,LdDGet2)	; 2
+	lda LdDp	; 4
+	lsr		; 2
+	rol LdZp	; 5
+			;---
+			;19
+	dey
+	.SAFEBRA(bpl,LdDGet0)
+	lda LdZp
+	rts
+
+;--------------------------------------
+
+SendChar:
+	lda LdBSLo,X
+	sta LdDp
+LdBSend0:
+	bit LdDp
+	.SAFEBRA(bpl,LdBSend0)           ;bpl LdBSend0
+	asl
+	ora #$10
+	sta LdDp
+LdBSend1:
+	bit LdDp
+	.SAFEBRA(bmi,LdBSend1)           ;bmi LdBSend1
+        lda LdBSHi,X
+	sta LdDp
+LdBSend2:
+	bit LdDp
+	.SAFEBRA(bpl,LdBSend2)           ;bpl LdBSend2
+	asl
+	ora #$10
+	sta LdDp
+LdBSend3:
+	bit LdDp
+	.SAFEBRA(bmi,LdBSend3)           ;bmi LdBSend3
+	rts
+
+;--------------------------------------
+
+LdTab1:
+	.SAFETABLE_START
+	.DB $0f,$07,$0d,$05,$0b,$03,$09,$01
+	.DB $0e,$06,$0c,$04,$0a,$02,$08,$00
+	.SAFETABLE_END
+
+;--------------------------------------
+
+#if *>$0600
+#error "Code too long! Buffer will overwrite it"
+#endif
+
+;--------------------------------------
+
+@0T71_LdrStart:
+	lda #%00100000
+	sta $180f
+LdMkTab:
+	ldy #0
+LdMkTab2:
+	ldx #$10
+LdMkMod:
+	lda LdTab1
+LdMkTab1:
+	sta LdBSHi,y
+	iny
+	dex
+	bne LdMkTab1
+        inc LdMkMod+1
+	tya
+	bne LdMkTab2
+LdMkTab4:
+	lda LdTab1,x
+	sta LdBSLo,y
+	dex
+	bpl LdMkTab3
+	ldx #$0f
+LdMkTab3:
+	dey
+	bne LdMkTab4
+	jmp Restart
+
+LdMkTab_End:
+
+
+;--------------------------------------
+
+    .)	;*** T71 ***
+
+T71LdEnd:
+    .REALPC
+T71LdE:
+
+

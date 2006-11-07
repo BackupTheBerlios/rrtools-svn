@@ -1,0 +1,59 @@
+;--------------------------------------
+;
+; Init CMD HD
+;
+;--------------------------------------
+
+IHDStart:
+    .PSEUDOPC $0700
+
+    .(	;*** IHD ***
+
+;--------------------------------------
+
+Dp	= $8000
+Zp	= 6
+
+	sei
+	ldy #0
+	sty Dp
+Get:
+	ldx #3
+Get0:
+	lda #4
+Get1:
+	bit Dp
+	beq Get1
+	lda Dp
+	lsr
+	rol Zp
+	lda #4
+Get2:
+	bit Dp
+	bne Get2
+	lda Dp
+	lsr
+	rol Zp
+	dex
+	bpl Get0
+	lda Zp
+Get3:
+	sta $0300,Y
+	iny
+	bne Get
+	inc Get3+2
+	dec Cnt
+	bne Get
+	jmp THD_LdrStart
+
+Cnt:
+	.DB >THDLdEnd-$0201
+
+;--------------------------------------
+
+    .)	;*** IHD ***
+
+    .REALPC
+IHDEnd:
+
+

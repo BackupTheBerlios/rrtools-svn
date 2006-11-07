@@ -1,0 +1,286 @@
+
+SHORT = 0	;1	; assume file is ok
+IRQLOAD = 0	;1
+
+
+LZPOS	= $9e		; 2 ZeroPage temporaries
+bitstr	= $fb		; 1 temporary (does not need to be ZP)
+
+
+;--------------------------------------
+;  DLoad stress test
+;--------------------------------------
+
+	* = $0801
+
+    .(		; BasicStart
+	.DW BasicEnd, 2006
+	.DB $9e
+
+	.DB '0'|((BasicJumpIn-(BasicJumpIn/10000)*10000)/1000)
+	.DB '0'|((BasicJumpIn-(BasicJumpIn/1000)*1000)/100)
+	.DB '0'|((BasicJumpIn-(BasicJumpIn/100)*100)/10)
+	.DB '0'|(BasicJumpIn-(BasicJumpIn/10)*10)
+
+	.PET " baccy/drm"
+	.DB 0
+BasicEnd:
+	.DW 0
+    .)		; BasicStart
+
+;--------------------------------------
+
+BasicJumpIn:
+	; copy test to dst
+	lda #<TestPsyStart
+	sta $57
+	lda #>TestPsyStart
+	sta $58
+
+	lda #<TestPsyEnd
+	sta $59
+	lda #>TestPsyEnd
+	sta $5a
+
+	lda #<TestStart
+	sta $5b
+	lda #>TestStart
+	sta $5c
+
+	jsr copy
+
+
+	; copy init to dst
+	lda #<InitPsyStart
+	sta $57
+	lda #>InitPsyStart
+	sta $58
+
+	lda #<InitPsyEnd
+	sta $59
+	lda #>InitPsyEnd
+	sta $5a
+
+	lda #<LdCfgInitCodeStart
+	sta $5b
+	lda #>LdCfgInitCodeStart
+	sta $5c
+
+	jsr copy
+
+	jmp TestStart
+
+
+copy:
+	ldy #0
+copy0:
+	lda ($57),y
+	sta ($5b),y
+
+	inc $57
+	bne next0
+	inc $58
+next0:
+
+	inc $5b 
+	bne next1
+	inc $5c
+next1:
+
+	lda $57
+	cmp $59
+	lda $58
+	sbc $5a
+	bcc copy0
+	rts
+
+;--------------------------------------
+
+TestPsyStart:
+	.PSEUDOPC $c000
+
+	.SETPET
+
+#include "dload.cfg"
+
+;--------------------------------------
+
+IrqLine1	= $72
+IrqLine2	= $a2
+
+TestStart:
+	sta $d07a			;1Mhz
+	jsr LdCfgInitCodeStart		;install DLoad
+	bcc FastLoadInstallOk		;Check return state
+
+	lda #<Text_FastLoadErr		;Display Error Message
+	ldy #>Text_FastLoadErr
+	jmp $ab1e
+
+FastLoadInstallOk:
+	sei
+	lda #$35
+	sta 1
+
+;Init the Irq
+	lda #$7f
+	sta $dc0d
+	lda $dc0d
+	lda #$1b
+	sta $d011
+	lda #IrqLine1
+	sta $d012
+	lda #$81
+	sta $d01a
+	lda $d019
+	sta $d019
+	lda #<irq0
+	sta $fffe
+	lda #>irq0
+	sta $ffff
+	cli
+
+	lda #FileName_len
+	ldx #<FileName
+	ldy #>FileName
+	jsr LdLoc			; open File
+	bcs showError
+
+	lda #$34
+        sta 1
+	jsr Depack
+        inc 1
+	bcs showError
+
+	jsr LdLoc+15
+	jsr irqOff
+	jmp $1000
+
+showError:
+	cmp #3				; keep errornumber in a valid range
+	bcc showError0
+	lda #3
+showError0:
+	tax				; save errorNr
+	jsr irqOff
+	lda ErrorMsgLo,x
+	ldy ErrorMsgHi,x
+	jsr $ab1e
+	jmp LdLoc+15
+
+;Stop IRQ and return to old screencolors
+irqOff:
+	sei
+	lda #$37
+	sta 1
+	lda #0
+	sta $d01a
+	lda $d019
+	sta $d019
+	lda #$81
+	sta $dc0d
+	lda #$0e
+	sta $d020
+	lda #$06
+	sta $d021
+	cli
+	rts
+
+
+;Irq 0 shows blue border and light blue screen
+irq0:
+	pha
+	lda 1
+	pha
+	lda #$35
+	sta 1
+	lda $d019
+	sta $d019
+	lda #6
+	sta $d020
+	lda #$0e
+	sta $d021
+	lda #IrqLine2
+	sta $d012
+	lda #<irq1
+	sta $fffe
+	lda #>irq1
+	sta $ffff
+	pla
+	sta 1
+	pla
+	rti
+
+
+;Irq 1 shows light blue border and blue screen
+irq1:
+	pha
+	lda 1
+	pha
+	lda #$35
+	sta 1
+	lda $d019
+	sta $d019
+	lda #$0e
+	sta $d020
+	lda #$06
+	sta $d021
+	lda #IrqLine1
+	sta $d012
+	lda #<irq0
+	sta $fffe
+	lda #>irq0
+	sta $ffff
+	pla
+	sta 1
+	pla
+	rti
+
+
+Text_FastLoadErr:
+	.PET "error installing fastload!",13,0
+
+
+ErrorMsgLo:
+	.DB <ErrMsg_Ok
+	.DB <ErrMsg_FileNotFound
+	.DB <ErrMsg_Read
+	.DB <ErrMsg_Unknown
+
+ErrorMsgHi:
+	.DB >ErrMsg_Ok
+	.DB >ErrMsg_FileNotFound
+	.DB >ErrMsg_Read
+	.DB >ErrMsg_Unknown
+
+ErrMsg_Ok:
+	.PET "ok",0
+ErrMsg_FileNotFound:
+	.PET "file not found error!",0
+ErrMsg_Read:
+	.PET "read error!",0
+ErrMsg_Unknown:
+	.PET "strange error number. oh, oh!",0
+
+FileName:
+	.PET "testpuc"
+FileName_len = * - FileName
+
+;--------------------------------------
+
+#include "pucdecrunch.src"
+
+;--------------------------------------
+
+	.REALPC
+TestPsyEnd:
+
+;--------------------------------------
+
+InitPsyStart:
+	.binclude "dload.prg", 2
+InitPsyEnd:
+
+;--------------------------------------
+
+

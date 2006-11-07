@@ -1,0 +1,216 @@
+;--------------------------------------
+;  DLoad stress test
+;--------------------------------------
+
+	* = $0801
+
+    .(		; BasicStart
+	.DW BasicEnd, 2006
+	.DB $9e
+
+	.DB '0'|((BasicJumpIn-(BasicJumpIn/10000)*10000)/1000)
+	.DB '0'|((BasicJumpIn-(BasicJumpIn/1000)*1000)/100)
+	.DB '0'|((BasicJumpIn-(BasicJumpIn/100)*100)/10)
+	.DB '0'|(BasicJumpIn-(BasicJumpIn/10)*10)
+
+	.PET " baccy/drm"
+	.DB 0
+BasicEnd:
+	.DW 0
+    .)		; BasicStart
+
+;--------------------------------------
+
+BasicJumpIn:
+	; copy test to dst
+	lda #<TestPsyStart
+	sta $57
+	lda #>TestPsyStart
+	sta $58
+
+	lda #<TestPsyEnd
+	sta $59
+	lda #>TestPsyEnd
+	sta $5a
+
+	lda #<TestStart
+	sta $5b
+	lda #>TestStart
+	sta $5c
+
+	jsr copy
+
+
+	; copy init to dst
+	lda #<InitPsyStart
+	sta $57
+	lda #>InitPsyStart
+	sta $58
+
+	lda #<InitPsyEnd
+	sta $59
+	lda #>InitPsyEnd
+	sta $5a
+
+	lda #<LdCfgInitCodeStart
+	sta $5b
+	lda #>LdCfgInitCodeStart
+	sta $5c
+
+	jsr copy
+
+	jmp TestStart
+
+
+copy:
+	ldy #0
+copy0:
+	lda ($57),y
+	sta ($5b),y
+
+	inc $57
+	bne next0
+	inc $58
+next0:
+
+	inc $5b 
+	bne next1
+	inc $5c
+next1:
+
+	lda $57
+	cmp $59
+	lda $58
+	sbc $5a
+	bcc copy0
+	rts
+
+;--------------------------------------
+
+TestPsyStart:
+	.PSEUDOPC $c000
+
+	.SETPET
+
+; get start of init code and loader location
+#include "dload.cfg"
+
+IrqLine1	= $82
+IrqLine2	= $92
+
+TestStart:
+	sta $d07a		;1Mhz
+	jsr LdCfgInitCodeStart
+	bcc FastLoadInstallOk
+	lda #<Text_FastLoadErr
+	ldy #>Text_FastLoadErr
+	jmp $ab1e
+
+FastLoadInstallOk:
+	sei
+	lda #$7f
+	sta $dc0d
+	lda #$35
+	sta 1
+	lda #$1b
+	sta $d011
+	lda #IrqLine1
+	sta $d012
+	lda #$81
+	sta $d01a
+	lda $d019
+	sta $d019
+	lda #<irq0
+	sta $fffe
+	lda #>irq0
+	sta $ffff
+	cli
+
+	lda #FileName_len
+	ldx #<FileName
+	ldy #>FileName
+	jsr LdLoc			;load file
+	jsr LdLoc+15			;switch speeder off
+	sei
+	lda #$37
+	sta 1
+	lda #0
+	sta $d01a
+	lda $d019
+	sta $d019
+	lda #$81
+	sta $dc0d
+	lda #$0e
+	sta $d020
+	lda #$06
+	sta $d021
+	cli
+	lda #0
+	sta $800
+	jsr $a659
+	jmp $a7ae
+
+irq0:
+	pha
+	lda 1
+	pha
+	lda #$35
+	sta 1
+	lda $d019
+	sta $d019
+	lda #6
+	sta $d020
+	lda #$0e
+	sta $d021
+	lda #IrqLine2
+	sta $d012
+	lda #<irq1
+	sta $fffe
+	lda #>irq1
+	sta $ffff
+	pla
+	sta 1
+	pla
+	rti
+
+irq1:
+	pha
+	lda 1
+	pha
+	lda #$35
+	sta 1
+	lda $d019
+	sta $d019
+	lda #$0e
+	sta $d020
+	lda #$06
+	sta $d021
+	lda #IrqLine1
+	sta $d012
+	lda #<irq0
+	sta $fffe
+	lda #>irq0
+	sta $ffff
+	pla
+	sta 1
+	pla
+	rti
+
+
+Text_FastLoadErr:
+	.PET "error installing fastload!",13,0
+FileName:
+	.PET "test"
+FileName_len = * - FileName
+
+
+	.REALPC
+TestPsyEnd:
+
+;--------------------------------------
+
+InitPsyStart:
+	.binclude "dload.prg", 2
+InitPsyEnd:
+
+;--------------------------------------

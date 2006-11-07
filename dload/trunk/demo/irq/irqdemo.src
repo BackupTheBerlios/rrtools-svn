@@ -1,0 +1,277 @@
+;--------------------------------------
+;  DLoad stress test
+;--------------------------------------
+
+	* = $0801
+
+    .(		; BasicStart
+	.DW BasicEnd, 2006
+	.DB $9e
+
+	.DB '0'|((BasicJumpIn-(BasicJumpIn/10000)*10000)/1000)
+	.DB '0'|((BasicJumpIn-(BasicJumpIn/1000)*1000)/100)
+	.DB '0'|((BasicJumpIn-(BasicJumpIn/100)*100)/10)
+	.DB '0'|(BasicJumpIn-(BasicJumpIn/10)*10)
+
+	.PET " baccy/drm"
+	.DB 0
+BasicEnd:
+	.DW 0
+    .)		; BasicStart
+
+;--------------------------------------
+
+BasicJumpIn:
+	; copy test to dst
+	lda #<TestPsyStart
+	sta $57
+	lda #>TestPsyStart
+	sta $58
+
+	lda #<TestPsyEnd
+	sta $59
+	lda #>TestPsyEnd
+	sta $5a
+
+	lda #<TestStart
+	sta $5b
+	lda #>TestStart
+	sta $5c
+
+	jsr copy
+
+
+	; copy init to dst
+	lda #<InitPsyStart
+	sta $57
+	lda #>InitPsyStart
+	sta $58
+
+	lda #<InitPsyEnd
+	sta $59
+	lda #>InitPsyEnd
+	sta $5a
+
+	lda #<LdCfgInitCodeStart
+	sta $5b
+	lda #>LdCfgInitCodeStart
+	sta $5c
+
+	jsr copy
+
+	jmp TestStart
+
+
+copy:
+	ldy #0
+copy0:
+	lda ($57),y
+	sta ($5b),y
+
+	inc $57
+	bne next0
+	inc $58
+next0:
+
+	inc $5b 
+	bne next1
+	inc $5c
+next1:
+
+	lda $57
+	cmp $59
+	lda $58
+	sbc $5a
+	bcc copy0
+	rts
+
+;--------------------------------------
+
+TestPsyStart:
+	.PSEUDOPC $c000
+
+	.SETPET
+
+#include "dload.cfg"
+
+IrqLine1	= $72
+IrqLine2	= $a2
+
+TestStart:
+	sta $d07a			;1Mhz
+	jsr LdCfgInitCodeStart		;install DLoad
+	bcc FastLoadInstallOk		;Check return state
+
+	lda #<Text_FastLoadErr		;Display Error Message
+	ldy #>Text_FastLoadErr
+	jmp $ab1e
+
+FastLoadInstallOk:
+	sei
+
+;Copy CharSet to ram
+	lda #$33
+	sta 1
+	ldx #$0f
+	ldy #0
+CopyFonts:
+	lda $d000,y
+	sta $d000,y
+	iny
+	bne CopyFonts
+	inc CopyFonts+2
+	inc CopyFonts+5
+	dex
+	bpl CopyFonts
+	lda #$35
+	sta 1
+
+;Fill Screen at $0400 with a's and Screen at $c400 with b's
+;set char Color to white
+	ldx #0
+FillScreens:
+	lda #1
+	sta $0400,x
+	sta $0500,x
+	sta $0600,x
+	sta $0700,x
+	sta $d800,x
+	sta $d900,x
+	sta $da00,x
+	sta $db00,x
+	lda #2
+	sta $c400,x
+	sta $c500,x
+	sta $c600,x
+	sta $c700,x
+	inx
+	bne FillScreens
+
+	lda #$3c			;Bank $03 -> $03 EOR $3F = $3c
+	sta $dd02
+	lda #0				;Initialize $dd00
+	sta $dd00
+
+;Init the Irq
+	lda #$7f
+	sta $dc0d
+	lda $dc0d
+	lda #$1b
+	sta $d011
+	lda #IrqLine1
+	sta $d012
+	lda #$81
+	sta $d01a
+	lda $d019
+	sta $d019
+	lda #<irq0
+	sta $fffe
+	lda #>irq0
+	sta $ffff
+	cli
+
+	lda #FileName_len
+	ldx #<FileName
+	ldy #>FileName
+	jsr LdLoc			;load File
+        jsr LdLoc+15                    ;switch off Speeder
+
+;Stop IRQ and return to old screencolors
+	sei
+	lda #$37
+	sta 1
+	lda #0
+	sta $d01a
+	lda $d019
+	sta $d019
+	lda #$81
+	sta $dc0d
+	lda #$0e
+	sta $d020
+	lda #$06
+	sta $d021
+
+;Restore values in $dd00 and $dd02 as we are returning to the System
+	lda #$03
+	sta $dd00
+	lda #$3f
+	sta $dd02
+
+;Run the loaded Program
+	cli
+	lda #0
+	sta $800
+	jsr $a659
+	jmp $a7ae
+
+;Irq 0 switches in the "b"'s
+irq0:
+	pha
+        lda 1
+        pha
+        lda #$35
+        sta 1
+        lda $d019
+	sta $d019
+	lda #6
+	sta $d020
+	lda #$0e
+	sta $d021
+	lda #$3f			;Switch to Bank $00 -> $00 EOR $3F = $3F
+	sta $dd02			;Don't touch $dd00 anymore!
+	lda #IrqLine2
+	sta $d012
+	lda #<irq1
+	sta $fffe
+	lda #>irq1
+	sta $ffff
+        pla
+        sta 1
+        pla
+	rti
+
+
+;Irq 1 switches the "a"'s back in
+irq1:
+	pha
+        lda 1
+        pha
+        lda #$35
+        sta 1
+        lda $d019
+	sta $d019
+	lda #$0e
+	sta $d020
+	lda #$06
+	sta $d021
+	lda #$3c			;Switch to Bank $03 -> $03 EOR $3F = $3C
+	sta $dd02			;Don't touch $dd00 anymore!
+	lda #IrqLine1
+	sta $d012
+	lda #<irq0
+	sta $fffe
+	lda #>irq0
+	sta $ffff
+        pla
+        sta 1
+        pla
+	rti
+
+
+Text_FastLoadErr:
+	.PET "error installing fastload!",13,0
+FileName:
+	.PET "test"
+FileName_len = * - FileName
+
+
+	.REALPC
+TestPsyEnd:
+
+;--------------------------------------
+
+InitPsyStart:
+	.binclude "dload.prg", 2
+InitPsyEnd:
+
+;--------------------------------------

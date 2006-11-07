@@ -1,0 +1,30 @@
+
+;--------------------------------------
+
+DLoad_MMC64_DeviceAddress		= $21
+DLoad_MMC64RR_DeviceAddress		= $22
+DLoad_MMC64Cnt_DeviceAddress		= $23
+DLoad_MMC64_ParameterVersion		= 0
+
+;--------------------------------------
+; Macro definitions for structures
+
+#macro struct_init() {__structure_adr:=0}
+#macro struct_elem(a) {=__structure_adr : __structure_adr+={a}}
+#macro struct_len() {=__structure_adr}
+
+;--------------------------------------
+; MMC Parameter Block
+
+.struct_init
+MMC64Param_BlockClusterShift		.struct_elem(1)
+MMC64Param_ClusterMask			.struct_elem(1)
+MMC64Param_FATStartSector		.struct_elem(3)
+MMC64Param_FirstDataBlock		.struct_elem(3)
+MMC64Param_DirTrack			.struct_elem(1)
+MMC64Param_DirSec			.struct_elem(1)
+MMC64Param_FirstCluster			.struct_elem(2)
+MMC64Param_FirstClusterBlock		.struct_elem(3)
+MMC64Param_size				.struct_len
+
+;--------------------------------------

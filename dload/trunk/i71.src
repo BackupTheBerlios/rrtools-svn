@@ -1,0 +1,59 @@
+;--------------------------------------
+;
+; Init 1571
+;
+;--------------------------------------
+
+I71Start:
+    .PSEUDOPC $0700
+
+    .(	;*** I71 ***
+
+;--------------------------------------
+
+Dp	= $1800
+Zp	= 6
+
+	sei
+	ldy #0
+	sty Dp
+Get:
+	ldx #3
+Get0:
+	lda #4
+Get1:
+	bit Dp
+	beq Get1
+	lda Dp
+	lsr
+	rol Zp
+	lda #4
+Get2:
+	bit Dp
+	bne Get2
+	lda Dp
+	lsr
+	rol Zp
+	dex
+	bpl Get0
+	lda Zp
+Get3:
+	sta $0300,Y
+	iny
+	bne Get
+	inc Get3+2
+	dec Cnt
+	bne Get
+        jmp T71_LdrStart
+
+Cnt:
+	.DB >T71LdEnd-$0201
+
+;--------------------------------------
+
+    .)	;*** I71 ***
+
+    .REALPC
+I71End:
+
+

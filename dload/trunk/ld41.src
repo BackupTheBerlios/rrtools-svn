@@ -1,0 +1,91 @@
+;--------------------------------------
+;
+; Loader 1541
+;
+;--------------------------------------
+
+Ld41PsyStart:
+    .PSEUDOPC LdSerialEnd
+
+    .(	;*** Ld41 ***
+
+;--------------------------------------
+
+@0Ld41ReadBlock:
+	jsr LdSerial_LdSendH
+        ldy #0
+        sty $dd00
+Get:
+	bit $dd00
+	bmi Get
+        ;ldy #0
+	sty LdChk
+	jsr GByte
+        bne LdSerial_Error
+GLoop:
+	jsr GByte
+	sta LdBf,y
+	iny
+	bne GLoop
+	jsr GByte
+	lda LdChk
+        bne LdSerial_Error
+
+	ldx LdBf+1
+	lda LdBf
+	beq Get0
+	ldx #$ff
+Get0:
+	dex
+	stx LdChk
+        ;clc             ; weg, weil am Ende von Gbyte C=0
+	rts
+
+GByte:
+	ldx #8
+	lda $dd00
+	stx $dd00
+	and #$C0
+	lsr
+	lsr
+	sta LdGZp
+	jsr GBRts
+	ldx #0
+	lda $dd00
+	stx $dd00
+	and #$C0
+	ora LdGZp
+	lsr
+	lsr
+	sta LdGZp
+	jsr LdSerial_CSRts
+	nop
+	ldx #8
+	lda $dd00
+	stx $dd00
+	and #$C0
+	ora LdGZp
+	lsr
+	lsr
+	sta LdGZp
+	jsr GBRts
+	ldx #0
+	lda $dd00
+	stx $dd00
+	and #$C0
+	ora LdGZp	;3
+	pha		;3
+	eor LdChk	;3
+	sta LdChk	;3
+	pla		;4
+GBRts:
+	rts
+
+;--------------------------------------
+
+    .)	;*** Ld41 ***
+
+Ld41End:
+    .REALPC
+
+

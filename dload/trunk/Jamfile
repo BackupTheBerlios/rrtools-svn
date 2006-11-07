@@ -1,0 +1,76 @@
+TOP = . ;
+SubDir TOP ;
+
+#--------------------------------------
+# Help:
+#
+# jam
+#   build all targets
+#
+# jam clean
+#   delete all produced files
+#
+# jam user
+#   build dload with the config found in the directory 'user_cfg'
+#
+# jam docs
+#   build all docs
+#
+# jam docs_clean
+#   remove all produced docs
+#
+# jam sim<drive><videonorm>:<test>
+#   run test in vice
+#   with drive=41,70,71,81
+#        videonorm=n,p
+#        test = a direcory in the 'demo' folder, e.g. decrunch_abcruncher20
+#   example: jam sim41p:stresstest
+#
+# jam backup
+#   create a backup of all files ("*.*") in the configured directory ARCDIR. The filename consists
+#   of the project and a date/time stamp.
+#
+# jam distrib
+#   create a backup of the project files (PROJECT_FILES) in the configured directory ARCDIR.
+#   The filename consists of the project (PROJECT) and a date stamp.
+#
+#--------------------------------------
+# Start of Config
+#
+
+DA		= dreamass ;
+CBMC		= cbmconvert ;
+ARCDIR          = /home/baccy/BackUp ;
+
+EMUFLAGS	= +sound -truedrive ;
+RR_PAL_CRT	= -cartrr /home/baccy/RetroReplay/rr-38a-64pal.bin ;
+RR_NTSC_CRT	= -cartrr /home/baccy/RetroReplay/rr-38a-64ntsc.bin ;
+
+#
+# End of Config
+#--------------------------------------
+
+PROJECT		= dload ;
+
+AddProjectFiles Jamfile Jamrules ;
+AddProjectFiles dload.src dload_si.src filelib.src i41.src i71.src i81.src iff.src ihd.src ;
+AddProjectFiles ld41.src ldcommon.src ldhd.src ldmmc.src ldserial.src mmcparam.src ;
+AddProjectFiles t41.src t71.src t81.src thd.src ;
+
+#--------------------------------------
+
+DLOAD_SI = dload_si.src ;
+
+SubInclude TOP crc_gen ;
+SubInclude TOP demo ;
+SubInclude TOP doc ;
+SubInclude TOP linkdata ;
+SubInclude TOP user_cfg ;
+
+#--------------------------------------
+# backup and distribution
+
+BackupRar backup ;
+DistribRar distrib : $(PROJECT_FILES) ;
+
+#--------------------------------------

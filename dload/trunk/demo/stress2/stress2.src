@@ -1,0 +1,357 @@
+;--------------------------------------
+;  DLoad stress test for open/get interface
+;--------------------------------------
+
+	* = $0801
+
+    .(		; BasicStart
+	.DW BasicEnd, 2006
+	.DB $9e
+
+	.DB '0'|((BasicJumpIn-(BasicJumpIn/10000)*10000)/1000)
+	.DB '0'|((BasicJumpIn-(BasicJumpIn/1000)*1000)/100)
+	.DB '0'|((BasicJumpIn-(BasicJumpIn/100)*100)/10)
+	.DB '0'|(BasicJumpIn-(BasicJumpIn/10)*10)
+
+	.PET " baccy/drm"
+	.DB 0
+BasicEnd:
+	.DW 0
+    .)		; BasicStart
+
+;--------------------------------------
+
+BasicJumpIn:
+	; copy test to dst
+	lda #<TestPsyStart
+	sta $57
+	lda #>TestPsyStart
+	sta $58
+
+	lda #<TestPsyEnd
+	sta $59
+	lda #>TestPsyEnd
+	sta $5a
+
+	lda #<TestStart
+	sta $5b
+	lda #>TestStart
+	sta $5c
+
+	jsr copy
+
+
+	; copy init to dst
+	lda #<InitPsyStart
+	sta $57
+	lda #>InitPsyStart
+	sta $58
+
+	lda #<InitPsyEnd
+	sta $59
+	lda #>InitPsyEnd
+	sta $5a
+
+	lda #<LdCfgInitCodeStart
+	sta $5b
+	lda #>LdCfgInitCodeStart
+	sta $5c
+
+	jsr copy
+
+	jmp TestStart
+
+
+copy:
+	ldy #0
+copy0:
+	lda ($57),y
+	sta ($5b),y
+
+	inc $57
+	bne next0
+	inc $58
+next0:
+
+	inc $5b 
+	bne next1
+	inc $5c
+next1:
+
+	lda $57
+	cmp $59
+	lda $58
+	sbc $5a
+	bcc copy0
+	rts
+
+;--------------------------------------
+
+TestPsyStart:
+	.PSEUDOPC $c000
+
+	.SETPET
+
+; get start of init code and loader location
+#include "dload.cfg"
+
+TestStart:
+	sta $d07a		;1Mhz
+	jsr LdCfgInitCodeStart
+	bcc FastLoadInstallOk
+	lda #<Text_FastLoadErr
+	ldy #>Text_FastLoadErr
+	jmp $ab1e
+
+FastLoadInstallOk:
+
+TestLoop:
+	; show "loading"
+        lda #<Text_Loading0
+        ldy #>Text_Loading0
+        jsr $ab1e
+	;show filename
+        ldy #0
+showFilename:
+	lda FileName,y
+        jsr $ffd2
+        iny
+        cpy #FileName_len
+        bcc showFilename
+        lda #<Text_Loading1
+        ldy #>Text_Loading1
+        jsr $ab1e
+
+	; reset rtc to 0
+	jsr resetTime
+
+	lda #FileName_len
+	ldx #<FileName
+	ldy #>FileName
+	jsr LdLoc			; open file
+        bcs LoadError
+
+	; skip load adr
+	jsr LdLoc+3
+	bcs LoadError
+	jsr LdLoc+3
+	bcs LoadError
+
+	jsr initCrc16
+
+	ldy #0
+LoadLoop:
+	jsr LdLoc+3
+	bcs IsLoadError
+	jsr updateCrc16
+	jmp LoadLoop
+
+IsLoadError:
+	tay
+	bne LoadError
+
+        lda #<Text_Time
+        ldy #>Text_Time
+        jsr $ab1e
+	jsr printTime
+        lda #13
+        jsr $ffd2
+
+	jsr testCrc16
+        bcs CrcError
+        lda #<Text_CrcOk
+        ldy #>Text_CrcOk
+        jsr $ab1e
+
+	lda #<Text_ExtraDelay
+	ldy #>Text_ExtraDelay
+	jsr $ab1e
+	jsr ExtraDelay
+
+	; next file
+	lda FileName+4
+        clc
+        adc #1
+        and #$07
+        ora #$30
+        sta FileName+4
+        
+	jmp TestLoop
+
+LoadError:
+        lda #<Text_LoadError
+        ldy #>Text_LoadError
+        jsr $ab1e
+ErrorFlash:
+	lda #2
+        sta $d021
+ErrorFlash0:
+	inc $d020
+        jmp ErrorFlash0
+
+CrcError:
+        lda #<Text_CrcError
+        ldy #>Text_CrcError
+        jsr $ab1e
+	jmp ErrorFlash
+
+;--------------------------------------
+
+resetTime:
+	; clock is 50Hz
+        lda #$80
+        sta $dd0e
+
+	; set clock (not alarm)
+	lda #0
+        sta $dd0f
+	; first set hours, last 1/10 seconds
+        sta $dd0b		; hours
+        sta $dd0a		; minutes
+        sta $dd09		; seconds
+        sta $dd08		; 1/10 seconds
+        rts
+
+;--------------------------------------
+
+printTime:
+	; first read hours, last 1/10 seconds
+        lda $dd0b
+        jsr printBCD
+        lda #':'
+        jsr $ffd2
+        lda $dd0a
+        jsr printBCD
+        lda #'.'
+        jsr $ffd2
+        lda $dd09
+        jsr printBCD
+        lda #'\''
+        jsr $ffd2
+        lda $dd08
+        jmp printBCD
+
+printBCD:
+	pha
+        lsr
+        lsr
+        lsr
+        lsr
+        jsr printBCD0
+        pla
+printBCD0:
+        and #$0f
+        ora #$30
+        jmp $ffd2
+
+;--------------------------------------
+
+crc_value:
+	.DW 0
+crc_dataByte:
+	.DB 0
+
+initCrc16:
+	ldy #0
+        sty crc_value
+        sty crc_value+1
+	rts
+
+updateCrc16:
+	ldx crc_value
+	eor crc_value+1
+	stx crc_value+1
+	sta crc_value
+	lsr
+	lsr
+	lsr
+	lsr
+	eor crc_value
+	sta crc_value
+	asl
+	asl
+	asl
+	asl
+	eor crc_value+1
+	sta crc_value+1
+	lda crc_value
+	lsr
+	lsr
+	lsr
+	eor crc_value+1
+	sta crc_value+1
+	lda crc_value
+	asl
+	asl
+	asl
+	asl
+	asl
+	eor crc_value
+	sta crc_value
+	rts
+
+testCrc16:
+        lda crc_value
+        ora crc_value+1
+        cmp #1
+        rts
+
+;--------------------------------------
+
+ExtraDelay:
+	jsr LdLoc+6		; shutup
+
+	lda #4
+	ldx #0
+	ldy #0
+delay0:
+	stx $dd00
+	inx
+	bne delay0
+	iny
+	bne delay0
+	sec
+	sbc #1
+	bcs delay0
+	jmp LdLoc+9		; wakeup
+
+;--------------------------------------
+;             0         1         2         3
+;             0123456789012345678901234567890123456789
+;
+Text_Loading0:
+	.PET "loading ",0
+Text_Loading1:
+	.PET " with crc check...",13,0
+Text_Time:
+	.PET "time: ",0
+Text_CrcOk:
+	.PET "crc ok!",13,0
+
+Text_FastLoadErr:
+	.PET "error installing fastload!",13,0
+Text_CrcError:
+	.PET "crc error!",13,0
+Text_LoadError:
+	.PET "load error!",13,0
+
+Text_ExtraDelay:
+	.PET "testing shutup/wakeup",13,0
+
+FileName:
+	.PET "test0"
+FileName_len = * - FileName
+
+
+;--------------------------------------
+
+	.REALPC
+TestPsyEnd:
+
+;--------------------------------------
+
+InitPsyStart:
+	.binclude "dload.prg", 2
+InitPsyEnd:
+
+;--------------------------------------

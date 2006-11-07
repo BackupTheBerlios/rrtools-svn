@@ -1,0 +1,23 @@
+SubDir TOP crc_gen ;
+
+#--------------------------------------
+
+AddProjectFiles Jamfile ;
+AddProjectFiles crcgen.c ;
+
+#--------------------------------------
+
+if ! $(NT)
+{
+	crcgen_src = [ FGristFiles crcgen.c ] ;
+	crcgen_exe = crcgen$(SUFEXE) ;
+
+	DEPENDS $(crcgen_exe) : $(crcgen_src) ;
+	LINKLIBS on $(crcgen_exe) = -lrt ;
+
+	Objects $(crcgen_src) ;
+	Link $(crcgen_exe) : $(crcgen_src) ;
+	Clean clean : $(crcgen_exe) ;
+}
+
+#--------------------------------------

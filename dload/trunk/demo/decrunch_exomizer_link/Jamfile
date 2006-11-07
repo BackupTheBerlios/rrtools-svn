@@ -1,0 +1,13 @@
+SubDir TOP demo decrunch_exomizer_link ;
+
+#--------------------------------------
+
+AddProjectFiles Jamfile ;
+AddProjectFiles exo_ld.src dload.cfg exodecrunch.src ;
+AddProjectFiles readme.txt ;
+
+#--------------------------------------
+
+Demo exo_ld : testexo.prg ;
+
+#--------------------------------------

@@ -1,0 +1,626 @@
+;--------------------------------------
+;
+; DreamLoad
+;
+;--------------------------------------
+
+
+;--------------------------------------
+; Check Config Version to make sure that all new Options are
+; set to correct values, as no defaults exist
+; Version Number is a Word with hi as precomma and lo postcomma
+; eg. 12.41 = $1241. !!! Note that .3==.30 !!! So Subversion 3 is .03 .
+;--------------------------------------
+
+#if LdCfgVer<$0206
+#error "Update your LdConfig!"
+#endif
+
+;--------------------------------------
+; Global Loader Vars
+;--------------------------------------
+
+Error_DriveOff			= 1
+Error_SecondDrive		= 2
+Error_UnknownDrive		= 3
+Error_UnsupportedDrive		= 4
+Error_MmcParameterVersion	= 5
+
+;--------------------------------------
+
+	.(	;*** DLoad ***
+
+;--------------------------------------
+
+#include "mmcparam.src"
+
+;--------------------------------------
+
+    .segment "zp"
+
+
+DLoadZp_Ptr			.DW 0
+DLoadZp_DevType			.DB 0
+DLoadZp_Zp0			.DB 0
+
+;--------------------------------------
+
+    .segment "code"
+
+
+@0DLoad_Install:
+	lda FileZp_Device
+	cmp #DLoad_MMC64_DeviceAddress
+	bcc noMmc64
+	cmp #DLoad_MMC64Cnt_DeviceAddress+1
+	bcs noMmc64
+        jmp InstallMmc64
+noMmc64:
+	sta DLoadZp_Zp0
+	ldx #8
+CheckJam:
+	stx FileZp_Device
+	cpx DLoadZp_Zp0
+	beq CheckJam0
+	jsr IFF
+	ldx FileZp_Device
+	lda DLoadZp_Zp0
+	sta FileZp_Device
+	bcc Err_SecondDrive
+CheckJam0:
+	inx             ; Zp_Device is restored here already
+	cpx #31
+	bcc CheckJam
+	jsr IFF
+	bcs Err_DriveOff
+	jmp InstallRealDrive
+
+Err_DriveOff:
+	lda #Error_DriveOff
+	.DB $2c
+Err_SecondDrive:
+	lda #Error_SecondDrive
+	sec
+	rts
+
+;--------------------------------------
+
+InstallMmc64:
+    .(
+	lda #7
+	sta DLoadZp_DevType
+
+	; test version number, must be at least the version used
+	; for this source
+	lda $b7
+	cmp #DLoad_MMC64_ParameterVersion
+	bcs parameterOk
+	lda #Error_MmcParameterVersion
+        sec
+        rts
+parameterOk:
+	ldy #1
+	jsr copyNPatchLd
+
+	; copy mmc code
+	ldx #0
+copyLdMMC64:
+	lda LdMMCPsyStart,x
+	sta LdCommonEnd,x
+	lda LdMMCPsyStart+((LdMMCEnd-LdCommonEnd) & $ff),x
+	sta LdCommonEnd+((LdMMCEnd-LdCommonEnd) & $ff),x
+	inx
+	bne copyLdMMC64
+
+	; patch mmc code
+
+	; root dir
+	ldy #MMC64Param_DirTrack
+	lda ($bb),y
+	sta Patch_LdMMC64_DirTrack+1
+	ldy #MMC64Param_DirSec
+	lda ($bb),y
+	sta Patch_LdMMC64_DirSec+1
+
+	; this is for 512 sectors only!
+	ldy #MMC64Param_ClusterMask
+	lda ($bb),y
+	sta Patch_LdMMC64_ClusterMask+1
+
+	ldy #MMC64Param_BlockClusterShift
+	lda ($bb),y
+	sta Patch_LdMMC64_BlockClusterShift_0+1
+	sta Patch_LdMMC64_BlockClusterShift_1+1
+
+	ldy #MMC64Param_FirstDataBlock
+	lda ($bb),y
+	sta Patch_LdMMC64_FirstDataBlock0+1
+	iny
+	lda ($bb),y
+	sta Patch_LdMMC64_FirstDataBlock1+1
+	iny
+	lda ($bb),y
+	sta Patch_LdMMC64_FirstDataBlock2+1
+
+	ldy #MMC64Param_FirstClusterBlock
+	lda ($bb),y
+	sta LdMMC64_PatchFirstClusterBlock0+1
+	iny
+	lda ($bb),y
+	sta LdMMC64_PatchFirstClusterBlock1+1
+	iny
+	lda ($bb),y
+	sta LdMMC64_PatchFirstClusterBlock2+1
+
+
+	; patch cluster handler
+
+	lda FileZp_Device
+	cmp #DLoad_MMC64_DeviceAddress
+	bne mmc_no_plain
+
+	; ***** Plain *****
+	ldx #LdMMC64_ClusterHandlerEnd_Plain-LdMMC64_ClusterHandlerStart_Plain
+mmcCopyCodePlain:
+	lda LdMMC64_ClusterHandlerStart_Plain-1,x
+	sta LdMMC_ClusterHandlerPatchStart-1,x
+	dex
+	bne mmcCopyCodePlain
+
+	lda #0
+	sta LdMMC64_PatchLastSkipClustersLo+1
+	sta LdMMC64_PatchLastSkipClustersHi+1
+
+	; init first cluster
+	ldy #MMC64Param_FirstCluster
+	lda ($bb),y
+	sta Patch_LdMMC64_FirstClusterLo+1
+	iny
+	lda ($bb),y
+	sta Patch_LdMMC64_FirstClusterHi+1
+
+	ldy #MMC64Param_FATStartSector
+	lda ($bb),y
+	sta Patch_LdMMC64_FATStartBlock0+1
+	iny
+	lda ($bb),y
+	sta Patch_LdMMC64_FATStartBlock1+1
+	iny
+	lda ($bb),y
+	sta Patch_LdMMC64_FATStartBlock2+1
+
+	lda #$ff
+	sta LdMMC64_PatchLastFatBlock0+1
+	sta LdMMC64_PatchLastFatBlock1+1
+
+	clc
+	rts
+
+
+mmc_no_plain:
+	cmp #DLoad_MMC64RR_DeviceAddress
+	bne mmc_no_rr
+
+
+	; ***** RR *****
+	ldx #LdMMC64_ClusterHandlerEnd_RR-LdMMC64_ClusterHandlerStart_RR
+mmcCopyCodeRR:
+	lda LdMMC64_ClusterHandlerStart_RR-1,x
+	sta LdMMC_ClusterHandlerPatchStart-1,x
+	dex
+	bne mmcCopyCodeRR
+
+	lda #0
+	sta LdMMC64RR_PatchLastSkipClustersLo+1
+	sta LdMMC64RR_PatchLastSkipClustersHi+1
+
+	clc
+	rts
+
+
+mmc_no_rr:
+	; ***** Cnt *****
+	ldx #LdMMC64_ClusterHandlerEnd_Cnt-LdMMC64_ClusterHandlerStart_Cnt
+mmcCopyCodeCnt:
+	lda LdMMC64_ClusterHandlerStart_Cnt-1,x
+	sta LdMMC_ClusterHandlerPatchStart-1,x
+	dex
+	bne mmcCopyCodeCnt
+
+	; init first cluster
+	ldy #MMC64Param_FirstCluster
+	lda ($bb),y
+	sta Patch_LdMMC64Cnt_FirstClusterLo+1
+	iny
+	lda ($bb),y
+	sta Patch_LdMMC64Cnt_FirstClusterHi+1
+
+	clc
+	rts
+
+    .)
+
+
+;--------------------------------------
+
+InstallRealDrive:
+    .(
+	txa
+	beq Err_UnknownDrive
+	cpx #7
+	bcc driveTypOk
+
+Err_UnsupportedDrive:
+        lda #Error_UnsupportedDrive
+	.DB $2c
+Err_UnknownDrive:
+	lda #Error_UnknownDrive
+	sec
+	rts
+
+driveTypOk:
+	stx DLoadZp_DevType
+	lda DLoadBSS_TabMaxCmdLen-1,x
+	sta DLoadBSS_SysCmd0
+	lda DLoadBSS_TabIStartLo-1,x
+	sta DLoadZp_Ptr
+	lda DLoadBSS_TabIStartHi-1,x
+	sta DLoadZp_Ptr+1
+	lda DLoadBSS_TabILength-1,x
+	sta LdLAE
+	lda #7
+	sta DLoadBSS_SysCmd0+1
+	lda #0
+	sta DLoadBSS_SysCmd0+2
+
+Sys0:
+	sec
+	lda LdLAE
+	sbc DLoadBSS_SysCmd0+2
+	beq Sys5
+	cmp DLoadBSS_SysCmd0
+	bcs Sys1
+	sta DLoadBSS_SysCmd0
+Sys1:
+	jsr Listen
+	ldy #6
+Sys2:
+	lda DLoadBSS_SysCmd0-1,y
+	jsr File_WriteByte
+	dey
+	bne Sys2
+Sys3:
+	lda (DLoadZp_Ptr),y
+	jsr File_WriteByte
+	iny
+	cpy DLoadBSS_SysCmd0
+	bcc Sys3
+	jsr File_UnListen
+	tya
+	clc
+	adc DLoadZp_Ptr
+	sta DLoadZp_Ptr
+	bcc Sys4
+	inc DLoadZp_Ptr+1
+Sys4:
+	tya
+	clc
+	adc DLoadBSS_SysCmd0+2
+	sta DLoadBSS_SysCmd0+2
+	bcc Sys0
+/*
+;the Init-Routines are much smaller than 1 Page
+	inc DLoadBSS_SysCmd0+1
+	bcs Sys0
+*/
+
+Sys5:
+	jsr Listen
+	ldy #5
+Sys6:
+	lda DLoadBSS_SysCmd1-1,y
+	jsr File_WriteByte
+	dey
+	bne Sys6
+	jsr File_UnListen
+
+	ldy DLoadZp_DevType
+	cpy #IFFDevTyp_FD
+	bne PatchNoFD
+        ldx #PatchFDLen
+PatchFDLoop:
+	lda PatchFDTab,x
+	sta T81LdS+T81_PatchFD-$300,x
+	dex
+	bpl PatchFDLoop
+PatchNoFD:
+#ifndef LdFlag_7Xis41
+	cpy #IFFDevTyp_70
+	bne PatchNo70
+	asl T71LdS+T71_Patch70Stepper+1-$0300
+	lda #36
+	sta T71LdS+T71_Patch70MaxTrk+1-$0300
+PatchNo70:
+#endif
+	lda DLoadBSS_TabDriveCodeLo-1,y
+	sta DLoadZp_Ptr
+	lda DLoadBSS_TabDriveCodeHi-1,y
+	sta DLoadZp_Ptr+1
+	lda DLoadBSS_TabDriveCodePages-1,y
+	sta LdLAE+1
+
+	ldx #2
+Sys7:
+	jsr Delay
+	dey
+	bne Sys7
+	dex
+	bne Sys7
+
+Send:
+	lda (DLoadZp_Ptr),y
+	sta LdLAE
+	ldx #3
+Send0:
+	asl LdLAE
+        lda #$30+LdFlag_VicBank
+	bcs Send1
+        lda #$10+LdFlag_VicBank
+Send1:
+	sta $dd00
+	asl LdLAE
+        lda #$20+LdFlag_VicBank
+	bcs Send2
+        lda #$00+LdFlag_VicBank
+Send2:
+	sta $dd00
+	jsr Delay
+	dex
+	bpl Send0
+	iny
+	bne Send
+	inc DLoadZp_Ptr+1
+	dec LdLAE+1
+	bne Send
+        lda #$00+LdFlag_VicBank
+        sta $dd00
+
+	ldy #0
+	jsr copyNPatchLd
+
+	;copy LdSerial
+	ldx #LdSerialPsyEnd-LdSerialPsyStart
+copyLdSerial0:
+	lda LdSerialPsyStart-1,x
+	sta LdCommonEnd-1,x
+	dex
+	bne copyLdSerial0
+	;copy Ld for device
+	ldx DLoadZp_DevType
+	lda DLoadBSS_TabLdStartLo-1,x
+	sta DLoadZp_Ptr
+	lda DLoadBSS_TabLdStartHi-1,x
+	sta DLoadZp_Ptr+1
+	ldy DLoadBSS_TabLdLength-1,x
+copyLdSerial1:
+	dey
+	lda (DLoadZp_Ptr),y
+	sta LdSerialEnd,y
+	tya
+	bne copyLdSerial1
+
+	clc
+	rts
+
+Delay:
+	LdDelay
+	rts
+
+
+PatchFDTab:
+	ldx $54.2
+	lda $56
+        cpx $51.2
+PatchFDLen = *-PatchFDTab-1
+
+Listen:
+	lda #0
+	sta $90
+	lda FileZp_Device
+	jsr File_Listen
+	lda #$6F
+	jmp File_SecListen
+
+
+DLoadBSS_TabIStartLo:
+	.DB <I41Start,		<I71Start
+	.DB <I71Start,		<I81Start
+	.DB <IHDStart,		<I81Start
+DLoadBSS_TabIStartHi:
+	.DB >I41Start,		>I71Start
+	.DB >I71Start,		>I81Start
+	.DB >IHDStart,		>I81Start
+DLoadBSS_TabILength:
+	.DB I41End-I41Start,	I71End-I71Start
+	.DB I71End-I71Start,	I81End-I81Start
+	.DB IHDEnd-IHDStart,	I81End-I81Start
+DLoadBSS_TabMaxCmdLen:
+	.DB 34,			34
+	.DB 34,			34
+	.DB 248,		120
+
+DLoadBSS_TabDriveCodeLo:
+	.DB <T41LdS,		<T71LdS
+	.DB <T71LdS,		<T81LdS
+	.DB <THDLdS,		<T81LdS
+DLoadBSS_TabDriveCodeHi:
+	.DB >T41LdS,		>T71LdS
+	.DB >T71LdS,		>T81LdS
+	.DB >THDLdS,		>T81LdS
+DLoadBSS_TabDriveCodePages:
+	.DB >T41LdEnd-$0201,	>T71LdEnd-$0201
+	.DB >T71LdEnd-$0201,	>T81LdEnd-$0201
+	.DB >THDLdEnd-$0201,	>T81LdEnd-$0201
+
+DLoadBSS_TabLdStartLo:
+	.DB <Ld41PsyStart,	<Ld71PsyStart
+	.DB <Ld71PsyStart,	<LdHDPsyStart
+	.DB <LdHDPsyStart,	<LdHDPsyStart
+DLoadBSS_TabLdStartHi:
+	.DB >Ld41PsyStart,	>Ld71PsyStart
+	.DB >Ld71PsyStart,	>LdHDPsyStart
+	.DB >LdHDPsyStart,	>LdHDPsyStart
+DLoadBSS_TabLdLength:
+	.DB Ld41End-LdSerialEnd,Ld71End-LdSerialEnd
+	.DB Ld71End-LdSerialEnd,LdHDEnd-LdSerialEnd
+	.DB LdHDEnd-LdSerialEnd,LdHDEnd-LdSerialEnd
+
+
+DLoadBSS_SysCmd0:
+	.DB 0,7,0
+	.PET "w-m"
+DLoadBSS_SysCmd1:
+	.DB 7,0
+	.PET "e-m"
+
+
+    .)
+
+;--------------------------------------
+
+copyNPatchLd:
+    .(
+	ldx #LdCommonPsyEnd-LdCommonPsyStart
+copyLdCommon:
+	lda LdCommonPsyStart-1,x
+	sta LdLoc-1,x
+	dex
+	bne copyLdCommon
+
+	ldx DLoadZp_DevType
+	lda DLoadBSS_TabReadBlockLo-1,x
+#ifdef LdFlag_SetDD02
+	sta PatchCommon_ReadBlock0+1
+#else
+	#ifndef LdFlag_OpenGetInterface
+		sta PatchCommon_LoadTS0+1
+		sta PatchCommon_LoadTS3+1
+	#else
+		sta PatchCommon_LoadTS4+1
+	#endif
+	sta PatchCommon_LoadTS1+1
+	sta PatchCommon_LoadTS2+1
+#endif
+	lda DLoadBSS_TabReadBlockHi-1,x
+#ifdef LdFlag_SetDD02
+	sta PatchCommon_ReadBlock0+2
+#else
+	#ifndef LdFlag_OpenGetInterface
+		sta PatchCommon_LoadTS0+2
+		sta PatchCommon_LoadTS3+2
+	#else
+		sta PatchCommon_LoadTS4+2
+	#endif
+	sta PatchCommon_LoadTS1+2
+	sta PatchCommon_LoadTS2+2
+#endif
+
+	; patch the special functions
+	lda DLoadBSS_TabShutUpLo,y
+	sta PatchCommon_ShutUp0+1
+	lda DLoadBSS_TabShutUpHi,y
+	sta PatchCommon_ShutUp0+2
+	lda DLoadBSS_TabWakeUpLo,y
+	sta PatchCommon_WakeUp0+1
+	lda DLoadBSS_TabWakeUpHi,y
+	sta PatchCommon_WakeUp0+2
+	lda DLoadBSS_TabLedOffLo,y
+	sta PatchCommon_LedOff0+1
+	sta PatchCommon_LedOff1+1
+	sta PatchCommon_LedOff2+1
+	lda DLoadBSS_TabLedOffHi,y
+	sta PatchCommon_LedOff0+2
+	sta PatchCommon_LedOff1+2
+	sta PatchCommon_LedOff2+2
+	lda DLoadBSS_TabSwitchOffLo,y
+	sta PatchCommon_SwitchOff0+1
+	lda DLoadBSS_TabSwitchOffHi,y
+	sta PatchCommon_SwitchOff0+2
+	rts
+    .)
+
+;--------------------------------------
+;		41		70
+;		71		81
+;		HD		FD
+;		MMC64
+;--------------------------------------
+
+#ifdef LdFlag_7Xis41
+	I71Start = I41Start
+	I71End = I41End
+	T71LdS = T41LdS
+	T71LdEnd = T41LdEnd
+	Ld71PsyStart = Ld41PsyStart
+	Ld71End = Ld41End
+	Ld71ReadBlock = Ld41ReadBlock
+#else
+	Ld71PsyStart = LdHDPsyStart
+	Ld71End = LdHDEnd
+	Ld71ReadBlock = LdHDReadBlock
+#endif
+
+
+;--------------------------------------
+; c64 code start, serial only
+
+;--------------------------------------
+; patch ldcommon, all models
+
+DLoadBSS_TabReadBlockLo:
+	.DB <Ld41ReadBlock,     <Ld71ReadBlock
+	.DB <Ld71ReadBlock,     <LdHDReadBlock
+	.DB <LdHDReadBlock,     <LdHDReadBlock
+	.DB <LdMMCReadBlock
+DLoadBSS_TabReadBlockHi:
+	.DB >Ld41ReadBlock,     >Ld71ReadBlock
+	.DB >Ld71ReadBlock,     >LdHDReadBlock
+	.DB >LdHDReadBlock,     >LdHDReadBlock
+	.DB >LdMMCReadBlock
+
+;--------------------------------------
+; patch ldcommon, serial, mmc, mmcrr
+
+DLoadBSS_TabShutUpLo:
+	.DB <LdSerial_ShutUp
+	.DB <LdMMC64_ShutUp
+DLoadBSS_TabShutUpHi:
+	.DB >LdSerial_ShutUp
+	.DB >LdMMC64_ShutUp
+
+DLoadBSS_TabWakeUpLo:
+	.DB <LdSerial_WakeUp
+	.DB <LdMMC64_WakeUp
+DLoadBSS_TabWakeUpHi:
+	.DB >LdSerial_WakeUp
+	.DB >LdMMC64_WakeUp
+
+DLoadBSS_TabLedOffLo:
+	.DB <LdSerial_LedOff
+	.DB <LdMMC64_LedOff
+DLoadBSS_TabLedOffHi:
+	.DB >LdSerial_LedOff
+	.DB >LdMMC64_LedOff
+
+DLoadBSS_TabSwitchOffLo:
+	.DB <LdSerial_SwitchOff
+	.DB <LdMMC64_SwitchOff
+DLoadBSS_TabSwitchOffHi:
+	.DB >LdSerial_SwitchOff
+	.DB >LdMMC64_SwitchOff
+
+;--------------------------------------
+
+	.)	;*** DLoad ***
+
+

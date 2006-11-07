@@ -1,0 +1,14 @@
+SubDir TOP demo decrunch_levelsqueezer20 ;
+
+#--------------------------------------
+
+AddProjectFiles Jamfile ;
+AddProjectFiles dload.cfg ls20_d.src ls20decrunch.src ;
+AddProjectFiles level-squeezer.prg readme.txt ;
+AddProjectFiles test.prg ;
+
+#--------------------------------------
+
+Demo ls20_d : [ FGristFiles test.prg ] ;
+
+#--------------------------------------

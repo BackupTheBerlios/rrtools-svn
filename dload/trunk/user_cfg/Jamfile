@@ -1,0 +1,18 @@
+SubDir TOP user_cfg ;
+
+#--------------------------------------
+
+AddProjectFiles Jamfile ;
+AddProjectFiles dload.cfg ;
+#AddProjectFiles readme.txt ;
+
+#--------------------------------------
+
+userfile = [ FGristFiles dload.prg ] ;
+
+DEPENDS all : $(userfile) ;
+NotFile user ;
+DEPENDS user : $(userfile) ;
+Object $(userfile) : $(DLOAD_SI) ;
+
+#--------------------------------------

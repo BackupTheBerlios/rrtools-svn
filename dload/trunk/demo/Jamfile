@@ -1,0 +1,23 @@
+SubDir TOP demo ;
+
+#--------------------------------------
+
+AddProjectFiles Jamfile ;
+AddProjectFiles readme.txt ;
+
+#--------------------------------------
+
+SubInclude TOP demo decrunch_abcruncher20 ;
+SubInclude TOP demo decrunch_exomizer ;
+SubInclude TOP demo decrunch_exomizer_link ;
+SubInclude TOP demo decrunch_levelsqueezer20 ;
+SubInclude TOP demo decrunch_pucrunch ;
+SubInclude TOP demo decrunch_pucrunch_link ;
+SubInclude TOP demo irq ;
+SubInclude TOP demo simple ;
+SubInclude TOP demo stress1 ;
+SubInclude TOP demo stress2 ;
+SubInclude TOP demo stress3 ;
+SubInclude TOP demo stress4 ;
+
+#--------------------------------------

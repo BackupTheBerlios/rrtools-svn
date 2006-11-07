@@ -1,0 +1,10 @@
+
+#segdef "mem",  $0000-$10000
+#outfile @, "mem"
+
+	.segment "mem"
+
+	.binclude "bitmap.exo"
+	.binclude "col.exo"
+	.binclude "d8.exo"
+	.binclude "viewer.exo"

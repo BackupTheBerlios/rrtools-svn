@@ -1,0 +1,123 @@
+
+;--------------------------------------
+
+LdSerialPsyStart:
+    .PSEUDOPC LdCommonEnd
+
+;--------------------------------------
+
+@0LdSerial_LedOff:
+        ldy #2
+        .DB $2c
+@0LdSerial_SwitchOff:
+        ldy #0
+#ifdef LdFlag_SetDD02
+        jsr SetDD02
+#endif
+        ldx #0
+PatchCommon_SendH0:
+#ifdef LdFlag_SetDD02
+        jsr LdSerial_LdSendH
+        jmp UnSetDD02
+#else
+        jmp LdSerial_LdSendH
+#endif
+
+;--------------------------------------
+
+@0LdSerial_ShutUp:
+#ifdef LdFlag_SetDD02
+	lda $dd00
+	ora #$20
+	and #$ef
+	sta $dd00
+ShutUp0:
+	bit $dd00
+	bvc ShutUp0
+	eor #$30
+	sta $dd00
+#else
+	lda #$20
+	sta $dd00
+ShutUp0:
+	bit $dd00
+	bvc ShutUp0
+	lda $dd02
+	and #3
+	eor #$13
+	sta $dd00
+#endif
+	jsr ShutUp1
+        lda #3
+        sta $dd02
+ShutUp1:
+        rts
+
+;--------------------------------------
+
+@0LdSerial_WakeUp:
+	lda $dd00
+	ora #$10
+	sta $dd00
+	and #3
+	eor #$3f
+	sta $dd02
+	ldx #0
+	ldy #2
+#ifdef LdFlag_SetDD02
+	jsr SendHJumpIn
+	jmp UnSetDD02
+#else
+        bne SendHJumpIn
+#endif
+
+@0LdSerial_LdSendH:
+	lda #$20
+	sta $dd00
+SendH0:
+	bit $dd00
+	bvc SendH0
+SendHJumpIn:
+	txa
+	jsr LdSerial_SendByte
+	tya
+
+@0LdSerial_SendByte:
+	sta LdGZp
+	ldx #3
+SendNibble:
+	asl LdGZp
+	lda #$80
+	ror
+	lsr
+	lsr
+	sta $dd00
+	jsr LdSerial_CSRts
+	asl LdGZp
+	lda #$00
+	ror
+	lsr
+	lsr
+	sta $dd00
+	jsr LdSerial_CSRts
+	dex
+	bpl SendNibble
+	jsr LdSerial_CSRts
+	jsr LdSerial_CSRts
+	jsr LdSerial_CSRts
+	jsr LdSerial_CSRts
+LdSerial_CSRts:
+	; LedOff and thus LdSerial_CSRts must return carry clear!
+	clc
+	rts
+
+LdSerial_Error:
+	sec
+	rts
+
+;--------------------------------------
+
+LdSerialEnd:
+    .REALPC
+LdSerialPsyEnd:
+

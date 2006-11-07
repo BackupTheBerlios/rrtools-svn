@@ -1,0 +1,397 @@
+;--------------------------------------
+;
+; TLoad 1541
+;
+;--------------------------------------
+
+T41LdS:
+    .PSEUDOPC $0300
+
+    .(  ;*** T41 ***
+
+LdZp            = $06
+LdWFlag         = $07
+LdTrys          = $08
+LdTrk           = $09
+LdSec           = $0a
+LdATrk          = $0b
+LdPengu         = $0c
+
+
+LdXTmp          = $8b
+LdYTmp          = $8c
+
+LdB0            = $0146
+LdB1            = $0187
+LdB2            = $01c8
+LdB3            = $0209
+LdB4            = $0700
+LdB5            = $0741
+LdB6            = $0782
+LdB7            = $06bf
+LdDp            = $1800
+
+;--------------------------------------
+
+#macro LdSm(Smv0)
+{
+    .(
+	ldx {Smv0},y
+	lda LdTab1,X
+	sta LdDp
+Wait0:
+	bit LdDp
+	bpl Wait0
+	asl
+	ora #$10
+	sta LdDp
+Wait1:
+	bit LdDp
+	bmi Wait1
+    .)
+}
+
+#macro t41LdWBy
+{
+    .(
+Wait:
+	bvc Wait
+	clv
+	lda $1c01
+    .)
+}
+
+;--------------------------------------
+
+LdErr:
+	ldx #$0B
+	stx LdB0
+	dex
+	stx LdB7
+	ldy #0
+	jmp LdSLoopP
+Ld2:
+	jmp ($FFFC)
+@0T41_LdrStart:
+	lda $1C00
+	and #$F3
+	sta $1C00
+	and #$10        ;New
+	sta LdPengu     ;New
+;       lda #0          ;New
+	lda #$10        ;hauptsache <>0
+	sta LdWFlag
+
+	lda #8
+	sta LdDp
+	lda #1
+WaitHand:
+	bit LdDp
+	bne WaitHand
+LdGL0:
+	lda #0
+	sta LdDp
+	jsr LdDGet
+	tax
+	jsr LdDGet
+	cpx #0
+	bne Ld1
+	tay
+	beq Ld2
+	dey
+	bne T41_LdrStart
+	ldx #18
+	lda #1
+Ld1:
+	cpx #36
+LdErrP:
+	bcs LdErr
+	stx LdTrk
+	sta LdSec
+	lda $1c00
+	and #$10               ;Protection
+	eor LdPengu            ;Changed? -> Akku == $10
+	ora LdWFlag            ;Protection Changed or Motor Warmup?
+	beq LdGl1              ;LdWFlag Rumdrehen
+	lda $1c00
+	ora #$0c
+	sta $1c00
+	and #$10               ;Get Protection
+	sta LdPengu
+	lda #0                 ;LdWFlag Rumdrehen
+	sta LdWFlag
+	lda $1c0c
+	ora #$0e
+	sta $1c0c
+LdWarm:
+	jsr LdSeek
+	bcs LdWarm
+LdGl1:
+	lda #5
+	sta LdTrys
+LdRead1:
+	dec LdTrys
+	bmi LdErr
+	jsr LdMoveH
+	jsr LdSRead
+	bcc LdRead0
+	jsr LdSeek
+	bcc LdRead1
+	bcs LdErrP
+LdRead0:
+	lda #$0a
+	sta LdB0+$40
+	sta LdB7+$40
+	ldy #$40
+	jmp LdSLoopP
+LdSLoop:
+	.LdSm(LdB1+1)
+	.LdSm(LdB5+1)
+	.LdSm(LdB6+1)
+	.LdSm(LdB4+1)
+LdSLoopP:
+	.LdSm(LdB0)
+	.LdSm(LdB7)
+	.LdSm(LdB3)
+	.LdSm(LdB2)
+
+	dey
+	bmi LdSLoop0
+	jmp LdSLoop
+LdSLoop0:
+	jmp LdGL0
+
+LdSeek:
+	ldy #91
+LdSeek0:
+	dey
+	bmi LdErr1
+	jsr LdSync
+	.t41LdWBy
+	cmp #$52
+	bne LdSeek0
+LdBW1:
+	.t41LdWBy
+	sta $25,X
+	inx
+	cpx #7
+	bcc LdBW1
+	jsr $F497
+	lda $16
+	eor $17
+	eor $18
+	eor $19
+	eor $1a
+	bne LdErr1
+	lda $18
+	sta LdATrk
+	lda $16
+	sta $12
+	lda $17
+	sta $13
+	clc
+	rts
+LdMoveH:
+	lda LdATrk
+	sec
+	sbc LdTrk
+	beq LdMHR
+	ldx #1
+	bcs LdMH1
+	eor #$ff
+	adc #1
+	dex
+LdMH1:
+	asl
+	sta LdYTmp
+	stx LdXTmp
+LdMH0:
+	lda LdXTmp
+	eor $1c00
+	sec
+	rol
+	and #3
+	eor $1c00
+	sta $1c00
+	ldy #6
+;       ldx #0
+LdWL:
+	inx
+	bne LdWL
+	dey
+	bne LdWL
+	dec LdYTmp
+	bne LdMH0
+
+LdMHR:
+	lda LdTrk
+	sta LdATrk
+	ldx #4
+LdZ0:
+	dex
+	cmp LdZone,X
+	bcc LdZ0
+	lda $1c00
+	and #$9f
+	ora LdZone0,X
+	sta $1c00
+	rts
+LdErr1:
+	sec
+	rts
+LdSRead:
+	lda $12
+	sta $16
+	lda $13
+	sta $17
+	lda LdTrk
+	sta $18
+	lda LdSec
+	sta $19
+	eor $16
+	eor $17
+	eor $18
+	sta $1a
+	jsr $F934
+	ldy #90
+LdLF54E:
+	dey
+	bmi LdErr2
+	jsr LdSync
+LdLF53D:
+	.t41LdWBy
+	cmp $24,X
+	bne LdLF54E
+	inx
+	cpx #8
+	bcc LdLF53D
+	jsr LdSync
+	ldy #$40
+	.t41LdWBy
+	cmp #$55
+	beq LdBbr0
+LdErr2:
+	sec
+	rts
+LdBr0:
+	.t41LdWBy
+	lsr
+	sta LdB0,Y
+LdBbr0:
+	.t41LdWBy
+	ror
+	tax
+	and #$e0
+	sta LdB1,Y
+	txa
+	and #$1f
+	sta LdB2,Y
+	.t41LdWBy
+	tax
+	ror
+	lsr
+	lsr
+	lsr
+	sta LdB3,Y
+	.t41LdWBy
+	sta LdB4,Y
+	asl
+	txa
+	rol
+	and #$1f
+	sta LdB5,Y
+	.t41LdWBy
+	sta LdB6,Y
+	dey
+	bpl LdBr0
+	ldx #$40
+LdBr1:
+	lda LdB0,X
+	lsr
+	lsr
+	sta LdB7,X
+	lda LdB0,X
+	and #3
+	lsr
+	ora LdB1,X
+	rol
+	rol
+	rol
+	rol
+	sta LdB0,X
+	lda LdB4,X
+	lsr
+	lsr
+	and #$1f
+	sta LdB1,X
+	lda LdB6,X
+	lsr LdB4,X
+	ror
+	lsr LdB4,X
+	ror
+	lsr
+	lsr
+	lsr
+	sta LdB4,X
+	lda LdB6,X
+	and #$1f
+	sta LdB6,X
+	dex
+	bpl LdBr1
+	clc
+	rts
+
+LdDGet:
+	ldy #3
+LdDGet0:
+	lda #4		; 2
+LdDGet1:
+	bit LdDp	; 4
+	.SAFEBRA(beq,LdDGet1)	; 2
+	lda LdDp	; 4
+	lsr		; 2
+	rol LdZp	; 5
+			;---
+			;19
+
+	lda #4		; 2
+LdDGet2:
+	bit LdDp	; 4
+	.SAFEBRA(bne,LdDGet2)	; 2
+	lda LdDp	; 4
+	lsr		; 2
+	rol LdZp	; 5
+			;---
+			;19
+	dey
+	.SAFEBRA(bpl,LdDGet0)
+	lda LdZp
+	rts
+
+LdSync:
+	bit $1c00
+	bmi LdSync
+	lda $1c01
+	clv
+	ldx #0
+	rts
+
+LdTab1:
+	.SAFETABLE_START
+	.DB $00,$00,$00,$00,$00,$00,$00,$00
+	.DB $00,$0e,$0f,$07,$00,$0a,$0b,$03
+	.DB $00,$00,$0d,$05,$00,$00,$09,$01
+	.DB $00,$06,$0c,$04,$00,$02,$08
+	.SAFETABLE_END
+LdZone:
+	.DB 1,18,25,31
+LdZone0:
+	.DB $60,$40,$20,0
+
+    .)  ;*** T41 ***
+
+T41LdEnd:
+    .REALPC
+T41LdE:
+
+;--------------------------------------

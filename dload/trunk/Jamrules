@@ -1,0 +1,456 @@
+ECHO "Using C64 toolset" ;
+
+# matches both ".binclude" and "#include"
+DREAMASS_INCPATTERN = "include[ \t]*[\"<]([^\">]*)[\">].*$" ;
+
+
+if $(NT) {
+	SYSTEM_SLASH = \\ ;
+	RM = del ;
+} else {
+	SYSTEM_SLASH = / ;
+}
+
+#--------------------------------------
+# Demo rule
+#
+# Set up dependencies for a dload demo
+#
+
+rule Demo
+{
+	local _diskfiles ;
+	local _simname ;
+	local _demo ;
+	local _dload ;
+
+
+	_diskfiles = [ FGristFiles $(<).prg ] $(>) ;
+	_demo = [ FGristFiles $(<).prg ] ;
+	_dload = [ FGristFiles dload.prg ] ;
+
+	# add the diskimages to the 'all' target
+	DEPENDS all : [ FGristFiles $(<).d64 $(<).d81 $(<).lnx $(<).dfi ] ;
+
+	CreateD64  [ FGristFiles $(<).d64 ] : $(_diskfiles) ;
+	CreateD81  [ FGristFiles $(<).d81 ] : $(_diskfiles) ;
+	CreateLynx [ FGristFiles $(<).lnx ] : $(_diskfiles) ;
+	CreateDfi  [ FGristFiles $(<).dfi ] : $(_diskfiles) ;
+
+	Object $(_dload) : $(DLOAD_SI) ;
+	Object $(_demo) : [ FGristFiles $(<).src ] ;
+	DEPENDS $(_demo) : $(_dload) ;
+
+	# add simulation rules
+	Emu sim41p:$(LOCATE_TARGET:BS) : [ FGristFiles $(<).d64 ] : -drive8type 1541 -pal $(RR_PAL_CRT) ;
+	Emu sim70p:$(LOCATE_TARGET:BS) : [ FGristFiles $(<).d64 ] : -drive8type 1570 -pal $(RR_PAL_CRT) ;
+	Emu sim71p:$(LOCATE_TARGET:BS) : [ FGristFiles $(<).d64 ] : -drive8type 1571 -pal $(RR_PAL_CRT) ;
+	Emu sim81p:$(LOCATE_TARGET:BS) : [ FGristFiles $(<).d81 ] : -drive8type 1581 -pal $(RR_PAL_CRT) ;
+	Emu sim41n:$(LOCATE_TARGET:BS) : [ FGristFiles $(<).d64 ] : -drive8type 1541 -ntsc $(RR_NTSC_CRT) ;
+	Emu sim70n:$(LOCATE_TARGET:BS) : [ FGristFiles $(<).d64 ] : -drive8type 1570 -ntsc $(RR_NTSC_CRT) ;
+	Emu sim71n:$(LOCATE_TARGET:BS) : [ FGristFiles $(<).d64 ] : -drive8type 1571 -ntsc $(RR_NTSC_CRT) ;
+	Emu sim81n:$(LOCATE_TARGET:BS) : [ FGristFiles $(<).d81 ] : -drive8type 1581 -ntsc $(RR_NTSC_CRT) ;
+}
+
+
+rule Emu
+{
+	NotFile $(<) ;
+	ALWAYS $(<) ;
+	DEPENDS $(<) : $(>) ;
+	EMUFLAGS on $(<) = $(EMUFLAGS) $(3) ;
+}
+
+actions Emu
+{
+	x64 $(EMUFLAGS) -8 $(>)
+}
+
+#--------------------------------------
+
+rule Object
+{
+	local _target _source ;
+
+
+	_target = $(<) ;
+	_source = $(>) ;
+
+
+	Clean clean : $(_target) ;
+
+	MakeLocate $(_target) : $(LOCATE_TARGET) ;
+	SEARCH on $(_source) = $(SEARCH_SOURCE) ;
+
+	HDRS on $(_target) = $(SEARCH_SOURCE) $(HDRS) $(SUBDIRHDRS) ;
+
+	HDRRULE on $(_source) = HdrRule ;
+	if $(_source:S) = .src
+	{
+	    HDRSCAN on $(_source) = $(DREAMASS_INCPATTERN) ;
+	}
+	else
+	{
+	    HDRSCAN on $(_source) = $(HDRPATTERN) ;
+	}
+    
+	HDRSEARCH on $(_source) = $(HDRS) $(SUBDIRHDRS) $(SEARCH_SOURCE) $(STDHDRS) ;
+	HDRGRIST on $(_source) = $(HDRGRIST) ;
+
+	switch $(_source:S)
+	{
+		case .src :	DreamAss $(_target) : $(_source) ;
+		case .asm :	As $(_target) : $(_source) ;
+		case .c :	Cc $(_target) : $(_source) ;
+		case .C :	C++ $(_target) : $(_source) ;
+		case .cc :	C++ $(_target) : $(_source) ;
+		case .cpp :	C++ $(_target) : $(_source) ;
+		case .s :	As $(_target) : $(_source) ;
+		case * :	UserObject $(_target) : $(_source) ;
+	}
+}
+
+#--------------------------------------
+
+rule AddProjectFiles
+{
+	local _path ;
+
+	if $(SUBDIR) != $(DOT)
+	{
+		_path = $(SUBDIR)$(SYSTEM_SLASH) ;
+		PROJECT_FILES += $(_path)$(<) ;
+	} else {
+		PROJECT_FILES += $(<) ;
+	}
+}
+
+#--------------------------------------
+
+# expand/cutdown a number to 2 digits
+rule TwoDigit
+{
+	local _d ;
+
+	_d = [ MATCH "0*([0-9][0-9])x" : 00$(<)x ] ;
+	return $(_d) ;
+}
+
+# convert the JAMDATE to a datestamp list with year,month,monthday,hour,minute
+rule DateStamp
+{
+	local _monthname ;
+	local _month ;
+	local _datestamp ;
+
+
+	_monthname = [ MATCH "... (...)" : $(JAMDATE) ] ;
+	switch $(_monthname)
+	{
+	case Jan : _month = 01 ;
+	case Feb : _month = 02 ;
+	case Mar : _month = 03 ;
+	case Apr : _month = 04 ;
+	case May : _month = 05 ;
+	case Jun : _month = 06 ;
+	case Jul : _month = 07 ;
+	case Aug : _month = 08 ;
+	case Sep : _month = 09 ;
+	case Oct : _month = 10 ;
+	case Nov : _month = 11 ;
+	case Dec : _month = 12 ;
+	}
+
+	_datestamp = [ MATCH "[^ ]+ +[^ ]+ +[0-9]+ +[0-9]+:[0-9]+:[0-9]+ +([0-9]+)" : $(JAMDATE) ] ;
+	_datestamp += $(_month) ;
+	_datestamp += [ TwoDigit [ MATCH "[^ ]+ +[^ ]+ +([0-9]+)" : $(JAMDATE) ] ] ;
+	_datestamp += [ TwoDigit [ MATCH "[^ ]+ +[^ ]+ +[0-9]+ +([0-9]+)" : $(JAMDATE) ] ] ;
+	_datestamp += [ TwoDigit [ MATCH "[^ ]+ +[^ ]+ +[0-9]+ +[0-9]+:([0-9]+)" : $(JAMDATE) ] ] ;
+
+	return $(_datestamp) ;
+}
+
+# build a filename with date and timestamp (YYYYMMDD_hhmm)
+rule DateTimeStampFilename
+{
+	local _ds ;
+	local _name ;
+
+
+	_ds = [ DateStamp ] ;
+
+	_name = $(<[1])$(_ds[1]) ;
+	_name = $(_name)$(_ds[2]) ;
+	_name = $(_name)$(_ds[3]) ;
+	_name = $(_name)_ ;
+	_name = $(_name)$(_ds[4]) ;
+	_name = $(_name)$(_ds[5]) ;
+	_name = $(_name)$(<[2]) ;
+
+	return $(_name) ;
+}
+
+# build a filename with datestamp (YYYYMMDD)
+rule DateStampFilename
+{
+	local _ds ;
+	local _name ;
+
+
+	_ds = [ DateStamp ] ;
+
+	_name = $(<[1])$(_ds[1]) ;
+	_name = $(_name)$(_ds[2]) ;
+	_name = $(_name)$(_ds[3]) ;
+	_name = $(_name)$(<[2]) ;
+
+	return $(_name) ;
+}
+
+
+rule BackupRar
+{
+	local _arcname ;
+
+
+	NotFile $(<) ;
+
+	_arcname = [ DateTimeStampFilename $(PROJECT)_complete_ .rar ] ;
+	_arcname = $(SYSTEM_SLASH)$(_arcname) ;
+	_arcname = $(ARCDIR)$(_arcname) ;
+
+	DEPENDS $(<) : $(_arcname) ;
+	BackupRar1 $(_arcname) ;
+}
+
+rule BackupRar1
+{
+	ALWAYS $(<) ;
+}
+
+actions BackupRar1
+{
+	rar a -ap$(PROJECT) -k -m5 -r -s $(<)
+}
+
+
+rule DistribRar
+{
+	local _arcname ;
+	local _filelist ;
+	local _filelist_comment ;
+
+
+	NotFile $(<) ;
+
+	_arcname = [ DateStampFilename $(PROJECT)_src_ .rar ] ;
+	_arcname = $(SYSTEM_SLASH)$(_arcname) ;
+	_arcname = $(ARCDIR)$(_arcname) ;
+
+	_filelist = _$(PROJECT).lst ;
+	_filelist_comment = "// generated by jam on $(JAMDATE), all changes will be lost" ;
+	DEPENDS $(<) : $(_arcname) ;
+	DEPENDS $(_arcname) : $(_filelist) ;
+	MakeList $(_filelist) : $(>) : $(_filelist_comment) ;
+	DistribRar1 $(_arcname) : $(_filelist) ;
+	RmTemps $(_arcname) : $(_filelist) ;
+}
+
+rule DistribRar1
+{
+	DEPENDS $(<) : $(>) ;
+}
+
+actions DistribRar1
+{
+	rar a -ap$(PROJECT) -k -m5 -s $(<) @$(>)
+}
+
+#--------------------------------------
+# Generate a listfile $(<) with all elements of $(>), each in one row
+# The first line is a comment specified in $(3)
+
+rule MakeList
+{
+	DEPENDS $(<) : $(>) ;
+	COMMENT on $(<) = $(3) ; 
+	MakeList1 $(<) ;
+	for file in $(>)
+	{
+		MakeList2 $(<) : $(file) ;
+	}
+}
+
+actions quietly MakeList1
+{
+	echo $(COMMENT) > $(<)
+}
+
+actions quietly MakeList2
+{
+	echo $(>) >> $(<)
+}
+
+#--------------------------------------
+# Cruncher rules
+
+rule Pucrunch
+{
+	Depends $(<) : $(>) ;
+	Depends obj : $(<) ;
+	Clean clean : $(<) ;
+
+	MakeLocate $(<) : $(LOCATE_TARGET) ;
+	SEARCH on $(>) = $(SEARCH_SOURCE) ;
+}
+
+actions Pucrunch
+{
+	pucrunch $(PUCRUNCHFLAGS) $(>) $(<)
+}
+
+
+
+rule Exomizer
+{
+	Depends $(<) : $(>) ;
+	Depends obj : $(<) ;
+	Clean clean : $(<) ;
+
+	MakeLocate $(<) : $(LOCATE_TARGET) ;
+	SEARCH on $(>) = $(SEARCH_SOURCE) ;
+}
+
+actions Exomizer
+{
+	exomizer $(EXOMIZERFLAGS) -o $(<) $(>)
+}
+
+#--------------------------------------
+# Image rules
+
+rule CreateD64
+{
+	# d64 depends on the single files
+	Depends $(<) : $(>) ;
+	# add d64 to clean target
+	Clean clean : $(<) ;
+
+	MakeLocate $(<) : $(LOCATE_TARGET) ;
+	SEARCH on $(>) = $(SEARCH_SOURCE) ;
+}
+
+actions CreateD64
+{
+	echo x > $(<)
+	$(RM) $(<)
+	cbmconvert -n -D4 $(<) $(>)
+}
+
+
+
+rule CreateD81
+{
+	Depends $(<) : $(>) ;
+	Clean clean : $(<) ;
+
+	MakeLocate $(<) : $(LOCATE_TARGET) ;
+	SEARCH on $(>) = $(SEARCH_SOURCE) ;
+}
+
+actions CreateD81
+{
+	echo x > $(<)
+	$(RM) $(<)
+	cbmconvert -n -D8 $(<) $(>)
+}
+
+
+
+rule CreateLynx
+{
+	Depends $(<) : $(>) ;
+	Clean clean : $(<) ;
+
+	MakeLocate $(<) : $(LOCATE_TARGET) ;
+	SEARCH on $(>) = $(SEARCH_SOURCE) ;
+}
+
+actions CreateLynx
+{
+	echo x > $(<)
+	$(RM) $(<)
+	cbmconvert -n -L $(<) $(>)
+}
+
+
+rule CreateDfi
+{
+	Depends $(<) : $(>) ;
+	Clean clean : $(<) ;
+
+	MakeLocate $(<) : $(LOCATE_TARGET) ;
+	SEARCH on $(>) = $(SEARCH_SOURCE) ;
+}
+
+actions CreateDfi
+{
+	echo x > $(<)
+	$(RM) $(<)
+	cbmconvert -n -F $(<) $(>)
+}
+
+#--------------------------------------
+
+rule DreamAss
+{
+	MakeLocate $(<:S=.html) $(<:S=.lab) : $(LOCATE_TARGET) ;
+	Clean clean : $(<:S=.html) $(<:S=.lab) ;
+
+	DEPENDS $(<) : $(>) ;
+	DAFLAGS on $(<) = $(DAFLAGS) $(SUBDIRDAFLAGS) ;
+}
+
+actions DreamAss
+{
+	dreamass -o $(<) -l $(<:S=.lab) -d $(<:S=.html) -I$(HDRS) $(DAFLAGS) $(>)
+}
+
+#--------------------------------------
+
+rule GenCrc
+{
+	local _cmd ;
+
+	Depends $(<) : $(>[1]) ;
+	Clean clean : $(<) ;
+	MakeLocate $(<) : $(LOCATE_TARGET) ;
+	GENCRCFLAGS on $(<) = $(3) ;
+	_cmd = $(DOT)$(SLASH) ;
+	_cmd = $(_cmd)$(>) ;
+	COMMAND on $(<) = $(_cmd) ;
+}
+
+actions GenCrc
+{
+	$(COMMAND) -o $(<) $(GENCRCFLAGS)
+}
+
+#--------------------------------------
+# Document rules
+
+rule RunCommand
+{
+	DEPENDS $(<) : $(>) ;
+	MakeLocate $(<) : $(LOCATE_TARGET) ;
+	SEARCH on $(>) = $(SEARCH_SOURCE) ;
+	COMMAND on $(<) = $(3) ;
+}
+
+actions RunCommand
+{
+	$(COMMAND) -o $(<) $(>[1])
+}
+
+#--------------------------------------
+

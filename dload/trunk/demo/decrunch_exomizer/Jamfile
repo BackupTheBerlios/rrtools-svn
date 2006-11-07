@@ -1,0 +1,14 @@
+SubDir TOP demo decrunch_exomizer ;
+
+#--------------------------------------
+
+AddProjectFiles Jamfile ;
+AddProjectFiles exo_d.src dload.cfg exodecrunch.src ;
+AddProjectFiles readme.txt ;
+AddProjectFiles test.prg ;
+
+#--------------------------------------
+
+Demo exo_d : [ FGristFiles test.prg ] ;
+
+#--------------------------------------

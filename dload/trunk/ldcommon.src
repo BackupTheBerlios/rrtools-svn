@@ -1,0 +1,262 @@
+
+;--------------------------------------
+
+;Default values, will be patched by 'DLoad_Init'
+Tama_ReadBlock	= Tama_Error
+Tama_ShutUp	= Tama_Error
+Tama_WakeUp	= Tama_Error
+Tama_LedOff	= Tama_Error
+Tama_SwitchOff	= Tama_Error
+
+#ifdef LdFlag_SetDD02
+	LoadTS = LoadTS_SetDD02
+#else
+	LoadTS = Tama_ReadBlock
+#endif
+
+#ifdef LdFlag_OpenGetInterface
+	LdGetBytePos = LdLAE
+	LdSaveY = LdLAE+1
+#endif
+
+Ok			= 0
+Error_FileNotFound	= 1
+Error_Read		= 2
+
+;--------------------------------------
+
+LdCommonPsyStart:
+    .PSEUDOPC LdLoc
+
+;--------------------------------------
+
+LdCommonStart:
+#ifdef LdFlag_OpenGetInterface
+	jmp OpenFile
+	jmp GetByte
+#else
+	jmp LoadFile            ;Load with Filename (A len, X/Y ptr to name)
+@0PatchCommon_LoadTS0:
+	jmp LoadTS
+#endif
+PatchCommon_ShutUp0:
+	jmp Tama_ShutUp
+PatchCommon_WakeUp0:
+        jmp Tama_WakeUp
+PatchCommon_LedOff0:
+	jmp Tama_LedOff
+PatchCommon_SwitchOff0:
+	jmp Tama_SwitchOff
+
+;--------------------------------------
+
+#ifdef LdFlag_OpenGetInterface
+OpenFile:
+#else
+LoadFile:
+#endif
+	sta SelfMod_FileNameLen+1
+	stx LdLAE
+	sty LdLAE+1
+        ldx #0
+	ldy #1
+
+Find:
+@0PatchCommon_LoadTS1:
+	jsr LoadTS
+	bcs Psy_Err_Read
+	ldx #0
+Find0:
+	lda LdBf+2,x
+	and #$87
+	eor #$82
+	bne Find3
+	tay
+Find1:
+	lda (LdLAE),y
+	cmp #'*'
+	beq Find4
+	cmp #'?'
+	beq Find2
+	cmp LdBf+5,x
+	bne Find3
+Find2:
+	inx
+	iny
+SelfMod_FileNameLen:
+	cpy #0
+	bcc Find1
+	cpy #16
+	bcs Find4
+	lda #$a0
+	cmp LdBf+5,x
+	beq Find4
+Find3:
+	txa
+	clc
+	and #$e0
+	adc #$20
+	tax
+	bcc Find0
+	ldy LdBf+1
+	ldx LdBf
+	bne Find
+;Err_FileNotFound
+	lda #Error_FileNotFound
+	.DB $2c
+Err_Read:
+	lda #Error_Read
+	pha
+PatchCommon_LedOff1:
+	jsr Tama_LedOff
+        pla
+Tama_Error:
+	sec
+	rts
+
+Find4:
+	txa
+	and #$e0
+	tax
+	ldy LdBf+4,x
+	lda LdBf+3,x
+	tax
+@0PatchCommon_LoadTS2:
+	jsr LoadTS
+Psy_Err_Read:
+	bcs Err_Read
+#ifdef LdFlag_OpenGetInterface
+	lda #0
+	sta LdGetBytePos
+	clc
+	rts
+#else
+	#ifdef LdFlag_PresetAE
+		bit LdZp_PresetAE
+		bmi PresetAE
+	#endif
+		lda LdBf+2
+		sta LdLAE
+	#ifdef LdFlag_RememberStart
+		sta LdLC1
+	#endif
+		lda LdBf+3
+		sta LdLAE+1
+	#ifdef LdFlag_RememberStart
+		sta LdLC1+1
+	#endif
+	PresetAE:
+		ldx #2
+		bne BLRD2
+	BLRD:
+	@0PatchCommon_LoadTS3:
+		jsr LoadTS
+		bcs Err_Read
+		ldx #0
+	BLRD2:
+		ldy #0
+	#ifdef LdFlag_LoadBelowIO
+		lda 1
+		pha
+		lda #$34
+		sta 1
+	#endif
+	BLRD0:
+		lda LdBf+2,x
+		sta (LdLAE),y
+		inx
+		iny
+		cpx LdChk
+		bcc BLRD0
+	#ifdef LdFlag_LoadBelowIO
+		pla
+		sta 1
+	#endif
+		tya
+		clc
+		adc LdLAE
+		sta LdLAE
+		bcc BLRD1
+		inc LdLAE+1
+	BLRD1:
+		ldy LdBf+1
+		ldx LdBf
+		bne BLRD
+PatchCommon_LedOff2:
+		jmp Tama_LedOff
+#endif
+
+;--------------------------------------
+
+#ifdef LdFlag_SetDD02
+LoadTS_SetDD02:
+	jsr SetDD02
+PatchCommon_ReadBlock0:
+	jsr Tama_ReadBlock
+UnSetDD02:
+	lda $dd02
+	and #3
+	eor #3
+	sta $dd00
+UnSetDD02_restoreDD02:
+	lda #$3f
+	sta $dd02
+	rts
+
+SetDD02:
+	lda $dd00
+	and #3
+	eor #$3f
+	sta $dd02
+	lda #0
+	sta $dd00
+	rts
+#endif
+
+#ifdef LdFlag_OpenGetInterface
+GetByte:
+	stx GetByte_X+1
+	sty LdSaveY
+	ldx LdGetBytePos
+	cpx LdChk
+	bcc GetByteFromBuf
+	; carry is always set here
+	ldy LdBf+1
+	ldx LdBf
+	beq GetByte_Eof
+@0PatchCommon_LoadTS4:
+	jsr LoadTS
+	bcs GetByte_Error
+	lda LdBf
+	bne GetByteNoLedOff
+PatchCommon_LedOff2:
+	jsr Tama_LedOff
+;	clc
+GetByteNoLedOff:
+	ldx #0
+GetByteFromBuf:
+	lda LdBf+2,x
+	inx
+	stx LdGetBytePos
+GetByteEnd:
+GetByte_X:
+	ldx #0
+GetByte_Y:
+	ldy LdSaveY
+	rts
+
+GetByte_Eof:
+	lda #Ok
+	.DB $2c
+GetByte_Error:
+	lda #Error_Read
+	bcs GetByteEnd
+#endif
+
+;--------------------------------------
+
+LdCommonEnd:
+    .REALPC
+LdCommonPsyEnd:
+
+

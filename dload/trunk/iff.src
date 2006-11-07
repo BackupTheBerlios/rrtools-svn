@@ -1,0 +1,123 @@
+;--------------------------------------
+;
+; IFF V1.1
+;
+; Drive detection by Ninja
+;
+; 1.1 : 1570 Support by Baccy
+;
+;--------------------------------------
+
+IFFDevTyp_Unknown	= 0
+IFFDevTyp_41		= 1
+IFFDevTyp_70		= 2
+IFFDevTyp_71		= 3
+IFFDevTyp_81		= 4
+IFFDevTyp_HD		= 5
+IFFDevTyp_FD		= 6
+IFFDevTyp_RL		= 7
+IFFDevTyp_RD		= 8
+
+;--------------------------------------
+
+    .(	;*** IFF ***
+
+;--------------------------------------
+
+	.segment "zp"
+
+IFFZp_Zp0		.DB 0
+IFFZp_Zp1		.DB 0
+
+	.segment "code"
+
+;---------------------------------------
+
+@0IFF:
+	lda #6
+	ldx #<IFFBSS_Mr0
+	ldy #>IFFBSS_Mr0
+	jsr File_SetName
+	lda #$6f
+	sta FileZp_SecAdr
+	jsr File_Open
+	bcs DriveOff
+	jsr GetByte		;NEW
+	tay
+	jsr File_UnTalk
+	jsr File_Close		;NEW
+	tya
+	ldx #3
+CheckFamily:
+	cmp IFFBSS_Tab1-1,x
+	beq RecognizedFamily
+	dex
+	bne CheckFamily
+	clc
+DriveOff:
+	rts
+RecognizedFamily:
+	lda IFFBSS_VLo-1,x
+	sta IFFBSS_Mr1+3
+	lda IFFBSS_VHi-1,x
+	sta IFFBSS_Mr1+4
+	lda #6
+	ldx #<IFFBSS_Mr1
+	ldy #>IFFBSS_Mr1
+	jsr File_SetName
+	jsr File_Open
+	jsr GetByte		;NEW
+	sta IFFZp_Zp0
+	jsr File_ReadByte
+	sta IFFZp_Zp1
+	jsr File_UnTalk
+	jsr File_Close
+	ldx #8
+CheckTyp:
+	lda IFFZp_Zp0
+	cmp IFFBSS_TabL-1,x
+	bne L3
+	lda IFFZp_Zp1
+	cmp IFFBSS_TabH-1,x
+	beq RecognizedTyp
+L3:
+	dex
+	bne CheckTyp
+RecognizedTyp:
+	clc
+	rts
+
+GetByte:
+	lda #0
+	sta FileZp_90
+	lda FileZp_Device
+	jsr File_Talk
+	lda #$6f
+	jsr File_SecTalk
+	jmp File_ReadByte
+
+;--------------------------------------
+
+IFFBSS_Mr0:
+	.PET "m-r"
+	.DB $a0,$fe,$01
+IFFBSS_Mr1:
+	.PET "m-r"
+	.DB 0,0,2
+IFFBSS_Tab1:
+	.DB $43,$0d,$ff
+IFFBSS_VLo:
+	.DB $a4,$c6,$e9
+IFFBSS_VHi:
+	.DB $fe,$e5,$a6
+IFFBSS_TabL:
+	.PET "4778hfrr"
+IFFBSS_TabH:
+	.DB $b1,$b0,$b1,$b1
+	.PET "ddld"
+
+;--------------------------------------
+
+    .)	;*** IFF ***
+
+

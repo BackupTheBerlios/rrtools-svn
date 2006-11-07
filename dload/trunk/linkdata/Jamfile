@@ -1,0 +1,25 @@
+SubDir TOP linkdata ;
+
+#--------------------------------------
+
+AddProjectFiles Jamfile ;
+AddProjectFiles testexo.src testpuc.src ;
+AddProjectFiles bitmap.prg col.prg d8.prg viewer.prg ;
+AddProjectFiles readme.txt ;
+
+#--------------------------------------
+
+PUCRUNCHFLAGS = -fshort -c0 ;
+EXOMIZERFLAGS = -q -r ;
+
+datafiles = bitmap.prg col.prg d8.prg viewer.prg ;
+
+Object testexo.prg : [ FGristFiles testexo.src ] ;
+Object testpuc.prg : [ FGristFiles testpuc.src ] ;
+
+for data in [ FGristFiles $(datafiles) ] {
+	Exomizer $(data:S=.exo) : $(data) ;
+	Pucrunch $(data:S=.puc) : $(data) ;
+}
+
+#--------------------------------------

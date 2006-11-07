@@ -1,0 +1,31 @@
+SubDir TOP doc ;
+
+#--------------------------------------
+
+AddProjectFiles Jamfile ;
+AddProjectFiles dload.texi dreamslogo.texi history.texi ;
+
+#--------------------------------------
+
+NotFile docs docs_clean ;
+
+TEXI_FILES = dload.texi dreamslogo.texi history.texi ;
+
+DEPENDS docs : dload.txt ;
+DEPENDS docs : dload.info ;
+DEPENDS docs : dload.html ;
+#DEPENDS docs : dload.pdf ;
+
+DEPENDS clean : docs_clean ;
+
+#--------------------------------------
+
+RunCommand dload.dvi  : $(TEXI_FILES) : texi2dvi ;
+RunCommand dload.pdf  : $(TEXI_FILES) : texi2dvi --pdf ;
+RunCommand dload.txt  : $(TEXI_FILES) : makeinfo --plaintext ;
+RunCommand dload.info : $(TEXI_FILES) : makeinfo ;
+RunCommand dload.html : $(TEXI_FILES) : makeinfo --html --no-split ;
+
+Clean docs_clean : dload.txt dload.info dload.html ;
+
+#--------------------------------------

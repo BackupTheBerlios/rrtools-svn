@@ -1,0 +1,188 @@
+
+;---------------------------------------
+
+Depack:
+	ldy #0
+	inc 1
+
+DepackLoop:
+	ldx #4
+GetChunk:
+	jsr LdLoc+3		; GetByte
+	bcs EndOfFile
+	sta LFB,x
+	dex
+	bpl GetChunk
+
+	dec 1
+	jsr processChunk
+	inc 1
+	bne DepackLoop
+
+EndOfFile:
+	dec 1
+	cmp #1			; 0 is the code for eof, that's no error
+	rts
+
+;--------------------------------------
+
+processChunk:
+	tya
+	sta LF6
+	sty LF8
+LC03B:
+	jsr LC0A7
+	rol
+	bne LC043
+LC041:
+	bcc LC04F
+LC043:
+	rol LF8
+	jsr LC0A7
+	bcs LC03B
+LC04A:
+	sta LF7
+	jsr LC0C3
+LC04F:
+	tya
+	sty LF9
+	sty LFA
+LC054:
+	jsr LC0A7
+	rol
+	beq LC063
+LC05A:
+	bmi LC061
+LC05C:
+	jsr LC0A7
+	bcs LC054
+LC061:
+	inc LF6
+LC063:
+	adc #$2
+	sta LF7
+	ldx #$2
+LC069:
+	jsr LC0A7
+	rol LF6
+	dex
+	bne LC069
+LC071:
+	ldx LF6
+	lda Tab,X
+	tax
+	beq LC083
+LC079:
+	jsr LC0A7
+	rol LF9
+	rol LFA
+	dex
+	bne LC079
+LC083:
+	lda LF6
+	and #$3
+	beq LC093
+LC089:
+	inc LF9
+	bne LC08F
+LC08D:
+	inc LFA
+LC08F:
+	dec LF6
+	bpl LC071
+LC093:
+	clc
+	lda LFC
+	adc LF9
+	sta LF9
+	lda LFD
+	adc LFA
+	sta LFA
+	inc LF6
+	jsr LC0D6
+	beq processChunk
+LC0A7:
+	asl LFB
+	bne LC0C2
+LC0AB:
+	cpy LFE
+	bne LC0B5
+LC0AF:
+	cpy LFF
+	beq LC0C0
+LC0B3:
+	dec LFF
+LC0B5:
+	dec LFE
+	pha
+	jsr LC0FF
+	sec
+	rol
+	sta LFB
+	.db $24
+LC0C0:
+	pla
+	pla
+LC0C2:
+	rts
+
+;---------------------------------------
+
+LC0C3:
+	sec
+	lda LFE
+	sbc LF7
+	sta LF9
+	sta LFE
+	lda LFF
+	sbc #$0
+	sta LFA
+	sbc LF8
+	sta LFF
+LC0D6:
+	ldy LF7
+	beq LC0ED
+LC0DA:
+	lda LFC
+	sec
+	sbc LF7
+	sta LFC
+	bcs LC0E5
+LC0E3:
+	dec LFD
+LC0E5:
+	jsr LC0F8
+	sta (LFC),Y
+	dey
+	bne LC0E5
+LC0ED:
+	cpy LF8
+	beq LC0F7
+LC0F1:
+	dec LFA
+	dec LF8
+	bpl LC0E3
+LC0F7:
+	rts
+           
+;---------------------------------------
+
+LC0F8:
+	lda LF6
+	beq LC0FF
+LC0FC:
+	lda (LF9),Y
+	rts
+
+LC0FF:
+	inc 1
+	jsr LdLoc+3		;GetByte
+        dec 1
+	rts
+
+;---------------------------------------
+
+Tab:
+	.DB $04,$02,$02,$02,$05,$02,$02,$03
+
+;---------------------------------------

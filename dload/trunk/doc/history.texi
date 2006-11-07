@@ -1,0 +1,66 @@
+
+Dienstag tief im Westen, wo Baccy seinen Adventskalender pluendert
+@itemize @bullet
+@item changed buildsystem from make to jam
+@item fixed 1571 NTSC speeder, thanks to
+@end itemize
+@sp 1
+
+Sonntag bei Baccy, der immer noch kein Bett hat
+@itemize @bullet
+@item changed crossassembler from xa to dreamass
+@item added getbyte interface
+@item some code beautifying and cleanups
+@item changed doc language from sgml to texinfo
+@end itemize
+@sp 1
+
+Samstach auf der Willow, wo die Belgier das Dosenpfand untergraben
+@itemize @bullet
+@item fixed bug in 1541 speedzone table
+@item corrected buffersize for cmd fd command buffer (did not cause problems, but for completeness... :)
+@item corrected check for additional drives
+@item shortened some bytes (again ;)
+@item header speed is now on the *very* safe side without serious loss of speed
+@item added some tips to the docs
+@end itemize
+@sp 1
+
+Montag bei Baccy, der nach der X fast auffer Arbeit eingeschlafen ist
+@itemize @bullet
+@item improved reliability for all drives (yes, we optimized a bit too much :)
+@item squeezed some bytes out of the installer
+@end itemize
+@sp 1
+
+Freitag bei Grampa, wo Kolibris auf Disneyland scheissen und Oppossums an Zitronen knabbern (und wir auch)
+@itemize @bullet
+@item verified ntsc-compatibility
+@item saved dozens of bytes and cycles (especially in t71)
+@item shutup and wakeup-routines
+@item documentation!
+@item ill. track/sector detect 81/fd
+@end itemize
+@sp 1
+
+Sonntag bei Baccy, der jetzt beim Chinamann was futtern geht
+@itemize @bullet
+@item recognition of diskchange
+@item speed improvements for 41
+@item ill. track/sector detect for 41/71/hd
+@end itemize
+@sp 1
+
+Montag bei Ninja seiner Schwester, die Ute
+@itemize @bullet
+@item VIC-banks are now switchable using $dd02. Do not touch $dd00
+@item Parameter for Load: A = Filename length, X/Y = Pointer to filename
+@item now possible to load directly from Track/Sector (X/Y)
+@item NTSC Fix (alpha)
+@item Fix in FD-loader
+@item HD-Speeder now runs on all devices (I hope :)
+@item speed improvements for HD/FD/81
+@item 1571-native loader!
+@end itemize
+@sp 1
+

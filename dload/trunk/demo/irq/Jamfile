@@ -1,0 +1,14 @@
+SubDir TOP demo irq ;
+
+#--------------------------------------
+
+AddProjectFiles Jamfile ;
+AddProjectFiles dload.cfg irqdemo.src ;
+AddProjectFiles readme.txt ;
+AddProjectFiles test.prg ;
+
+#--------------------------------------
+
+Demo irqdemo : [ FGristFiles test.prg ] ;
+
+#--------------------------------------

@@ -1,0 +1,21 @@
+SubDir TOP demo stress4 ;
+
+#--------------------------------------
+
+AddProjectFiles Jamfile ;
+AddProjectFiles dload.cfg stress4.src ;
+
+#--------------------------------------
+
+Demo stress4 : [ FGristFiles test0.prg test1.prg test2.prg test3.prg test4.prg test5.prg test6.prg test7.prg ] ;
+
+GenCrc [ FGristFiles test0.prg ] : crcgen$(SUFEXE) : -s 0x0801 -e 0xbbfc ;
+GenCrc [ FGristFiles test1.prg ] : crcgen$(SUFEXE) : -s 0x21ab -e 0x4734 ;
+GenCrc [ FGristFiles test2.prg ] : crcgen$(SUFEXE) : -s 0x1000 -e 0x10fe ;
+GenCrc [ FGristFiles test3.prg ] : crcgen$(SUFEXE) : -s 0x1000 -e 0x5000 ;
+GenCrc [ FGristFiles test4.prg ] : crcgen$(SUFEXE) : -s 0x0801 -e 0x8000 ;
+GenCrc [ FGristFiles test5.prg ] : crcgen$(SUFEXE) : -s 0x1730 -e 0x566d ;
+GenCrc [ FGristFiles test6.prg ] : crcgen$(SUFEXE) : -s 0x0900 -e 0x1900 ;
+GenCrc [ FGristFiles test7.prg ] : crcgen$(SUFEXE) : -s 0x2000 -e 0x3f40 ;
+
+#--------------------------------------
