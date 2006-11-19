@@ -1,0 +1,208 @@
+;--------------------------------------
+; Koala viewer plugin for MMC64
+;
+; by Doc Bacardi/DRM
+; based on some binaries by Oliver Achten
+;--------------------------------------
+
+#segdef "zp", $02-$0100
+#segdef "data", $7000-$8000
+#segdef "code", $c000-$cf00
+
+#outfile @, startadr, sort, $00, "code"
+
+;--------------------------------------
+
+	.segment "zp"
+	* = $02
+
+	.segment "data"
+	* = $7000
+
+	.segment "code"
+	* = $c000
+
+;--------------------------------------
+
+KoalaFilesize = $2713
+
+;--------------------------------------
+
+	.segment "zp"
+
+LoadPtr				.DW 0
+
+;--------------------------------------
+
+	.segment "code"
+
+	sei
+	lda #$35
+	sta 1
+
+	; init the plugin variables
+	jsr MMC64Plugin_Init
+
+	; check filesize, must be 10003 bytes
+	lda MMCBios_FileSize+2
+	ora MMCBios_FileSize+3
+	bne filesize_error
+	lda MMCBios_FileSize
+	cmp #<KoalaFilesize
+	bne filesize_error
+	lda MMCBios_FileSize+1
+	cmp #>KoalaFilesize
+	bne filesize_error
+
+filesize_ok:
+	jsr LoadKoalaFile
+	bcs load_error
+	jsr ShowKoalaPicture
+
+	; wait for space / firebutton
+waitSpace:
+	lda $dc00
+	and $dc01
+	and #$10
+	bne waitSpace
+
+	; turn screen off
+	lda #$ff
+	sta $d011
+
+	; go back to MMC64 browser
+	jmp MMC64Plugin_Exit
+
+;--------------------------------------
+
+filesize_error:
+	jsr clearScreen
+
+	ldx #filesize_error_msg_len-1
+showMsg0:
+	lda filesize_error_msg,x
+	sta $0400,x
+	dex
+	bpl showMsg0
+	bmi waitSpace	; bra
+
+load_error:
+	jsr clearScreen
+
+	ldx #load_error_msg_len-1
+showMsg1:
+	lda load_error_msg,x
+	sta $0400,x
+	dex
+	bpl showMsg1
+	bmi waitSpace	; bra
+
+clearScreen:
+	ldx #0
+clearScreen0:
+	lda #$20
+	sta $0400,x
+	sta $0500,x
+	sta $0600,x
+	sta $0700,x
+	lda #$01
+	sta $d800,x
+	sta $d900,x
+	sta $da00,x
+	sta $db00,x
+	inx
+	bne clearScreen0
+	rts
+
+filesize_error_msg:
+	     ;          1         2         3
+	     ;0123456789012345678901234567890123456789
+	.SCR "error: no koala picture. the filesize   "
+	.SCR "must be 10003 bytes!"
+filesize_error_msg_len = * - filesize_error_msg
+
+load_error_msg:
+	     ;          1         2         3
+	     ;0123456789012345678901234567890123456789
+	.SCR "load error!"
+load_error_msg_len = * - load_error_msg
+
+;--------------------------------------
+
+LoadKoalaFile:
+    .(
+	jsr MMC64Plugin_OpenFile
+
+	; discard start address ....
+	jsr MMC64Plugin_GetByte
+	jsr MMC64Plugin_GetByte
+
+	; ... take this instead
+	lda #<$2000
+	sta LoadPtr
+	lda #>$2000
+	sta LoadPtr+1
+
+	ldy #0
+load0:
+	jsr MMC64Plugin_GetByte
+	bcs load1
+	sta (LoadPtr),y
+	iny
+	bne load0
+	inc LoadPtr+1
+	bne load0
+
+load1:
+	lsr
+	rts
+    .)
+
+;--------------------------------------
+
+ShowKoalaPicture:
+    .(
+	; screen black and off
+	ldy #$ff
+	sty $d011
+	iny
+	sty $d020
+	sty $d021
+
+	; copy screen and color ram
+	ldx #3
+copyScr:
+	lda $3f40,y
+	sta $0400,y
+copyCol:
+	lda $4328,y
+	sta $d800,y
+	iny
+	bne copyScr
+	inc copyScr+2
+	inc copyScr+5
+	inc copyCol+2
+	inc copyCol+5
+	dex
+	bpl copyScr
+
+	; set background color
+	lda $4710
+	sta $D020
+
+	; show picture
+	lda #$18
+	sta $d016
+	sta $d018
+	lda #$3b
+	sta $d011
+	rts
+    .)
+
+;--------------------------------------
+
+#include "mmc64_plugin/mmc64_plugin.src"
+
+;--------------------------------------
+
+

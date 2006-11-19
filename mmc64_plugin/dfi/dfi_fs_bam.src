@@ -1,0 +1,445 @@
+
+
+;--------------------------------------
+
+DfiFs_Bam_BlockOffset			.DB 0		; 256-byte offset of the bam block in the buffer
+DfiFs_Bam_BufferModified		.DB 0		; flag: bam buffer contains unsaved changes
+
+; ZP for DfiFs_ReadFreeBlocks
+DfiFs_ReadFreeBlocks_TrkCnt		.DB 0		; counter for the number of tracks to process
+DfiFs_ReadFreeBlocks_ByteBuf		.DB 0		; rotate buffer for one bam byte
+
+; ZP for DfiFs_Bam_Alloc
+DfiFs_Bam_Alloc_Trk			.DB 0
+DfiFs_Bam_Alloc_Sec			.DB 0
+
+; ZP for DfiFs_Bam_Free
+DfiFs_Bam_Free_Sec			.DB 0
+DfiFs_Bam_Free_SecOffset		.DB 0
+
+;--------------------------------------
+; Dfi Fs Bam routines
+;
+
+DfiFs_Bam_Init:
+.defBJL(DfiFs_Bam_Init)
+    .(
+	; init the vars
+	lda #$ff			; illegal value, will never match
+	sta DfiFs_Bam_BlockOffset
+	lda #0
+	sta DfiFs_Bam_BufferModified
+
+	; load the first bam block
+	lda #0
+	jsr DfiFs_Bam_readOffset
+
+	; get the number of free blocks
+	jmp DfiFs_Bam_ReadFreeBlocks
+
+error:
+	rts
+    .)
+
+
+;--------------------------------------
+; DfiFs_flushBuffer
+;
+; Check for unsaved changes in the BAM buffer
+; and write them to the image.
+;
+
+DfiFs_Bam_flushBuffer:
+.defBJL(DfiFs_Bam_flushBuffer)
+    .(
+	lda DfiFs_Bam_BufferModified
+	beq bufferClean
+
+	; write buffer
+	lda DfiFs_Bam_BlockOffset
+	clc
+	adc DfiFs_Bam+1
+	tay
+	lda DfiFs_Bam
+	adc #0
+	tax
+	lda #DfiFs_Cfg_BamBufferIdx
+	jsr DfiFs_WriteBlock
+	bcs error
+
+	lda #0
+	sta DfiFs_Bam_BufferModified
+
+bufferClean:
+	clc
+error:
+	rts
+    .)
+
+;--------------------------------------
+; DfiFs_Bam_readOffset
+;
+; Read a 256 byte part of the Bam. The offset
+; is specified in 256 byte steps in the Akku.
+; The routine respects an already buffered block
+; and takes care of unsaved changes in the buffer.
+;
+; Parameter:
+;   A : 256 byte offset in the BAM
+;
+; Returns:
+;   Carry : Ok (C), Error (S)
+
+DfiFs_Bam_readOffset:
+.defBJL(DfiFs_Bam_readOffset)
+    .(
+	cmp DfiFs_Bam_BlockOffset
+	beq blockBuffered
+
+	; save any changes
+	pha
+	jsr DfiFs_Bam_flushBuffer
+	pla
+	bcs error
+
+	; save the new offset
+	sta DfiFs_Bam_BlockOffset
+
+	; read the new block
+	clc
+	adc DfiFs_Bam+1
+	tay
+	lda DfiFs_Bam
+	adc #0
+	tax
+	lda #DfiFs_Cfg_BamBufferIdx
+	jsr DfiFs_ReadBlock
+	bcs error
+
+blockBuffered:
+	clc
+error:
+	rts
+    .)
+
+
+;--------------------------------------
+; DfiFs_GetTrackSectorOffset
+;
+; Read the bam information for one track,
+; return the offset
+;
+; Parameter:
+;    X : track
+;
+; Returns:
+;    Carry : Ok (C), Error (S)
+;    Y : byte offset for the track
+;        NOTE: this is a multiple of $20
+;
+
+DfiFs_Bam_GetTrackOffset:
+.defBJL(DfiFs_Bam_GetTrackOffset)
+    .(
+	; is track valid?
+	txa
+	beq trackIsInvalid
+	dex
+	cpx DfiFs_Tracks
+	bcc trackIsValid
+trackIsInvalid:
+	sec
+	rts
+
+trackIsValid:
+	; get the byte offset
+	txa
+	asl
+	asl
+	asl
+	asl
+	asl
+	pha
+
+	; get the sector offset
+	txa
+	lsr
+	lsr
+	lsr
+	jsr DfiFs_Bam_readOffset
+	pla
+	bcs error
+
+	tay
+	clc
+
+error:
+	rts
+    .)
+
+
+;--------------------------------------
+; DfiFs_ReadFreeBlocks
+;
+; Read the bam and get the number of
+; free blocks (word stored in DfiFs_FreeBlocks).
+; NOTE: the DfiFs_Bam and DfiFs_Tracks
+; entries must be valid
+;
+
+DfiFs_Bam_ReadFreeBlocks:
+.defBJL(DfiFs_Bam_ReadFreeBlocks)
+    .(
+	lda DfiFs_InitFlag
+	bne initDone
+	jsr DfiFs_Init
+	bcs error
+initDone:
+
+	; init the free blocks
+	lda #0
+	sta DfiFs_FreeBlocks
+	sta DfiFs_FreeBlocks+1
+
+	ldx #0
+counterLoop:
+	inx
+	stx DfiFs_ReadFreeBlocks_TrkCnt
+	; get the BAM for the track in X
+	jsr DfiFs_Bam_GetTrackOffset
+	bcs error
+
+	; count all free sectors 
+getFreeBlockLoop:
+	lda DfiFs_BamBuffer,y
+	eor #$ff			; '0' means free, invert to count them easier
+	sta DfiFs_ReadFreeBlocks_ByteBuf
+
+	ldx #7
+	lda #0
+getFreeBlockLoop_Bit:
+	asl DfiFs_ReadFreeBlocks_ByteBuf
+	adc #0
+	dex
+	bpl getFreeBlockLoop_Bit
+
+	adc DfiFs_FreeBlocks
+	sta DfiFs_FreeBlocks
+	bcc addFreeBlks0
+	inc DfiFs_FreeBlocks+1
+addFreeBlks0:
+
+	iny
+	tya
+	and #$1f			; a new track starts at a multiple of $20 in the bam
+	bne getFreeBlockLoop
+
+	ldx DfiFs_ReadFreeBlocks_TrkCnt
+	cpx DfiFs_Tracks
+	bcc counterLoop
+
+	clc
+	rts
+
+error:
+	sec
+	rts
+    .)
+
+
+;--------------------------------------
+; DfiFs_Bam_Alloc
+;
+; Allocate a new Block. The routine tries to get
+; the free block on the provided track first. If
+; this fails, all other tracks are checked.
+;
+; Parameter:
+;  X : Last Track
+;
+; Return:
+;  C : Ok (C), Error (S)
+;  X : Allocated Track, 0 if the image is full
+;  Y : Allocated Sector
+; The allocated track and sector are also stored in
+; DfiFs_Bam_Alloc_Trk and DfiFs_Bam_Alloc_Sec
+;
+
+DfiFs_Bam_Alloc:
+.defBJL(DfiFs_Bam_Alloc)
+    .(
+	; is at least one block free?
+	lda DfiFs_FreeBlocks
+	ora DfiFs_FreeBlocks+1
+	bne stillBlocksLeft
+
+	; no -> disk full
+	tax
+	tay
+	clc
+	rts
+
+stillBlocksLeft:
+	; start searching a free block at the last block
+
+	; last track valid?
+	txa
+	beq lastTrackIsNotValid
+
+imageLoop:
+	cpx DfiFs_Tracks
+	beq lastTrackIsValid
+	bcc lastTrackIsValid
+lastTrackIsNotValid:
+	; start at first track
+	ldx #1
+lastTrackIsValid:
+	stx DfiFs_Bam_Alloc_Trk
+
+searchLoop:
+	ldx DfiFs_Bam_Alloc_Trk
+	; get the BAM for the track in X
+	jsr DfiFs_Bam_GetTrackOffset
+	bcs error
+
+	; fast search
+	lda #$ff
+	ldx #$1f
+fastSearch:
+	cmp DfiFs_BamBuffer,y
+	bne foundSomethingFree
+	iny
+	dex
+	bpl fastSearch
+
+	; next track
+	ldx DfiFs_Bam_Alloc_Trk
+	inx
+	jmp imageLoop
+
+foundSomethingFree:
+	; get sector, bits 3-7
+	tya
+	and #$1f
+	asl
+	asl
+	asl
+	sta DfiFs_Bam_Alloc_Sec
+
+	; get sector, bits 0-2
+	lda DfiFs_BamBuffer,y
+	ldx #$ff
+getSectorBit:
+	inx
+	lsr
+	bcs getSectorBit
+	txa
+	ora DfiFs_Bam_Alloc_Sec
+	sta DfiFs_Bam_Alloc_Sec
+
+	; mark this block as allocated
+	sec
+	lda #0
+pot2:
+	rol
+	dex
+	bpl pot2
+	ora DfiFs_BamBuffer,y
+	sta DfiFs_BamBuffer,y
+	lda #1
+	sta DfiFs_Bam_BufferModified
+
+	; decrement number of free blocks
+	lda DfiFs_FreeBlocks
+	bne blockAllocated
+	dec DfiFs_FreeBlocks+1
+blockAllocated:
+	dec DfiFs_FreeBlocks
+
+	ldx DfiFs_Bam_Alloc_Trk
+	ldy DfiFs_Bam_Alloc_Sec
+	clc
+error:
+	rts
+    .)
+
+
+;--------------------------------------
+; DfiFs_Bam_Free
+;
+; Free a block. The routine checks if the
+; block was really allocated and increments
+; the free blocks counter.
+;
+; Parameter:
+;  X : Track to free
+;  Y : Sector to free
+;
+; Return:
+;  C : Ok (C), Error (S)
+;
+
+DfiFs_Bam_Free:
+.defBJL(DfiFs_Bam_Free)
+    .(
+	; is track valid?
+	txa
+	beq trackIsNotValid
+	cpx DfiFs_Tracks
+	beq trackIsValid
+	bcc trackIsValid
+trackIsNotValid:
+	sec
+	rts
+
+trackIsValid:
+	sty DfiFs_Bam_Free_Sec
+
+	; get the BAM for the track in X
+	jsr DfiFs_Bam_GetTrackOffset
+	bcs error
+
+	sty DfiFs_Bam_Free_SecOffset
+
+	; get the sector offset
+	lda DfiFs_Bam_Free_Sec
+	lsr
+	lsr
+	lsr
+	ora DfiFs_Bam_Free_SecOffset
+	tay
+
+	; get bitmask
+	lda DfiFs_Bam_Free_Sec
+	and #7
+	tax
+	sec
+	lda #0
+pot2:
+	rol
+	dex
+	bpl pot2
+	tax
+
+	; is the block really allocated?
+	and DfiFs_BamBuffer,y
+	beq notAllocated
+
+	; free the block
+	txa
+	eor #$ff
+	and DfiFs_BamBuffer,y
+	sta DfiFs_BamBuffer,y
+	lda #1
+	sta DfiFs_Bam_BufferModified
+
+	; one more free block
+	inc DfiFs_FreeBlocks
+	bne notAllocated
+	inc DfiFs_FreeBlocks+1
+notAllocated:
+
+	clc
+error:
+	rts
+    .)

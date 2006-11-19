@@ -1,0 +1,910 @@
+
+;--------------------------------------
+
+DfiFs_CommandLen			.DB 0
+DfiFs_CommandPos			.DB 0
+
+DfiFs_Cmd_Entry_Cnt			.DB 0
+DfiFs_Cmd_Entry_Len			.DB 0
+DfiFs_Cmd_Entry_NameHasFixedType	.DB 0
+DfiFs_Cmd_Entry_HasAtSign		.DB 0
+
+DfiFs_Cmd_Entry_NameLen			.DSB 8
+DfiFs_Cmd_Entry_NameStart		.DSB 8
+DfiFs_Cmd_Entry_NameHasWildCarts	.DSB 8
+
+DfiFs_Cmd_ScratchCounter		.DW 0
+
+tempPos					.DB 0	; temp buffer for testFor8BitNum
+byteSum					.DB 0	; temp buffer for testFor8BitNum
+
+;--------------------------------------
+
+DfiFs_Err_WriteCommandChannel:
+.defBJL(DfiFs_Err_WriteCommandChannel)
+    .(
+	lda $95
+	ldy DfiFs_CommandLen
+	cpy #$ff
+	bcc stillSpaceLeft
+
+	cmp #$0d
+	bne noLenReset
+	lda #0
+	sta DfiFs_CommandLen
+noLenReset:
+	lda #Err_34_SyntaxError
+	.bankJsr(L_DfiFs_SetError_NoBlock)
+	clc
+	rts
+
+stillSpaceLeft:
+	sta DfiFs_CommandBuf,y
+	inc DfiFs_CommandLen
+	cmp #$0d
+	bne noExecute
+
+	jsr DfiFs_Execute_Command
+
+noExecute:
+	clc
+	rts
+    .)
+
+;--------------------------------------
+
+DfiFs_Cmd_GetChar:
+    .(
+	sty smod0+1
+
+	ldy DfiFs_CommandPos
+	cpy DfiFs_CommandLen
+	bcs smod0
+	lda DfiFs_CommandBuf,y
+	inc DfiFs_CommandPos
+
+smod0:
+	ldy #0
+	rts
+    .)
+
+
+DfiFs_Cmd_PeekChar:
+    .(
+	sty smod0+1
+
+	ldy DfiFs_CommandPos
+	cpy DfiFs_CommandLen
+	bcs smod0
+	lda DfiFs_CommandBuf,y
+
+smod0:
+	ldy #0
+	rts
+    .)
+
+
+; look for ':', ',', '=' and name end
+DfiFs_Cmd_FindNextSpecial:
+    .(
+	ldy DfiFs_CommandPos
+
+searchLoop:
+	cpy DfiFs_CommandLen
+	bcs endOfName
+
+	lda DfiFs_CommandBuf,y
+	cmp #':'
+	beq foundChar
+	cmp #','
+	beq foundChar
+	cmp #','
+	beq foundChar
+	iny
+	bne searchLoop	; bra
+
+endOfName:
+	lda #0
+foundChar:
+	rts
+    .)
+
+
+; test for max $ff, max 3 digits
+testFor8BitNum:
+    .(
+	; test for number
+	ldy DfiFs_CommandPos
+	ldx #0
+checkLength:
+	cpy DfiFs_CommandLen
+	bcs noNum
+	lda DfiFs_CommandBuf,y
+	cmp #'0'
+	bcc noNum
+	cmp #'9'+1
+	bcs noNum
+	iny
+	inx
+	cpx #3
+	bcc checkLength
+noNum:
+	txa
+	bne readNum
+	sec
+	rts
+
+readNum:
+	lda #0
+	sta byteSum
+readNumLoop:
+	jsr DfiFs_Cmd_GetChar
+	and #$0f
+	tay
+	lda byteSum
+	cpy #0
+	beq noAdd
+addNumLoop:
+	clc
+	adc dezTab-1,x
+	dey
+	bne addNumLoop
+noAdd:
+	sta byteSum
+	dex
+	bne readNumLoop
+	clc
+	rts
+
+dezTab:
+	.DB 1, 10, 100
+    .)
+
+/*
+readNumRev:
+    .(
+	lda #0
+	sta byteSum
+
+	ldx #3
+
+	ldy DfiFs_CommandPos
+digitLoop:
+	dey
+	bpl endOfNum
+	sty tempPos
+
+	lda DfiFs_CommandBuf,y
+	cmp #'9'+1
+	bcs endOfNum
+	sbc #'0'-1	; carry is clear here
+	bcc endOfNum
+	tay
+	lda byteSum
+addLoop:
+	dey
+	bmi addEnd
+	clc
+	adc digiTab-1,x
+addEnd:
+	sta byteSum
+
+	ldy tempPos
+	dex
+	bne digitLoop
+
+endOfNum:
+	cpx #3		; no digit processed -> carry set
+	lda byteSum	; result
+	clc
+	rts
+
+digiTab:
+	.DB 100, 10, 1
+    .)
+*/
+
+
+initCounters:
+    .(
+	; set entry counter to 0
+	lda #0
+	sta DfiFs_Cmd_Entry_Len
+	sta DfiFs_Cmd_Entry_NameHasFixedType
+	sta DfiFs_Cmd_Entry_HasAtSign
+	ldx #7
+clearTables:
+	sta DfiFs_Cmd_Entry_NameLen,x
+	sta DfiFs_Cmd_Entry_NameStart,x
+	sta DfiFs_Cmd_Entry_NameHasWildCarts,x
+	dex
+	bpl clearTables
+
+	rts
+    .)
+
+
+; set input pointer to start of the first entry. it is special as it needs the
+; colons and may contain garbage at the beginning (e.g. "sxyz0:file" is valid)
+setToFirstEntry:
+    .(
+	jsr DfiFs_Cmd_FindNextSpecial
+	cmp #':'
+	beq foundFirstColon
+
+	lda #Err_34_SyntaxError
+	.bankJsr(L_DfiFs_SetError_NoBlock)
+	sec
+	rts
+
+
+foundFirstColon:
+	; go back while there are numbers
+rewindNum:
+	lda DfiFs_CommandBuf-1,y
+	cmp #'0'
+	bcc noNumber
+	cmp #'9'+1
+	bcs noNumber
+	dey
+	bne rewindNum	; bra, as first char is the command and thus non numeric
+
+	; set pos to start of first entry
+noNumber:
+	sty DfiFs_CommandPos
+
+	clc
+	rts
+    .)
+
+
+parseEntry:
+    .(
+	; check for space in entry list
+	ldx DfiFs_Cmd_Entry_Len
+	cpx #8
+	bcc space
+
+	; too many arguments
+	lda #Err_34_SyntaxError
+	.bankJsr(L_DfiFs_SetError_NoBlock)
+	sec
+	rts
+
+space:
+	; check for next special char
+	jsr DfiFs_Cmd_FindNextSpecial
+	cmp #':'
+	bne noColon
+
+	; chars before the colon?
+	cpy DfiFs_CommandPos
+	beq noDevNr
+
+	; test for '@'
+	jsr DfiFs_Cmd_PeekChar
+	cmp #'@'
+	bne noAtSign
+	jsr DfiFs_Cmd_GetChar
+	sta DfiFs_Cmd_Entry_HasAtSign
+noAtSign:
+
+	; chars between actual position and the colon, read them in
+	jsr testFor8BitNum
+	bcc foundDeviceNr
+
+	; strange things before colon
+	lda #Err_34_SyntaxError
+	.bankJsr(L_DfiFs_SetError_NoBlock)
+	sec
+	rts
+
+foundDeviceNr:
+	; dev number must be 0
+	cmp #0
+	beq noDevNr
+error:
+	; illegal device number
+	lda #Err_34_SyntaxError
+	.bankJsr(L_DfiFs_SetError_NoBlock)
+	sec
+	rts
+
+noDevNr:
+	; next char must be the colon
+	jsr DfiFs_Cmd_GetChar
+	bcs error
+	cmp #':'
+	bne error
+
+noColon:
+	; get end of filename
+	jsr DfiFs_Cmd_FindNextSpecial
+
+	; get length of filename
+	tya
+	sec
+	sbc DfiFs_CommandPos
+
+	; save length
+	ldx DfiFs_Cmd_Entry_Len
+	sta DfiFs_Cmd_Entry_NameLen,x
+
+	; save start offset in command
+	lda DfiFs_CommandPos
+	sta DfiFs_Cmd_Entry_NameStart,x
+
+	; find wildcarts in name
+loopName:
+	cpy DfiFs_CommandPos
+	beq endOfname
+	jsr DfiFs_Cmd_GetChar
+	cmp #'*'
+	beq foundWildCart
+	cmp #'?'
+	bne loopName
+foundWildCart:
+	lda #1
+	sta DfiFs_Cmd_Entry_NameHasWildCarts,x
+
+endOfname:
+	; set position behind the filename
+	sty DfiFs_CommandPos
+
+	; next entry pos
+	inc DfiFs_Cmd_Entry_Len
+
+	clc
+	rts
+    .)
+
+
+; check for '=(s,p,u,r)' and set 
+DfiFs_Cmd_CheckFixedType:
+    .(
+	jsr DfiFs_Cmd_PeekChar
+	bcs noFixedType
+	cmp #'='
+	bne noFixedType
+
+	; skip '='
+	jsr DfiFs_Cmd_GetChar
+	; get the type
+	jsr DfiFs_Cmd_GetChar
+	bcs error
+
+	ldx #1
+findType:
+	cmp typeTab-1,x
+	beq foundType
+	inx
+	cpx #typeTab_len+1
+	bcc findType
+	; not found -> invalid type
+	; this is no error for the 1541, but it matches no files
+foundType:
+	sta DfiFs_Cmd_Entry_NameHasFixedType
+
+noFixedType:
+	clc
+	rts
+
+error:
+	lda #Err_34_SyntaxError
+	.bankJsr(L_DfiFs_SetError_NoBlock)
+	sec
+	rts
+
+typeTab:
+	.PET 's'
+	.PET 'p'
+	.PET 'u'
+	.PET 'r'
+typeTab_len = *-typeTab:
+    .)
+
+
+DfiFs_Cmd_GetEntry:
+    .(
+	ldx DfiFs_Cmd_Entry_Cnt
+
+	; copy the first 16 chars of the filename
+	ldy DfiFs_Cmd_Entry_NameStart,x
+	ldx #0
+copyFileName:
+	lda DfiFs_CommandBuf,y
+	sta DfiFs_ExchangeBuffer+DfiFs_ParamOffs_SearchDir_Name,x
+	iny
+	inx
+	cpx #16
+	bcc copyFileName
+
+	ldx DfiFs_Cmd_Entry_Cnt
+	lda DfiFs_Cmd_Entry_NameLen,x
+	sta DfiFs_ExchangeBuffer+DfiFs_ParamOffs_SearchDir_NameLen
+
+	ldy DfiFs_Cmd_Entry_NameHasFixedType
+	lda typeLo,y
+	sta DfiFs_ExchangeBuffer+DfiFs_ParamOffs_SearchDir_TypLo
+	lda typeHi,y
+	sta DfiFs_ExchangeBuffer+DfiFs_ParamOffs_SearchDir_TypHi
+	rts
+
+typeLo:
+	.DB $81		; seq
+	.DB $81		; seq
+	.DB $82		; prg
+	.DB $83		; usr
+	.DB $84		; rel
+	.DB $ff		; no match
+
+typeHi:
+	.DB $85		; rel+1
+	.DB $82		; seq+1
+	.DB $83		; prg+1
+	.DB $84		; usr+1
+	.DB $85		; rel+1
+	.DB $ff		; no match
+    .)
+
+
+DfiFs_Cmd_CheckTypeModifier:
+    .(
+	jsr DfiFs_Cmd_PeekChar
+	bcs noFixedType
+	cmp #','
+	bne noFixedType
+
+	; skip ','
+	jsr DfiFs_Cmd_GetChar
+	; get the type
+	jsr DfiFs_Cmd_GetChar
+	bcs error
+
+	ldx #typeTab_len-1
+findType:
+	cmp typeTab,x
+	beq foundType
+	dex
+	bpl findType
+error:
+	lda #Err_34_SyntaxError
+	.bankJsr(L_DfiFs_SetError_NoBlock)
+	sec
+	rts
+
+foundType:
+	lda typeTabVal,x
+	sta DfiFs_FileType
+noFixedType:
+	clc
+	rts
+
+typeTab:
+	.PET 's'
+	.PET 'p'
+	.PET 'u'
+	.PET 'r'
+typeTab_len = *-typeTab:
+
+typeTabVal:
+	.DB $01
+	.DB $02
+	.DB $03
+	.DB $04
+    .)
+
+
+DfiFs_Cmd_CheckModeModifier:
+    .(
+	jsr DfiFs_Cmd_PeekChar
+	bcs noFixedType
+	cmp #','
+	bne noFixedType
+
+	; skip ','
+	jsr DfiFs_Cmd_GetChar
+	; get the mode
+	jsr DfiFs_Cmd_GetChar
+	bcs error
+
+	ldx #accessModeTab_len-1
+findMode:
+	cmp accessModeTab,x
+	beq foundMode
+	dex
+	bpl findMode
+error:
+	lda #Err_34_SyntaxError
+	.bankJsr(L_DfiFs_SetError_NoBlock)
+	sec
+	rts
+
+
+foundMode:
+	stx DfiFs_AccessMode
+
+noFixedType:
+	clc
+	rts
+
+accessModeTab:
+	.PET 'r'
+	.PET 'w'
+	.PET 'a'
+	.PET 'm'
+accessModeTab_len = *-accessModeTab:
+    .)
+
+
+;--------------------------------------
+
+DfiFs_Execute_Command:
+    .(
+	; cut off $0d at end of string
+	; NOTE: 1541 cuts off the last 2 chars for $0d $xx, i.e. it ignores
+	;       the last char in this case
+	lda #$0d
+	cmp DfiFs_CommandBuf-1,y
+	bne fileNameLenOk
+	cmp DfiFs_CommandBuf-2,y
+	bne fileNameLenCut1
+	dey
+fileNameLenCut1:
+	dey
+fileNameLenOk:
+	sty DfiFs_CommandLen
+	tya
+	beq emptyCommand
+
+	; set position in command buffer to 0
+	lda #0
+	sta DfiFs_CommandPos
+
+	; get the first char of the command
+	jsr DfiFs_Cmd_GetChar
+	ldx #cmdChar_len-1
+searchCommand:
+	cmp cmdChar,x
+	beq foundCmd
+	dex
+	bpl searchCommand
+
+	lda #0
+	sta DfiFs_CommandLen
+
+	; unknown command, set 31, syntax error
+	lda #Err_31_SyntaxError
+	.bankJsr(L_DfiFs_SetError_NoBlock)
+
+emptyCommand:
+	clc
+	rts
+
+
+foundCmd:
+	lda cmdJmpLo,x
+	sta smod0+1
+	lda cmdJmpHi,x
+	sta smod0+2
+smod0:
+	jsr smod0
+
+	lda #0
+	sta DfiFs_CommandLen
+	clc
+	rts
+
+
+cmdChar:
+	.PET 'v'		; validate
+	.PET 'i'		; init
+	.PET 'd'		;
+	.PET 'm'		;
+	.PET 'b'		; block commands
+	.PET 'u'		; user commands
+	.PET 'p'		;
+	.PET '&'		; execute file
+	.PET 'c'		; copy
+	.PET 'r'		; rename
+	.PET 's'		; scratch
+	.PET 'n'		; new
+cmdChar_len = *-cmdChar
+
+cmdJmpLo:
+	.DB <DfiFs_cmd_validate
+	.DB <DfiFs_cmd_init
+	.DB <DfiFs_cmd_d
+	.DB <DfiFs_cmd_m
+	.DB <DfiFs_cmd_b
+	.DB <DfiFs_cmd_u
+	.DB <DfiFs_cmd_p
+	.DB <DfiFs_cmd_amp
+	.DB <DfiFs_cmd_copy
+	.DB <DfiFs_cmd_rename
+	.DB <DfiFs_cmd_scratch
+	.DB <DfiFs_cmd_new
+
+cmdJmpHi:
+	.DB >DfiFs_cmd_validate
+	.DB >DfiFs_cmd_init
+	.DB >DfiFs_cmd_d
+	.DB >DfiFs_cmd_m
+	.DB >DfiFs_cmd_b
+	.DB >DfiFs_cmd_u
+	.DB >DfiFs_cmd_p
+	.DB >DfiFs_cmd_amp
+	.DB >DfiFs_cmd_copy
+	.DB >DfiFs_cmd_rename
+	.DB >DfiFs_cmd_scratch
+	.DB >DfiFs_cmd_new
+    .)
+
+;--------------------------------------
+
+DfiFs_cmd_validate:
+    .(
+not_yet:
+	inc $d020
+	jmp not_yet
+    .)
+
+;--------------------------------------
+
+DfiFs_cmd_init:
+    .(
+	.bankJsr(L_DfiFs_Init)
+	bcs error
+
+	; set ok
+	lda #Err_00_Ok
+	.bankJsr(L_DfiFs_SetError_NoBlock)
+
+	clc
+	rts
+
+error:
+	rts
+    .)
+
+;--------------------------------------
+
+DfiFs_cmd_d:
+    .(
+not_yet:
+	inc $d020
+	jmp not_yet
+    .)
+
+;--------------------------------------
+
+DfiFs_cmd_m:
+    .(
+not_yet:
+	inc $d020
+	jmp not_yet
+    .)
+
+;--------------------------------------
+
+DfiFs_cmd_b:
+    .(
+not_yet:
+	inc $d020
+	jmp not_yet
+    .)
+
+;--------------------------------------
+
+DfiFs_cmd_u:
+    .(
+not_yet:
+	inc $d020
+	jmp not_yet
+    .)
+
+;--------------------------------------
+
+DfiFs_cmd_p:
+    .(
+not_yet:
+	inc $d020
+	jmp not_yet
+    .)
+
+;--------------------------------------
+
+DfiFs_cmd_amp:
+    .(
+not_yet:
+	inc $d020
+	jmp not_yet
+    .)
+
+;--------------------------------------
+
+DfiFs_cmd_copy:
+    .(
+not_yet:
+	inc $d020
+	jmp not_yet
+    .)
+
+;--------------------------------------
+
+DfiFs_cmd_rename:
+    .(
+not_yet:
+	inc $d020
+	jmp not_yet
+    .)
+
+;--------------------------------------
+
+DfiFs_cmd_scratch:
+    .(
+	jsr initCounters
+	jsr setToFirstEntry
+	bcs error
+
+entryLoop:
+	; read one entry
+	jsr parseEntry
+	bcs error
+
+	; check for ','
+	jsr DfiFs_Cmd_PeekChar
+	cmp #','
+	bne lastEntry
+	jsr DfiFs_Cmd_GetChar
+	jmp entryLoop
+
+lastEntry:
+	jsr DfiFs_Cmd_CheckFixedType
+	bcs error
+
+	ldx #0
+	stx DfiFs_Cmd_ScratchCounter
+	stx DfiFs_Cmd_ScratchCounter+1
+loopFiles:
+	stx DfiFs_Cmd_Entry_Cnt
+
+	; scratch some files
+	jsr DfiFs_Cmd_GetEntry
+	jsr processScratchEntries
+	bcs error
+
+	ldx DfiFs_Cmd_Entry_Cnt
+	inx
+	cpx DfiFs_Cmd_Entry_Len
+	bcc loopFiles
+
+	lda #Err_01_FilesScratched
+	ldx DfiFs_Cmd_ScratchCounter
+	ldy DfiFs_Cmd_ScratchCounter+1
+	.bankJsr(L_DfiFs_SetError)
+error:
+	; the errornumber was set, that's it
+	clc
+	rts
+    .)
+
+;--------------------------------------
+
+DfiFs_cmd_new:
+    .(
+not_yet:
+	inc $d020
+	jmp not_yet
+    .)
+
+;--------------------------------------
+
+processScratchEntries:
+    .(
+	lda DfiFs_CurrentDir
+	sta DfiFs_WorkingDir
+	lda DfiFs_CurrentDir+1
+	sta DfiFs_WorkingDir+1
+
+	ldx DfiFs_WorkingDir
+	ldy DfiFs_WorkingDir+1
+	.bankJsr(L_searchDir_init)
+	bcs error
+
+loopOverAllFiles:
+	; find file in directory
+	.bankJsr(L_findNextMatchingDirEntry)
+	bcs error
+	tax
+	bne fileNotFound
+
+	; found a matching entry, scratch it
+
+;#error "save searchDir vars and invalidate buffer"
+
+	; copy the dir entry position
+;	lda DfiFs_SearchDir_Idx
+	sta DfiFs_ScratchFile_DirEntryIdx
+;	ldx DfiFs_SearchDir_Block
+	stx DfiFs_ScratchFile_DirEntryTrk
+;	ldy DfiFs_SearchDir_Block+1
+	sty DfiFs_ScratchFile_DirEntrySec
+
+	jsr scratchOneFile
+	bcs error
+
+;#error "restore searchDir vars and reload buffer"
+
+	; one file scratched
+	inc DfiFs_Cmd_ScratchCounter
+	bne loopOverAllFiles
+	inc DfiFs_Cmd_ScratchCounter+1
+	jmp loopOverAllFiles
+
+fileNotFound:
+	clc
+error:
+	rts
+    .)
+
+
+scratchOneFile:
+    .(
+	; read first file block
+	lda DfiFs_ExchangeBuffer+3
+	beq error
+	sta DfiFs_ScratchFile_Trk
+	lda DfiFs_ExchangeBuffer+4
+	sta DfiFs_ScratchFile_Sec
+
+	; loop over all blocks and free them
+loopOverAllBlocks:
+	ldx DfiFs_ScratchFile_Trk
+	ldy DfiFs_ScratchFile_Sec
+	.bankJsr(L_readFileNewBlock)
+	bcs error
+
+	ldx DfiFs_ScratchFile_Trk
+	ldy DfiFs_ScratchFile_Sec
+	.bankJsr(L_DfiFs_Bam_Free)
+	bcs error
+
+	ldy #1
+	lda (DfiFsZp_BufPtr),y
+	sta DfiFs_ScratchFile_Sec
+	dey
+	lda (DfiFsZp_BufPtr),y
+	sta DfiFs_ScratchFile_Trk
+	bne loopOverAllBlocks
+
+	; clear the dir entry
+
+	; first read the old entry
+	lda DfiFs_ScratchFile_DirEntryIdx
+	ldx DfiFs_ScratchFile_DirEntryTrk
+	ldy DfiFs_ScratchFile_DirEntrySec
+	.bankJsr(L_DfiFs_Dir_ReadDirEntry)
+	bcs error
+
+	; free the dir entry
+	lda #0
+	sta DfiFs_ExchangeBuffer+$02
+
+	; write the modified sector
+	lda DfiFs_ScratchFile_DirEntryIdx
+	ldx DfiFs_ScratchFile_DirEntryTrk
+	ldy DfiFs_ScratchFile_DirEntrySec
+	.bankJsr(L_DfiFs_Dir_WriteDirEntry)
+	bcs error
+
+	.bankJsr(L_DfiFs_Bam_flushBuffer)
+	rts
+
+error:
+	sec
+	rts
+    .)
+
+;--------------------------------------
+
