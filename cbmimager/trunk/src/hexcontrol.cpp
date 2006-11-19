@@ -42,9 +42,16 @@ CHexControl::CHexControl(wxWindow* parent, wxWindowID id, const wxPoint& pos, co
 	SetItemCount(0);
 }
 
+CHexControl::~CHexControl()
+{
+	Clear();
+}
+
 
 void CHexControl::SetData(byte *data, int nLength)
 {
+	Clear();
+
 	m_data = data;
 	m_dataLength = nLength;
 	SetItemCount(nLength / 8);
@@ -55,7 +62,17 @@ void CHexControl::SetData(byte *data, int nLength)
 
 void CHexControl::Clear()
 {
+	unsigned int i;
+
 	wxVListBox::Clear();
+
+	// Delete modified bytes array
+	for (i = 0; i < modArray.Count(); i++)
+	{
+		ModifiedByte *bt = modArray[i];
+		delete bt;
+	}
+	modArray.Clear();
 }
 
 
@@ -67,7 +84,10 @@ void CHexControl::OnDrawItem(wxDC &dc, const wxRect &rect, size_t n)const
 	wxString bTemp;
 	int i;
 	int len;
+	int specialBitmap;
 	byte pi;
+	int rowOffset = n * 8;						// Start of row in m_data
+	int colOffset;								// byte offset for the Column
 
 
 	if (m_dataLength == 0)
@@ -106,19 +126,38 @@ void CHexControl::OnDrawItem(wxDC &dc, const wxRect &rect, size_t n)const
 	for (i = 0; i < len; i++)
 	{
 		pi = output.GetChar(i);
-		if (pi >= 64 && pi < 128)
-			pi -= 64;
-		if (pi >= 192)			// TODO: ARGH !! Can we get this easier ??
-			pi -= 64;
-		if (pi >= 64)
-			pi -= 64;
+		if (i < 31)							// in HEX-Part ?
+		{
+			if (pi >= 64 && pi < 128)
+				pi -= 64;
+		}
+		else								// in ASCII-Part
+		{
+			if (pi < 32 || pi >= 192)
+				pi = 0x02e;					// Display as Dot (.)
+			if (pi >= 64)
+				pi -= 64;
+		}
+		
 		if (m_selRow == (int)n && (m_colHex == i || m_colAscii == i))
 		{
 			tempDC.SelectObject(selBitmap);
 		}
 		else
 		{
-			tempDC.SelectObject(stdBitmap);
+			if (i < 31)
+			{
+				colOffset = (i - 6) / 3;
+				specialBitmap = ((CHexControl*)this)->IsSpecialSelection(rowOffset, colOffset);		// Hex Part
+			}
+			else
+			{
+				specialBitmap = ((CHexControl*)this)->IsSpecialSelection(rowOffset, i - 31);		// ASCII Part
+			}
+			if (specialBitmap >= 0)
+				tempDC.SelectObject(selMaps[specialBitmap]);
+			else
+				tempDC.SelectObject(stdBitmap);
 		}
 		dc.Blit(i * charWidth + rect.x, rect.y, charWidth, charHeigth, &tempDC, pi<<3, 0);
 	}
@@ -171,8 +210,10 @@ void CHexControl::OnMouseEvent(wxMouseEvent& event)
 void CHexControl::OnKeyDown(wxKeyEvent& event)
 {
 	byte value;
+	int tmpRow = m_selRow;
+	int tmpCol = m_selCol;						// we have to work with tmp values, because StoreSpecialSelection() works with m_selCol and m_selRow
 	int offset = m_selRow * 8;					// Start of row in m_data
-	int b = (m_selCol - 6) / 3;					// byte offset for the row (4 cols for address + 2 spaces, each byte consist of 2 chars + 1 space)
+	int b = (m_selCol - 6) / 3;					// byte offset for the Column (4 cols for address + 2 spaces, each byte consist of 2 chars + 1 space)
 	bool high = (m_selCol - 6) % 3 == 0;		// is the high-nibble selected ?
 	byte target = m_data[offset + b];			// read byte from data-buffer
 
@@ -232,20 +273,25 @@ void CHexControl::OnKeyDown(wxKeyEvent& event)
 		{
 			target &= 0x0f;				// clear high-byte
 			value <<= 4;				// shift value to high-nibble
-			m_selCol++;					// move to next byte
+			tmpCol++;					// move to next nibble
 		}
 		else							// low-nible was selected
 		{
 			target &= 0xf0;				// clear low-nibble
 			if (m_selCol == 28 && (int)GetItemCount() > (m_selRow + 1))		// End of Line but not last line ?
 			{
-				m_selCol = 4;			// move to start of line
-				m_selRow++;				// next line
+				tmpCol = 4;				// move to start of line
+				tmpRow++;				// next line
 			}
-			if (m_selCol < 28 && offset + b + 1 < m_dataLength)					// not on the rightmost position ?
-				m_selCol += 2;			// move to next byte
+			if (m_selCol < 28 && offset + b + 1 < m_dataLength)				// not on the rightmost position ?
+				tmpCol += 2;			// move to next byte
 		}
 		target |= value;				// set value
+
+		StoreSpecialSelection(m_data[offset + b], target);					// Mark as modified
+
+		m_selRow = tmpRow;
+		m_selCol = tmpCol;
 		m_data[offset + b] = target;	// and store it
 	}
 	else if (m_selCol > 30)												// we're in the ASCII-Part of the hexdump
@@ -261,6 +307,9 @@ void CHexControl::OnKeyDown(wxKeyEvent& event)
 				else
 					target += 64;
 			}
+
+			StoreSpecialSelection(m_data[offset + b], target);				// Mark as modified
+
 			m_data[offset + b] = target;
 			if (m_selCol == 38 && (int)GetItemCount() > (m_selRow + 1))		// End of Line but not last line ?
 			{
@@ -333,4 +382,61 @@ void CHexControl::UpdateColPositions()
 		m_colHex = m_selCol;
 		m_colAscii = (m_selCol - 6) / 3 + 31;
 	}
+}
+
+
+int CHexControl::IsSpecialSelection(int row, int col)
+{
+	unsigned int i;
+
+	if (numSelMaps < 1)					// No special Bitmaps defined
+		return -1;
+
+	for (i = 0; i < modArray.Count(); i++)
+	{
+		if (modArray[i]->row == row && modArray[i]->col == col)
+			return m_modifiedBitmapIndex;
+	}
+	return -1;
+}
+
+
+void CHexControl::StoreSpecialSelection(unsigned char oldData, unsigned char newData)
+{
+	unsigned int i;
+	int rowOffset = m_selRow * 8;				// Start of row in m_data
+	int colOffset = (m_selCol - 6) / 3;			// byte offset for the Column
+
+	if (m_selCol > 30)							// fix offset for ASCII-part
+		colOffset = m_selCol - 31;
+
+	// first check, if we already have this position stored (to not add the position more than once)
+	for (i = 0; i < modArray.Count(); i++)
+	{
+		if (modArray[i]->row == rowOffset && modArray[i]->col == colOffset)
+		{
+			ModifiedByte *bt = modArray[i];
+			if (bt->oldByte != newData)
+				return;							// modified, but not to the original value, leave it in the array and exit
+			delete bt;							// delete object
+			modArray.RemoveAt(i);				// Remove old position and exit (value is reset to it's original)
+			return;
+		}
+	}
+	if (newData != oldData)						// only store changes !
+		modArray.Add(new ModifiedByte(rowOffset, colOffset, oldData));
+}
+
+
+bool CHexControl::SetCBMCharset(byte *buffer, int nLength)
+{
+	bool result = CODListBox::SetCBMCharset(buffer, nLength);			// call base-class
+	
+	if (result)
+	{
+		wxColor colRed(255, 0, 0);
+		wxColor colWhite(255, 255, 255);
+		m_modifiedBitmapIndex = CreateSelectionBitmap(colRed, colWhite);		// Create Drawing-Bitmap for modified bytes (red on white)
+	}
+	return result;
 }

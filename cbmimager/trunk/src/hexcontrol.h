@@ -23,6 +23,24 @@
 #include "odlistbox.h"
 
 
+class ModifiedByte
+{
+public :
+	int col, row;
+	unsigned char oldByte;
+
+	ModifiedByte(int row, int column, unsigned char data)
+	{
+		this->col = column;
+		this->row = row;
+		this->oldByte = data;
+	}
+};
+
+
+WX_DEFINE_ARRAY(ModifiedByte*, ModifiedArray);
+
+
 #define ID_HEXCONTROL	10010
 
 
@@ -32,6 +50,7 @@ class CHexControl :
 public:
 	CHexControl(wxWindow* parent, wxWindowID id = ID_HEXCONTROL, const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxDefaultSize, 
 		long style = 0, const wxString& name = _T("HexControl"));
+	~CHexControl();
 
 	virtual void OnDrawItem(wxDC &dc, const wxRect &rect, size_t n)const;
 	virtual void Clear();
@@ -41,12 +60,21 @@ public:
 	virtual void OnMouseEvent(wxMouseEvent& event);
 	virtual void OnKeyDown(wxKeyEvent& event);
 
+	virtual bool SetCBMCharset(byte* buffer, int nLength);
+
+	virtual int IsSpecialSelection(int row, int col);
+
+private:
+	void StoreSpecialSelection(unsigned char oldData, unsigned char newData);
+
 protected:
 	byte *m_data;					// pointer to hex-data
 	int m_dataLength;				// Length of data
-	int m_selRow;
-	int m_selCol;
-	int m_colHex, m_colAscii;
+	int m_selRow;					// Row under Cursor
+	int m_selCol;					// Column under Cursor
+	int m_colHex, m_colAscii;		// Column under Cursor in Hex- and ASCII-Part of the Data
+	int m_modifiedBitmapIndex;		// Index of special selection-bitmap used for modified content
+	ModifiedArray modArray;			// Array to store the positions of modified bytes
 
 	void UpdateColPositions();
 

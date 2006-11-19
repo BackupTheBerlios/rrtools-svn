@@ -25,7 +25,10 @@
 #include "Logic/cbmdirectoryentry.h"
 
 
-#define ID_ODLISTBOX		10010
+#define ID_ODLISTBOX			10010
+
+#define MAX_SPECIAL_BITMAPS		16
+
 
 
 DECLARE_EVENT_TYPE(wxEVT_MY_DRAG_EVENT, -1)
@@ -51,8 +54,10 @@ public:
 	virtual void OnDrawItem(wxDC &dc, const wxRect &rect, size_t n)const;
 	virtual void Clear();
 
-	bool SetCBMCharset(byte *buffer, int nLength);
-	bool SetCBMCharset(char *fileName);
+	virtual bool SetCBMCharset(byte *buffer, int nLength);
+	virtual bool SetCBMCharset(char *fileName);
+	virtual int CreateSelectionBitmap(wxColor& foreground, wxColor& background);
+	virtual int IsSpecialSelection(int row, int col);
 
 	void AddItem(wxString *text, CCbmDirectoryEntry *dirEntry);
 	void AddItem(wxString text, CCbmDirectoryEntry *dirEntry);
@@ -68,8 +73,12 @@ private:
 	byte abMirrorTab[0x0100];
 
 protected:
-	wxBitmap stdBitmap;			// Source of BitmapCharset (items are displayed in normal state)
-	wxBitmap selBitmap;			// items are selected in selected State
+	unsigned char masterCharset[0x0800];	// original charset to draw with
+
+	wxBitmap stdBitmap;				// Source of BitmapCharset (items are displayed in normal state)
+	wxBitmap selBitmap;				// items are selected in selected State
+	wxBitmap selMaps[MAX_SPECIAL_BITMAPS];			// special selection Bitmaps
+	int numSelMaps;					// last used special Bitmap+1
 	int charsPerRow;				// Number of chars per Row
 	int charHeigth;					// Height of each char
 	int charWidth;					// Height of each char

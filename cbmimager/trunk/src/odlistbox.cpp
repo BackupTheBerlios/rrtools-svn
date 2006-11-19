@@ -40,6 +40,7 @@ CODListBox::CODListBox(wxWindow* parent, wxWindowID id, const wxPoint& pos, cons
 	SetItemCount(0);
 	dragX = -1;
 	dragY = -1;
+	numSelMaps = 0;
 
 	createMirrorMap();
 
@@ -206,6 +207,7 @@ bool CODListBox::SetCBMCharset(byte *buffer, int nLength)
 #endif
 			bCharsetByte  = abMirrorTab[bCharsetByte];
 			pbOrderedCharset[iXCnt+(iYCnt<<8)] = bCharsetByte;
+			masterCharset[iXCnt+(iYCnt<<8)] = bCharsetByte;			// store also in MasterCharset for later use
 		}
 	}
 
@@ -287,11 +289,73 @@ bool CODListBox::SetCBMCharset(char *fileName)
 		f.Seek(0);
 		f.Read(buffer, length);
 		f.Close();
-		SetCBMCharset(buffer, length);
+		this->SetCBMCharset(buffer, length);
 		delete buffer;
 		return true;
 	}
 	return false;
+}
+
+
+// This method creates a selection bitmap of the CBM-Charset with the given foreground and background colours
+// A maximum of MAX_SPECIAL_BITMAPS selection-bitmaps can be created (limited by the size of the selMaps-Array)
+// In conjunction with the method IsSpecialSelection(), the derived class can determine, whether to use a special selection-bitmap or not
+int CODListBox::CreateSelectionBitmap(wxColor& foreground, wxColor& background)
+{
+	wxBitmap unmaskedSel;
+	wxMask *maskSel;
+	wxMemoryDC srcDC;
+	wxMemoryDC dstDC;
+	int iScreenDepth;
+	wxBrush fgBrush(foreground);
+	wxBrush bgBrush(background);
+
+	// Check for maximum of defined bitmaps
+	if (numSelMaps == MAX_SPECIAL_BITMAPS)
+		throw "Maximum of special bitmap-definitions reached";
+
+	// get current screen depth
+	iScreenDepth = wxDisplayDepth();
+
+	// create a bitmap from the original byte array
+	wxBitmap charsetBitmapMono((const char*)masterCharset, 0x0800, 8, 1);
+
+	// create a mask from the bitmap
+	maskSel = new wxMask(charsetBitmapMono);
+
+	unmaskedSel = wxBitmap(0x0800, 8, iScreenDepth);
+
+	selMaps[numSelMaps] = wxBitmap(0x0800, 8, iScreenDepth);
+
+	srcDC.SelectObject(unmaskedSel);
+	srcDC.SetBackground(fgBrush);
+	srcDC.Clear();
+	srcDC.SelectObject(wxNullBitmap);
+
+	unmaskedSel.SetMask(maskSel);
+
+	// clear the destination selected bitmap
+	dstDC.SelectObject(selMaps[numSelMaps]);
+	dstDC.SetBackground(bgBrush);
+	dstDC.Clear();
+	dstDC.SelectObject(wxNullBitmap);
+
+	srcDC.SelectObject(unmaskedSel);
+	dstDC.SelectObject(selMaps[numSelMaps]);
+	dstDC.Blit(0, 0, 0x0800, 8, &srcDC, 0, 0, wxCOPY, true);
+	srcDC.SelectObject(wxNullBitmap);
+	dstDC.SelectObject(wxNullBitmap);
+
+	numSelMaps++;
+	return numSelMaps - 1;
+}
+
+// With this method, a derived class can determine, whether to use a special bitmap for drawing the character at a given position
+// The method should return the index of the special bitmap as returned by the method CreateSelectionBitmap()
+// This method should be called from the function OnDrawItem()
+int CODListBox::IsSpecialSelection(int row, int col)
+{
+	throw "Must be implemented in derived class";
 }
 
 
