@@ -18,7 +18,7 @@ all: $(TARGET).bin
 
 #--------------------------------------
 
-$(TARGET).bin: $(TARGET).src $(MMC64_PLUGIN_SRC)/mmc64_plugin/mmc64_plugin.src
+$(TARGET).bin: $(TARGET).src $(MMC64_PLUGIN_SRC)/mmc64_plugin/mmc64_plugin.src testset.tst
 	$(DA) -v -I$(MMC64_PLUGIN_SRC) -d $(TARGET).html -l $(TARGET).lab -o $@ $(TARGET).src
 
 testset.tst: gendata
