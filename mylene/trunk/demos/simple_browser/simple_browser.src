@@ -1,0 +1,257 @@
+/***************************************************************************
+ *   Copyright (C) 1998 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+;--------------------------------------
+;
+; Mylene
+;
+; A portable directory browser.
+; Based on the never-released StereoSID-Player.
+;--------------------------------------
+
+#segdef "zp", $02-$ff
+#segdef "code", $0801-$4000
+#segdef "data", $4000-$5000
+#segdef "dirbuffer", $5000-$d000
+#outfile @, startadr, sort, $00, "code"
+
+;--------------------------------------
+
+	.segment "zp"
+	* = $02
+
+	.segment "code"
+	* = $0801
+
+	.segment "data"
+	* = $4000
+
+	.segment "dirbuffer"
+	* = $5000
+EntryMem_Start:
+	.DSB $d000-$5000
+EntryMem_End:
+
+;--------------------------------------
+
+	.segment "code"
+
+    .(	; BasicStart
+	.DW BasicEnd,2006
+	.DB $9e
+
+	; .DB '0'|(BasicJumpIn/10000)
+	.DB '0'|((BasicJumpIn-(BasicJumpIn/10000)*10000)/1000)
+	.DB '0'|((BasicJumpIn-(BasicJumpIn/1000)*1000)/100)
+	.DB '0'|((BasicJumpIn-(BasicJumpIn/100)*100)/10)
+	.DB '0'|(BasicJumpIn-(BasicJumpIn/10)*10)
+	.DB 0
+BasicEnd:
+	.DW 0
+
+    .)	; BasicStart
+
+;--------------------------------------
+
+#include "keyb.h"
+#include "keyb.src"
+
+#include "mylene/mylene.src"
+
+;--------------------------------------
+
+BasicJumpIn:
+	sei
+
+	lda #$35
+	sta 1
+
+	lda #<Irq0
+	sta $fffe
+	lda #>Irq0
+	sta $ffff
+
+	lda #$7f
+	sta $dc0d
+	sta $dd0d
+	lda $dc0d
+	lda $dd0d
+
+	lda #$30
+	sta $d012
+	lda #$1b
+	sta $d011
+	lda #1
+	sta $d01a
+	lda #0
+	sta $d019
+
+	lda #0
+	sta $d020
+	sta $d021
+
+	lda #15
+	sta KeyBZp_InitRepeatVal
+	lda #255-2
+	sta KeyBZp_RepeatVal
+	cli
+
+	jsr ComLib_ClearScreen
+	jsr Entry_ClearAll
+
+	lda #<levels_serial
+	ldy #>levels_serial
+	jsr level_init
+
+	; read level 0
+	jmp level_0_init
+
+;--------------------------------------
+
+Quit:
+	;Are you sure? Jaja...
+
+	sei
+	lda #$37
+	sta 1
+	jmp $fce2
+
+;--------------------------------------
+
+GotoDevList:
+	ldx #0
+	.DB $2c
+GotoPartDir:
+	ldx #1
+	.DB $2c
+GotoRootDir:
+	ldx #2
+	jmp GotoLevel
+
+;--------------------------------------
+
+GetKey:
+    .(
+	jsr KeyB_GetKey
+	bmi GetKeySpi
+	bvc GetKey
+
+	;Normal Keys
+
+	ldx #DirManBSS_KeyTab3_len-1
+GetKey0:
+	cmp DirManBSS_KeyTab3,x
+	beq GetKey1
+	dex
+	bpl GetKey0
+	bmi GetKey	; bra
+GetKey1:
+	lda DirManBSS_KeyTab4,x
+	sta LoadZp_Cnt
+	lda DirManBSS_KeyTab5,x
+	sta LoadZp_Cnt+1
+	jmp (LoadZp_Cnt)
+
+GetKeySpi:
+	ldx #DirManBSS_KeyTab0_len-1
+GetKey2:
+	cmp DirManBSS_KeyTab0,x
+	beq GetKey3
+	dex
+	bpl GetKey2
+	bmi GetKey	; bra
+GetKey3:
+	lda DirManBSS_KeyTab1,x
+	sta LoadZp_Cnt
+	lda DirManBSS_KeyTab2,x
+	sta LoadZp_Cnt+1
+	jmp (LoadZp_Cnt)
+    .)
+
+;--------------------------------------
+
+Irq0:
+    .(
+	pha
+	txa
+	pha
+	tya
+	pha
+
+	lda $d019
+	sta $d019
+
+	inc $d020
+	jsr KeyB_ScanKeys
+	dec $d020
+
+	pla
+	tay
+	pla
+	tax
+	pla
+	rti
+    .)
+
+;--------------------------------------
+
+	.segment "code"
+
+DirManBSS_KeyTab0:
+	.DS Key_CUp
+	.DS Key_CDo
+	.DS Key_Ret
+DirManBSS_KeyTab0_len = *-DirManBSS_KeyTab0
+DirManBSS_KeyTab1:
+	.DB <MoveListUp
+	.DB <MoveListDown
+	.DB <EntryAction
+DirManBSS_KeyTab2:
+	.DB >MoveListUp
+	.DB >MoveListDown
+	.DB >EntryAction
+
+DirManBSS_KeyTab3:
+	.DS ' '
+	.DS 'q'
+	.DS 'p'
+	.DS '1'
+	.DS 'r'
+	.DS 'd'
+DirManBSS_KeyTab3_len = *-DirManBSS_KeyTab3
+DirManBSS_KeyTab4:
+	.DB <SelectEntry
+	.DB <Quit
+	.DB <GotoPartDir
+	.DB <GotoPrevDir
+	.DB <GotoRootDir
+	.DB <GotoDevList
+DirManBSS_KeyTab5:
+	.DB >SelectEntry
+	.DB >Quit
+	.DB >GotoPartDir
+	.DB >GotoPrevDir
+	.DB >GotoRootDir
+	.DB >GotoDevList
+
+;--------------------------------------
+
+_DirManEnd:
+

@@ -1,0 +1,51 @@
+/***************************************************************************
+ *   Copyright (C) 1998 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+;--------------------------------------
+
+SC			= $0400
+
+MaxXPos			= 33
+MaxYPos			= 19
+
+ScrlBorder_Up		= 4
+ScrlBorder_Down		= MaxYPos-4-1
+
+Palette_HeaderCol	= $e
+Palette_BFreeCol	= $d
+
+;--------------------------------------
+
+	.segment "code"
+
+ComLib_ScrTabLo:
+	.DB <SC+200,<SC+240,<SC+280,<SC+320
+	.DB <SC+360,<SC+400,<SC+440,<SC+480
+	.DB <SC+520,<SC+560,<SC+600,<SC+640
+	.DB <SC+680,<SC+720,<SC+760,<SC+800
+	.DB <SC+840,<SC+880,<SC+920
+ComLib_ScrTabHi:
+	.DB >SC+200,>SC+240,>SC+280,>SC+320
+	.DB >SC+360,>SC+400,>SC+440,>SC+480
+	.DB >SC+520,>SC+560,>SC+600,>SC+640
+	.DB >SC+680,>SC+720,>SC+760,>SC+800
+	.DB >SC+840,>SC+880,>SC+920
+
+;--------------------------------------

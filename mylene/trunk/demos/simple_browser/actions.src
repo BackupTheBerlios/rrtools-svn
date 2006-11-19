@@ -1,0 +1,84 @@
+/***************************************************************************
+ *   Copyright (C) 1998 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+/*-------------------------------------
+This file defines the data source and
+actions of the browser.
+
+The browsable data is organized in levels.
+Each level can have several items which may
+represent a new level, just like a tree.
+-------------------------------------*/
+
+; include your sources here
+
+#include "serial.src"
+
+;--------------------------------------
+
+	.segment "code"
+
+.level_def_start(levels_serial, serial_read_devices)
+
+.levels_start
+	.level_entry(0, 2)
+	.level_entry(1, 2)
+	.level_entry(2, 2)
+	.level_entry(3, 2)
+.levels_end
+
+; level 0 : device list
+.level_actions_start(0)
+	.level_action(IFFDevTyp_41,		2, $e,	serial_enter_device,	serial_read_dir,		0)
+	.level_action(IFFDevTyp_70,		2, $e,	serial_enter_device,	serial_read_dir,		0)
+	.level_action(IFFDevTyp_71,		2, $e,	serial_enter_device,	serial_read_dir,		0)
+	.level_action(IFFDevTyp_81,		2, $e,	serial_enter_device,	serial_read_dir,		0)
+	.level_action(IFFDevTyp_HD,		1, $e,	serial_enter_device,	serial_read_partitions_cmd,	0)
+	.level_action(IFFDevTyp_FD,		1, $e,	serial_enter_device,	serial_read_partitions_cmd,	0)
+	.level_action(IFFDevTyp_RL,		1, $e,	serial_enter_device,	serial_read_partitions_cmd,	0)
+	.level_action(IFFDevTyp_RD,		1, $e,	serial_enter_device,	serial_read_partitions_cmd,	0)
+.level_actions_end(0)
+
+; level 1 : partition list
+.level_actions_start(1)
+	.level_action(PartitionEntry_41,	2, $f,	serial_enter_partition,	serial_read_dir,		0)
+	.level_action(PartitionEntry_71,	2, $f,	serial_enter_partition,	serial_read_dir,		0)
+	.level_action(PartitionEntry_81,	2, $f,	serial_enter_partition,	serial_read_dir,		0)
+	.level_action(PartitionEntry_81c,	2, $f,	serial_enter_partition,	serial_read_dir,		0)
+	.level_action(PartitionEntry_Nat,	2, $f,	serial_enter_partition,	serial_read_dir,		0)
+.level_actions_end(1)
+
+; level 2 : root directory
+.level_actions_start(2)
+	.level_action(FileEntry_Prg,		2, $81,	0,			serial_read_file,		0)
+	.level_action(FileEntry_Cbm,		3, $3,	serial_change_dir_1581,	serial_read_dir,		serial_prev_dir_1581)
+	.level_action(FileEntry_Dir,		3, $3,	serial_change_dir_cmd,	serial_read_dir,		serial_prev_dir_cmd)
+.level_actions_end(2)
+
+; level 3 : any subdirectory
+.level_actions_start(3)
+	.level_action(FileEntry_Prg,		3, $81,0,			serial_read_file,		0)
+	.level_action(FileEntry_Cbm,		3, $3,	serial_change_dir_1581,	serial_read_dir,		serial_prev_dir_1581)
+	.level_action(FileEntry_Dir,		3, $3,	serial_change_dir_cmd,	serial_read_dir,		serial_prev_dir_cmd)
+.level_actions_end(3)
+
+.level_def_end
+
+;--------------------------------------

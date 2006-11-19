@@ -1,0 +1,522 @@
+
+;--------------------------------------
+
+#include "keys.h"
+
+	.segment "code"
+
+KeyB_GetKey:
+    .(
+;	lda FKeysBSS_MacroStackPos		; Playing Macro?
+;	bne GetKeyMac0
+	sei					; Get Key
+	lda KeyBZp_Flag
+	ldx #0
+	stx KeyBZp_Flag
+	ldx KeyBZp_Key
+	cli
+/*
+	bpl GetKeyMac1				; Is Key F16?
+	cpx #Key_F16
+	bne GetKeyMac1
+	lda FKeysBSS_RecordKey			; Already Recording
+	bne GetKeyMac1
+	jsr ComLibVect_CursorBlinkFast		; Show we are in Record Mode
+	dec FKeysBSS_RecordKey			; = $ff, Block interpretation of FKeys in IRQ
+GetKeyWho:
+	cli					; Wait for FKey to Record. Ignore other Keys
+	wai					; Wait for Next IRQ -> new Key
+	sei
+        bit KeyBZp_Flag
+	bpl GetKeyWho				; No Special Key means No FKey
+	lda KeyBZp_Key
+	cmp #Key_F15+1				; Is FKey 1 to 15?
+	bcs GetKeyWho
+	sbc #Key_F1-2
+	bcc GetKeyWho
+	sta FKeysBSS_RecordKey			; 1 to 15 for FKeys
+	stz KeyBZp_Flag
+	cli	
+	tay
+	jsr SearchFKey
+;	bcs ERROR
+	rep #%00100000
+    MSize_16
+	lda [LongLibZp_Akku0]
+	sta FKeysBSS_OldKeyLen
+	sep #%00100000
+    MSize_8
+	lda #KeyBFlag_KeySpi
+	sta FKeysBSS_RecFlags
+	lda #0					; No Flags -> No Keys
+	bra GetKeyMac2				; Do not Record this Key
+
+GetKeyMac1:
+	ldy FKeysBSS_RecordKey
+	beq GetKeyMac2
+	cmp #$40
+	bcc GetKeyMac2				; No Keys, dann auch nichts Aufnehmen
+	jsr FKeys_PutChar
+GetKeyMac2:
+*/
+	ora #%00110000
+	pha
+	txa
+	plp
+	rts
+/*
+GetKeyMac0:
+	jsr KeyB_CheckStop
+	bne GetKeyMacBreak
+	jsr FKeys_GetChar
+	bra GetKeyMac1
+GetKeyMacBreak:
+	stz FKeysBSS_MacroStackPos		; Macro Replay off
+	stz FKeysBSS_RecordKey			; Macro Record off
+	ldx #StringBufZp_End
+	jsr LongLib_LoadPtr
+	ldx #StringBufZp_TempEnd
+	jsr LongLib_StorePtr
+	jsr ComLibVect_CursorBlinkNorm
+	lda #0					; No Flags -> No Keys
+	bra GetKeyMac2
+*/
+    .)
+
+;--------------------------------------
+
+KeyB_CheckStop:
+    .(
+	sei
+	lda KeyBZp_Flag
+	and #KeyBFlag_Stop
+	php
+	lda KeyBZp_Flag
+	and #~KeyBFlag_Stop
+	sta KeyBZp_Flag
+	plp
+	rts
+    .)
+
+;--------------------------------------
+/*
+	.(
+
++KeyB_AutoKeys:
+	bit KeyBZp_Flag
+	bpl End2
+	lda KeyBZp_Key
+	cmp #Key_Stp
+	bne SpiNoStop
+	lda #KeyBFlag_Stop
+	tsb KeyBZp_Flag
+End2:
+	rts
+SpiNoStop:
+	lda FKeysBSS_MacroStackPos
+	bne End2
+	lda KeyBZp_Key
++KeyB_AutoKeysFKeys:
+	cmp #Key_MSi
+	bne SpiNoMSi
+	lda #$20
+	bra SpiXSiIn0
+SpiNoMSi:
+	cmp #Key_XSi
+	bne SpiNoXSi
+	lda #$10
+SpiXSiIn0:
+	eor Intern_MX
+	sta Intern_MX
+	rts
+SpiNoXSi:
+	cmp #Key_139+1
+	bcs SpiNo1
+	cmp #Key_130
+	bcc SpiNo1
+	sbc #Key_130
+	ora #$30
+	sta Intern_01
+	rts
+SpiNo1:
+	cmp #Key_Rep
+	bne SpiNoRep
+	lda #OptionFlag_FollowXep
+	bra SpiSetOption
+SpiNoRep:
+	cmp #Key_VHu
+	bne SpiNoVHu
+	lda #OptionFlag_Verbose
+SpiSetOption:
+	eor OptionFlags
+	sta OptionFlags
+	rts
+SpiNoVHu:
+	cmp #Key_CSh
+	bne SpiNoCSh
+	jmp ComLibVect_SwitchCharsets
+SpiNoCSh:
+	cmp #Key_Map
+	bne SpiNoMMap
+	lda OptionFlags
+	eor #OptionFlag_MMap
+	sta OptionFlags
+	rts
+SpiNoMMap:
+	; FKey Stuff
+	ldy FKeysBSS_RecordKey
+	bmi SpiNoFKeys			; FKeys Blocked
+	cmp #Key_F15+1			; F16 is reserved for Macro-Rec
+	bcs SpiNoFKeys
+	cmp #Key_F1
+	bcc SpiNoFKeys
+	sbc #Key_F1-1
+
+	cmp FKeysBSS_RecordKey		; End for Macro-Record?
+	bne SpiNoEndOfMacro
+	jmp FKeys_TempBufToFKey
+
+SpiNoEndOfMacro:
+	tay
+
+	ldx FKeysBSS_MacroStackPos
+	cpx #$11
+	bcs End
+	sta FKeysBSS_MacroStack0,x	; Macro No.
+	txa
+	asl
+	tax
+	lda #1
+	sta FKeysBSS_MacroStack1,x
+	stz FKeysBSS_MacroStack1+1,x	;Macro Pos
+	inc FKeysBSS_MacroStackPos
+	lda #KeyBFlag_KeySpi
+	sta FKeysBSS_Flags
+	rts
+SpiNoFKeys:
+
+
+End:
+	rts
+
+	.)
+*/
+;--------------------------------------
+; Fragt Keyboard ab und setzt KeyBZp_Key
+; und _Flag
+;--------------------------------------
+
+KeyB_ScanKeys:
+    .(
+	lda #0
+	sta KeyBZp_Attr
+	sta $dc00
+	jsr KeyBEntprell
+	cmp #$ff
+	beq KeyBNoKeys
+	ldx #3
+KeyB0:
+	lda KeyBTab0,x
+	sta $dc00
+	jsr KeyBEntprell
+	and KeyBTab1,x
+	bne KeyB1
+	lda KeyBTab2,x
+	ora KeyBZp_Attr
+	sta KeyBZp_Attr
+KeyB1:
+	dex
+	bpl KeyB0
+
+	ldx #8
+KeyB2:
+	lda KeyBTab3-1,x
+	sta $dc00
+	jsr KeyBEntprell
+	ora KeyBTab4-1,x
+	ldy #7
+KeyB3:
+	asl
+	bcc KeyB4
+	dey
+	bpl KeyB3
+	dex
+	bne KeyB2
+	ldy #0
+KeyB4:
+	tya
+	ora KeyBTab5,x
+	tay
+	ldx #$ff
+	stx $dc00
+	cmp #$40
+	bne KeyB9
+	lda KeyBZp_Attr
+KeyB9:
+	cmp KeyBZp_Pressed
+	bne KeyB8
+	ldx KeyBZp_RepeatCnt
+	bmi KeyB6
+	dex
+	jmp KeyBDelay
+
+KeyBNoKeys:
+	ldx KeyBZp_InitRepeatVal
+	lda #$40
+	sta KeyBZp_Pressed
+KeyBDelay:
+	stx KeyBZp_RepeatCnt
+	lda #~(KeyBFlag_KeyNrm|KeyBFlag_KeySpi)
+	and KeyBZp_Flag
+	sta KeyBZp_Flag
+	rts
+
+KeyB6:
+	inx
+	bmi KeyBDelay
+	ldx KeyBZp_RepeatVal
+	stx KeyBZp_RepeatCnt
+KeyB8:
+	sta KeyBZp_Pressed
+	ldx KeyBZp_Attr
+	lda KeyBTab6,x			; KeyMaps Lo
+	sta KeyBZp_Ptr
+	lda KeyBTab7,x			; KeyMaps Hi
+	sta KeyBZp_Ptr+1
+	lda (KeyBZp_Ptr),y
+	cmp #Key_No
+	beq KeyBNoKeys
+	sta KeyBZp_Key
+	tya
+	and #7
+	tax
+	tya
+	lsr
+	lsr
+	lsr
+	clc
+	adc #$41
+	tay
+	lda (KeyBZp_Ptr),y
+KeyBTestSpi0:
+	asl
+	dex
+	bpl KeyBTestSpi0
+	lda KeyBZp_Flag
+	and #~(KeyBFlag_KeyNrm|KeyBFlag_KeySpi)
+	sta KeyBZp_Flag
+	lda #KeyBFlag_KeyNrm
+	bcc KeyBTestSpi1
+	asl
+KeyBTestSpi1:
+	ora KeyBZp_Flag
+	sta KeyBZp_Flag
+	rts
+
+KeyBEntprell:
+	lda $dc01
+	cmp $dc01
+	bne KeyBEntprell
+	rts
+
+;60 Keys + 4 Attrib
+
+;		Ctrl,	C,	RSh,	LSh
+KeyBTab0:
+	.DB	$7f,	$7f,	$bf,	$fd
+KeyBTab1:
+	.DB	$04,	$20,	$10,	$80
+KeyBTab2:
+	.DB	$01,	$02,	$04,	$04
+
+
+KeyBTab3:
+	.DB $7f,$bf,$df,$ef,$f7,$fb,$fd,$fe
+KeyBTab4:
+	.DB $24,$10,$00,$00,$00,$00,$80,$00
+KeyBTab5:
+	.DB $40,$38,$30,$28,$20,$18,$10,$08,$00
+
+;--------------------------------------
+
+
+KeyBTab6:
+	.DB <KeyMap_Normal		;No
+	.DB <KeyMap_Ctrl		;Ctrl
+	.DB <KeyMap_C			;	C
+	.DB <KeyMap_Ctrl		;Ctrl & C
+	.DB <KeyMap_Shift		;	    Shift
+	.DB <KeyMap_ShiftCtrl   	;Ctrl &     Shift
+	.DB <KeyMap_ShiftC		;	C & Shift
+	.DB <KeyMap_ShiftC		;Ctrl & C & Shift
+KeyBTab7:
+	.DB >KeyMap_Normal		;No
+	.DB >KeyMap_Ctrl		;Ctrl
+	.DB >KeyMap_C			;	C
+	.DB >KeyMap_Ctrl		;Ctrl & C
+	.DB >KeyMap_Shift		;	    Shift
+	.DB >KeyMap_ShiftCtrl		;Ctrl &     Shift
+	.DB >KeyMap_ShiftC		;	C & Shift
+	.DB >KeyMap_ShiftC		;Ctrl & C & Shift
+
+;--------------------------------------
+
+KeyMap_Normal:
+	.DS Key_BSp,	Key_Ret,	Key_CRi,	Key_F7,		Key_F1,		Key_F3,		Key_F5,		Key_CDo
+	.DS '3',	'w',		'a',		'4',		'z',		's',		'e',		Key_No
+	.DS '5',	'r',		'd',		'6',		'c',		'f',		't',		'x'
+	.DS '7',	'y',		'g',		'8',		'b',		'h',		'u',		'v'
+	.DS '9',	'i',		'j',		'0',		'm',		'k',		'o',		'n'
+	.DS '+',	'p',		'l',		'-',		'.',		':',		$00,		','
+	.DS $1c,	'*',		';',		Key_Hme,	Key_No,		'=',		$1e,		'/'
+	.DS '1',	$1f,		Key_No,		'2',		' ',		Key_No,		'q',		Key_Stp
+	.DS Key_No
+
+	.DB %11111111
+	.DB %00000000
+	.DB %00000000
+	.DB %00000000
+	.DB %00000000
+	.DB %00000000
+	.DB %00010000
+	.DB %00000001
+	.DB %00000000
+
+
+KeyMap_Shift:
+	.DS Key_Ins,	Key_SRe,	Key_CLe,	Key_F8,		Key_F2,		Key_F4,		Key_F6,		Key_CUp
+	.DS '#',	'W',		'A',		'$',		'Z',		'S',		'E',		Key_No
+	.DS '%',	'R',		'D',		'&',		'C',		'F',		'T',		'X'
+	.DS $27,	'Y',		'G',		'(',		'B',		'H',		'U',		'V'
+	.DS ')',	'I',		'J',		'0',		'M',		'K',		'O',		'N'
+	.DS '+',	'P',		'L',		'-',		'>',		'[',		$40,		'<'
+	.DS $1c,	'*',		']',		Key_Clr,	Key_No,		'=',		$1e,		'?'
+	.DS '!',	$1f,		Key_No,		$22,		' ',		Key_No,		'Q',		Key_Run
+	.DS Key_No
+
+	.DB %11111111
+	.DB %00000000
+	.DB %00000000
+	.DB %00000000
+	.DB %00000000
+	.DB %00000000
+	.DB %00010000
+	.DB %00000001
+	.DB %00000000
+
+
+KeyMap_C:
+	.DS Key_BSp,	Key_Ret,	Key_CRi,	Key_F15,	Key_F9,		Key_F11,	Key_F13,	Key_CDo
+	.DS Key_C10,	$77,		$61,		Key_C11,	$7a,		$73,		$65,		Key_No
+	.DS Key_C12,	$72,		$64,		Key_C13,	$63,		$66,		$74,		$78
+	.DS Key_C14,	$79,		$67,		Key_C15,	$62,		$68,		$75,		$76
+	.DS '9',	$69,		$6a,		'0',		$6d,		$6b,		$6f,		$6e
+	.DS '+',	$70,		$6c,		'-',		'.',		':',		$40,		','
+	.DS $1c,	'*',		';',		Key_Hme,	Key_No,		'=',		$1e,		'/'
+	.DS Key_C8,	$1f,		Key_No,		Key_C9,		' ',		Key_No,		$71,		Key_Stp
+	.DS Key_No
+
+	.DB %11111111
+	.DB %10010000
+	.DB %10010000
+	.DB %10010000
+	.DB %00000000
+	.DB %00000000
+	.DB %00010000
+	.DB %10010001
+	.DB %00000000
+
+
+KeyMap_ShiftC:
+	.DS Key_Ins,	Key_SRe,	Key_CLe,	Key_F8,		Key_F2,		Key_F4,		Key_F6,		Key_CUp
+	.DS '#',	'W',		'A',		'$',		'Z',		'S',		'E',		Key_No
+	.DS '%',	'R',		'D',		'&',		'C',		'F',		'T',		'X'
+	.DS $27,	'Y',		'G',		'(',		'B',		'H',		'U',		'V'
+	.DS ')',	'I',		'J',		'0',		'M',		'K',		'O',		'N'
+	.DS '+',	'P',		'L',		'-',		'.',		'[',		$40,		','
+	.DS $1c,	'*',		']',		Key_Clr,	Key_No,		'=',		$1e,		'/'
+	.DS '!',	$1f,		Key_No,		$22,		' ',		Key_No,		'Q',		Key_Run
+	.DS Key_CSh
+
+	.DB %11111111
+	.DB %00000000
+	.DB %00000000
+	.DB %00000000
+	.DB %00000000
+	.DB %00000000
+	.DB %00010000
+	.DB %00000001
+	.DB %10000000
+
+
+KeyMap_Ctrl:
+	.DS Key_Del,	Key_Ret,	Key_SRi,	Key_F16,	Key_F10,	Key_F12,	Key_F14,	Key_SDo
+	.DS Key_C2,	'w'|$80,	'a'|$80,	Key_C3,		'z'|$80,	's'|$80,	'e'|$80,	Key_No
+	.DS Key_C4,	'r'|$80,	'd'|$80,	Key_C5,		'c'|$80,	'f'|$80,	't'|$80,	'x'|$80
+	.DS Key_C6,	'y'|$80,	'g'|$80,	Key_C7,		'b'|$80,	'h'|$80,	'u'|$80,	'v'|$80
+	.DS Key_ROn,	'i'|$80,	'j'|$80,	Key_ROf,	'm'|$80,	'k'|$80,	'o'|$80,	'n'|$80
+	.DS '+',	'p'|$80,	'l'|$80,	'-',		'.',		':',		$c0,		','
+	.DS $1c,	'*',		';',		Key_Hme,	Key_No,		'=',		$1e,		'/'
+	.DS Key_C0,	$1f,		Key_No,		Key_C1,		' ',		Key_No,		'q'|$80,	Key_Stp
+	.DS Key_No
+
+	.DB %11111111
+	.DB %10010000
+	.DB %10010000
+	.DB %10010000
+	.DB %10010000
+	.DB %00000000
+	.DB %00010000
+	.DB %10010001
+	.DB %00000000
+
+
+KeyMap_ShiftCtrl:
+	.DS Key_Del,	Key_Ret,	Key_SLe,	Key_F16,	Key_F10,	Key_F12,	Key_F14,	Key_SUp
+	.DS Key_133,	'w'|$80,	'a'|$80,	Key_134,	'z'|$80,	's'|$80,	'e'|$80,	Key_No
+	.DS Key_135,	'r'|$80,	Key_Map,	Key_136,	'c'|$80,	Key_Rep,	't'|$80,	Key_XSi
+	.DS Key_137,	'y'|$80,	'g'|$80,	Key_138,	'b'|$80,	Key_VHu,	'u'|$80,	Key_Vid
+	.DS Key_139,	'i'|$80,	'j'|$80,	Key_130,	Key_MSi,	'k'|$80,	'o'|$80,	'n'|$80
+	.DS Key_VSU,	'p'|$80,	'l'|$80,	Key_VSD,	'.',		':',		$c0,		','
+	.DS $1c,	'*',		';',		Key_Hme,	Key_No,		'=',		$1e,		'/'
+	.DS Key_131,	$1f,		Key_No,		Key_132,	' ',		Key_No,		'q'|$80,	Key_Stp
+	.DS Key_No
+
+	.DB %11111111
+	.DB %10010000
+	.DB %10110101
+	.DB %10010101
+	.DB %10011000
+	.DB %10010000
+	.DB %00010000
+	.DB %10010001
+	.DB %00000000
+
+    .)
+
+;--------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

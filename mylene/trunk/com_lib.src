@@ -1,0 +1,271 @@
+/***************************************************************************
+ *   Copyright (C) 1998 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+;--------------------------------------
+
+	.segment "zp"
+
+ComLibZp_CrsrX		.DB 0
+ComLibZp_ScrPtr0	.DW 0
+ComLibZp_ScrPtr1	.DW 0
+ComLibZp_StringPtr	.DW 0
+
+	.segment "data"
+
+ComLibZp_XSave		.DB 0
+ComLibZp_YSave		.DB 0
+ComLibZp_DezOutVal	.DW 0
+ComLibZp_DezOutZFlag	.DB 0
+
+;--------------------------------------
+
+	.segment "code"
+
+;--------------------------------------
+
+ComLib_ClearScreen:
+    .(
+	ldx #0
+ClearScreen0:
+	jsr ComLib_ClearLine
+	inx
+	cpx #MaxYPos
+	bcc ClearScreen0
+	rts
+
+@0ComLib_ClearLine:
+	jsr ComLib_SetLine
+	ldy #MaxXPos-1
+	lda #' '
+ClearLine0:
+	sta (ComLibZp_ScrPtr0),y
+	dey
+	bpl ClearLine0
+	lda #0
+	sta ComLibZp_CrsrX
+	rts
+    .)
+
+;--------------------------------------
+
+ComLib_SetCursor:
+	sty ComLibZp_CrsrX
+ComLib_SetLine:
+    .(
+	lda ComLib_ScrTabLo,x
+	sta ComLibZp_ScrPtr0
+	lda ComLib_ScrTabHi,x
+	sta ComLibZp_ScrPtr0+1
+	rts
+    .)
+
+;--------------------------------------
+
+ComLib_ScrollScrDown:
+    .(
+	ldx EntryZp_LastScrlLine
+ScrollScrDown0:
+	dex
+	jsr ComLib_SetLine
+	lda ComLib_ScrTabLo+1,x
+	sta ComLibZp_ScrPtr1
+	lda ComLib_ScrTabHi+1,x
+	sta ComLibZp_ScrPtr1+1
+	jsr ScrollScr
+	cpx EntryZp_FirstScrlLine
+	bne ScrollScrDown0
+	rts
+
+@0ComLib_ScrollScrUp:
+	ldx EntryZp_FirstScrlLine
+ScrollScrUp0:
+	inx
+	jsr ComLib_SetLine
+	lda ComLib_ScrTabLo-1,x
+	sta ComLibZp_ScrPtr1
+	lda ComLib_ScrTabHi-1,x
+	sta ComLibZp_ScrPtr1+1
+	jsr ScrollScr
+	cpx EntryZp_LastScrlLine
+	bcc ScrollScrUp0
+	rts
+
+ScrollScr:
+	ldy #MaxXPos-1
+ScrollScr0:
+	lda (ComLibZp_ScrPtr0),y
+	sta (ComLibZp_ScrPtr1),y
+	dey
+	bpl ScrollScr0
+	lda ComLibZp_ScrPtr0+1
+	and #3
+	ora #$d8
+	sta ComLibZp_ScrPtr0+1
+	lda ComLibZp_ScrPtr1+1
+	and #3
+	ora #$d8
+	sta ComLibZp_ScrPtr1+1
+	ldy #MaxXPos-1
+ScrollScr1:
+	lda (ComLibZp_ScrPtr0),y
+	sta (ComLibZp_ScrPtr1),y
+	dey
+	bpl ScrollScr1
+	rts
+    .)
+
+;--------------------------------------
+
+ComLib_DezOut:
+    .(
+	sta ComLibZp_DezOutVal
+	stx ComLibZp_DezOutVal+1
+	lda #0
+	sta ComLibZp_DezOutZFlag
+	ldx #3
+DezOut0:
+	ldy #0
+DezOut1:
+	lda ComLibZp_DezOutVal
+	cmp ComLib_DezOutTab0,x
+	lda ComLibZp_DezOutVal+1
+	sbc ComLib_DezOutTab1,x
+	bcc DezOut2
+	sta ComLibZp_DezOutVal+1
+	lda ComLibZp_DezOutVal
+	sbc ComLib_DezOutTab0,x
+	sta ComLibZp_DezOutVal
+	iny
+	bne DezOut1
+DezOut2:
+	tya
+	bne DezOut5
+	ldy ComLibZp_DezOutZFlag
+	beq DezOut3
+DezOut5:
+	ora #$30
+	sta ComLibZp_DezOutZFlag
+	jsr ComLib_PrintChar
+DezOut3:
+	dex
+	bpl DezOut0
+DezOut4:
+	lda ComLibZp_DezOutVal
+	ora #$30
+	jmp ComLib_PrintChar
+    .)
+
+;--------------------------------------
+
+ComLib_ByteOut:
+    .(
+	pha
+	lsr
+	lsr
+	lsr
+	lsr
+	jsr ByteOut0
+	pla
+	and #$0f
+ByteOut0:
+	ora #$30
+	cmp #$3a
+	bcc ByteOut1
+	sbc #$39
+ByteOut1:
+	jmp ComLib_PrintChar
+    .)
+
+;--------------------------------------
+
+ComLib_PrintChar:
+    .(
+	sty ComLibZp_YSave
+	ldy ComLibZp_CrsrX
+	sta (ComLibZp_ScrPtr0),y
+	inc ComLibZp_CrsrX
+	ldy ComLibZp_YSave
+	rts
+    .)
+
+;--------------------------------------
+
+ComLib_PrintString:
+    .(
+	ldy #0
+	sta ComLibZp_StringPtr
+	stx ComLibZp_StringPtr+1
+	ldy #0
+PrintString0:
+	lda (ComLibZp_StringPtr),y
+	beq PrintString1
+	jsr ComLib_PrintChar
+	iny
+	bne PrintString0:
+PrintString1:
+	rts
+    .)
+
+;--------------------------------------
+
+ComLib_Ascii2Screen:
+    .(
+	stx ComLibZp_XSave
+	cmp #$ff
+	bne Ascii2Screen0
+	lda #$de
+Ascii2Screen0:
+	pha
+	lsr
+	lsr
+	lsr
+	lsr
+	lsr
+	tax
+	pla
+	eor ComLib_Ascii2ScreenTab,x
+	ldx ComLibZp_XSave
+	rts
+    .)
+
+;  00-1f -> 80-9f
+;  20-3f -> 20-3f
+;  40-5f -> 00-1f
+;  60-7f -> 40-5f
+;  80-9f -> c0-df
+;  a0-bf -> 60-7f
+;  dd	 -> ?
+;  c0-df -> 40-5f
+;  e0-fe -> 60-7e
+;  ff	 -> 5e
+
+;--------------------------------------
+
+ComLib_DezOutTab0:
+	.DB <10,<100,<1000,<10000
+ComLib_DezOutTab1:
+	.DB >10,>100,>1000,>10000
+
+
+ComLib_Ascii2ScreenTab:
+	.DB $80,$00,$40,$20,$40,$c0,$80,$a0
+
+;--------------------------------------
+

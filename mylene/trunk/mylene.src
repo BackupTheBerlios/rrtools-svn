@@ -1,0 +1,744 @@
+/***************************************************************************
+ *   Copyright (C) 1998 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+;--------------------------------------
+
+#include "screen.src"
+#include "mylene/mylene.h"
+#include "mylene/entry.h"
+
+;--------------------------------------
+
+#include "mylene/com_lib.src"
+#include "mylene/entry.src"
+#include "mylene/levels.src"
+
+;--------------------------------------
+
+	.segment "code"
+
+;--------------------------------------
+
+	; show a directory from the top
+ShowDirTop:
+	jsr Entry_GetHeaderPtr
+	lda EntryZp_FirstPtr
+	sta ListOutZp_StartPtr
+	sta BarPtr
+	lda EntryZp_FirstPtr+1
+	sta ListOutZp_StartPtr+1
+	sta BarPtr+1
+
+	lda EntryZp_FirstScrlLine
+	sta BarCrsrPos
+
+ShowDirMid:
+;	jsr Entry_ShowMem
+
+	jsr ListOut
+
+ShowBar:
+    .(
+	; Is the list empty? (StartPtr=LastPtr)
+	; -> don't show the bar
+	lda ListOutZp_StartPtr
+	cmp EntryZp_LastPtr
+	lda ListOutZp_StartPtr+1
+	sbc EntryZp_LastPtr+1
+	bcs ShowBarNot
+	jsr InvertBar
+ShowBarNot:
+	jmp GetKey
+    .)
+
+;--------------------------------------
+
+SelectEntry:
+    .(
+	lda BarPtr
+	sta EntryZp_ActEntry
+	lda BarPtr+1
+	sta EntryZp_ActEntry+1
+	jsr Entry_GetPtr
+
+	; get action idx to X
+	ldx Entry_EBuf+DirE_ActionIdx
+	; get action entry
+	jsr level_action_get
+	bcs noSelectionPossible
+
+	lda LevelAction+level_action_color_flag
+	bpl noSelectionPossible
+
+	lda Entry_EBuf+DirE_Typ
+	eor #$80
+	sta Entry_EBuf+DirE_Typ
+	jsr Entry_Write
+	ldx BarCrsrPos
+	jsr Entry_PrintCol
+	jmp ShowBar
+
+noSelectionPossible:
+	jmp GetKey
+    .)
+
+;--------------------------------------
+
+EntryAction:
+    .(
+	; copy entry under the cursor to the buffer
+	lda BarPtr
+	sta EntryZp_ActEntry
+	lda BarPtr+1
+	sta EntryZp_ActEntry+1
+	jsr Entry_GetPtr
+
+	; save type
+	lda Entry_EBuf+DirE_Typ
+	sta Entry_LastTyp
+
+	; get action idx to X
+	ldx Entry_EBuf+DirE_ActionIdx
+	; get action entry
+	jsr level_action_get
+	bcs noActionFound
+
+	; has the entry an action?
+	lda LevelAction+level_action_fn_action
+	ora LevelAction+level_action_fn_action+1
+	beq noActionFound
+
+	; try to set new level
+	ldx LevelAction+level_action_new_level
+	jsr level_entry_get
+	bcs noActionFound
+
+	; enter type
+	jsr call_enter
+	; enter succeeded?
+	bcs noActionFound
+
+	; ok, this is the new level
+	ldx LevelAction+level_action_new_level
+	stx Level
+
+	; already cached?
+	jsr CheckCache
+	bcs not_cached
+	jsr Entry_GetHeaderPtr
+	jmp ShowDirTop
+
+	; action
+not_cached:
+	jmp (LevelAction+level_action_fn_action)
+
+noActionFound:
+	jmp GetKey
+
+call_enter:
+	; 0 means no enter routine
+	lda LevelAction+level_action_fn_enter
+	ora LevelAction+level_action_fn_enter+1
+	beq call_enter_no
+	jmp (LevelAction+level_action_fn_enter)
+call_enter_no:
+	rts
+    .)
+
+;--------------------------------------
+
+MoveListUp:
+    .(
+	; is the bar not at the start of the list?
+	lda BarCrsrPos
+	cmp EntryZp_FirstScrlLine
+	beq UpGetKey
+
+	; switch off bar
+	jsr InvertBar
+
+	; move bar ptr one up
+	lda BarPtr
+	sec
+	sbc #DirE_len
+	sta BarPtr
+	lda BarPtr+1
+	sbc #0
+	sta BarPtr+1
+
+	; reached scroll border?
+	lda BarCrsrPos
+	cmp #ScrlBorder_Up
+	bcc Up2
+Up1:
+	dec BarCrsrPos
+	jmp UpShowBar
+
+Up2:
+	; scroll entries up?
+	; is the first shown entry on screen is the first in the list?
+	; (ListOutZp_StartPtr==EntryZp_FirstPtr)
+	lda ListOutZp_StartPtr
+	cmp EntryZp_FirstPtr
+	bne Up3
+	lda ListOutZp_StartPtr+1
+	cmp EntryZp_FirstPtr+1
+	beq Up1
+Up3:
+
+	lda ListOutZp_StartPtr
+	sec
+	sbc #DirE_len
+	sta ListOutZp_StartPtr
+	sta EntryZp_ActEntry
+	lda ListOutZp_StartPtr+1
+	sbc #0
+	sta ListOutZp_StartPtr+1
+	sta EntryZp_ActEntry+1
+
+	jsr Entry_GetPtr
+	jsr ComLib_ScrollScrDown
+	ldx EntryZp_FirstScrlLine
+	jsr Entry_PrintCol
+UpShowBar:
+	jmp ShowBar
+
+UpGetKey:
+	jmp GetKey
+    .)
+
+;--------------------------------------
+
+MoveListDown:
+    .(
+	; is at least one more entry below the bar?
+	lda BarPtr
+	clc
+	adc #DirE_len
+	tay
+	lda BarPtr+1
+	adc #0
+	cpy EntryZp_LastPtr
+	sbc EntryZp_LastPtr+1
+	bcs DownGetKey
+
+	; turn off the bar
+	jsr InvertBar
+
+	; set bar one down
+	lda BarPtr
+	clc
+	adc #DirE_len
+	sta BarPtr
+	lda BarPtr+1
+	adc #0
+	sta BarPtr+1
+
+	; reached scroll border?
+	lda BarCrsrPos
+	cmp #ScrlBorder_Down
+	bcs Down1
+Down0:
+	inc BarCrsrPos
+	jmp DownShowBar
+
+Down1:
+	lda ListOutZp_StartPtr
+	ldy ListOutZp_StartPtr+1
+	ldx EntryZp_FirstScrlLine
+Down2:
+	clc
+	adc #DirE_len
+	bcc Down3
+	iny
+Down3:
+	inx
+	cpx EntryZp_LastScrlLine
+	beq Down2
+	bcc Down2
+	sta EntryZp_ActEntry
+	sty EntryZp_ActEntry+1
+
+	cmp EntryZp_LastPtr
+	tya
+	sbc EntryZp_LastPtr+1
+	bcs Down0
+	jsr Entry_GetPtr
+
+	lda ListOutZp_StartPtr
+	clc
+	adc #DirE_len
+	sta ListOutZp_StartPtr
+	lda ListOutZp_StartPtr+1
+	adc #0
+	sta ListOutZp_StartPtr+1
+
+	jsr ComLib_ScrollScrUp
+	ldx EntryZp_LastScrlLine
+	jsr Entry_PrintCol
+DownShowBar:
+	jmp ShowBar
+
+DownGetKey:
+	jmp GetKey
+    .)
+
+;--------------------------------------
+
+InvertBar:
+	ldx BarCrsrPos
+InvertLine:
+    .(
+	jsr ComLib_SetLine
+	ldy #MaxXPos-1
+InvertBar0:
+	lda (ComLibZp_ScrPtr0),y
+	eor #$80
+	sta (ComLibZp_ScrPtr0),y
+	dey
+	bpl InvertBar0
+	rts
+    .)
+
+;--------------------------------------
+
+CheckCache:
+    .(
+	lda Entry_EBuf+DirE_Ptr
+	ora Entry_EBuf+DirE_Ptr+1
+	beq not_cached
+
+	lda Entry_EBuf+DirE_Ptr
+	sta EntryZp_ActHeader
+	lda Entry_EBuf+DirE_Ptr+1
+	sta EntryZp_ActHeader+1
+	clc
+	rts
+
+not_cached:
+	sec
+	rts
+    .)
+
+;--------------------------------------
+
+GotoLevel:
+    .(
+	; save level to go to
+	stx GotoLevel_Level
+
+	; the GotoLevel_Flag shows if the list has to be reprinted
+	lda #0
+	sta GotoLevel_Flag
+
+GotoLevel_loop:
+	; reached Level?
+	lda GotoLevel_Level
+	cmp EntryZp_HBuf+DirH_Level
+	bcs GotoLevel_done
+
+	; no, not yet. move up
+	; remember we moved
+	sec
+	rol GotoLevel_Flag
+
+	; remember this type
+	lda EntryZp_HBuf+DirH_Typ
+	sta GotoLevel_LastType
+
+	; go back in cache, abort if an error occured
+	jsr MovePrevCache
+	bcs GotoLevel_done
+
+	; the new header was copied to the buffer
+	ldx EntryZp_HBuf+DirH_Level
+	jsr level_entry_get
+	bcs GotoLevel_done
+
+	; ok, new level set
+	lda EntryZp_HBuf+DirH_Level
+	sta Level
+
+	; get action for last entry
+	ldx GotoLevel_LastType
+	jsr level_action_get
+	bcs GotoLevel_done
+
+	; call leave function
+	jsr callLeave
+
+	jmp GotoLevel_loop
+
+GotoLevel_done:
+	; really moved?
+	lda GotoLevel_Flag
+	beq GotoLevel_noUpdate
+	; yes -> update the list
+	jmp ShowDir
+GotoLevel_noUpdate:
+	; not moved -> no need to update the list
+	jmp GetKey
+
+callLeave:
+	lda LevelAction+level_action_fn_leave
+	ora LevelAction+level_action_fn_leave+1
+	beq callLeave_no
+	jmp (LevelAction+level_action_fn_leave)
+callLeave_no:
+	rts
+    .)
+
+;--------------------------------------
+
+GotoPrevDir:
+    .(
+	; remember this type
+	lda EntryZp_HBuf+DirH_Typ
+	sta GotoLevel_LastType
+
+	; go back in cache, abort if an error occured
+	jsr MovePrevCache
+	bcs GotoPrev_nothingUp
+
+	; the new header was copied to the buffer
+	ldx EntryZp_HBuf+DirH_Level
+	jsr level_entry_get
+	bcs GotoPrev_nothingUp
+
+	; ok, new level set
+	lda EntryZp_HBuf+DirH_Level
+	sta Level
+
+	; get action for last entry
+	ldx GotoLevel_LastType
+	jsr level_action_find
+	bcs GotoPrev_nothingUp
+
+	; call leave function
+	jsr callLeave
+
+	; yes -> update the list
+	jmp ShowDir
+
+GotoPrev_nothingUp:
+	; not moved -> no need to update the list
+	jmp GetKey
+
+callLeave:
+	lda LevelAction+level_action_fn_leave
+	ora LevelAction+level_action_fn_leave+1
+	beq callLeave_no
+	jmp (LevelAction+level_action_fn_leave)
+callLeave_no:
+	rts
+    .)
+
+;--------------------------------------
+
+; that's an old and ugly routine, replace with beauty!
+ShowDir:
+    .(
+	; try to center the barptr
+
+	; step #1:
+	; first go up from the bar position until...
+	; 1) MaxYPos/2 are taken -> continue with step #2
+	; 2) start of list is reached -> can't center bar, start at beginning of the list
+	lda BarPtr
+	sta ListOutZp_StartPtr
+	lda BarPtr+1
+	sta ListOutZp_StartPtr+1
+
+	ldy EntryZp_FirstScrlLine
+ShowDir0:
+	lda ListOutZp_StartPtr
+	sec
+	sbc #DirE_len
+	sta ListOutZp_StartPtr
+	tax
+	lda ListOutZp_StartPtr+1
+	sbc #0
+	sta ListOutZp_StartPtr+1
+
+	cpx EntryZp_FirstPtr
+	sbc EntryZp_FirstPtr+1
+	bcc ShowDir1
+
+	iny
+	cpy #MaxYPos>>1
+	bcc ShowDir0
+	sty BarCrsrPos
+
+
+	; step #2:
+	; enough space above to center bar, remember first direntry to display in ListOutZp_StartPtr
+	; now go down from ListOutZp_StartPtr until...
+	; 1) the complete display is filled -> ok, bar is centered
+	; 2) end of list is reached -> can't center, take more lines from the front
+	lda EntryZp_LastScrlLine
+	sbc EntryZp_FirstScrlLine
+	tay
+	lda ListOutZp_StartPtr
+	sta ListOutZp_TmpPtr
+	lda ListOutZp_StartPtr+1
+	sta ListOutZp_TmpPtr+1
+ShowDir2:
+	lda ListOutZp_TmpPtr
+	clc
+	adc #DirE_len
+	sta ListOutZp_TmpPtr
+	tax
+	lda ListOutZp_TmpPtr+1
+	adc #0
+	sta ListOutZp_TmpPtr+1
+
+	cpx EntryZp_LastPtr
+	sbc EntryZp_LastPtr+1
+	bcs ShowDir3
+	dey
+	bne ShowDir2
+
+	jmp ShowDirMid
+
+ShowDir3:
+	tya
+	clc
+	adc BarCrsrPos
+	sta BarCrsrPos
+
+	lda ListOutZp_StartPtr
+	sta ListOutZp_TmpPtr
+	lda ListOutZp_StartPtr+1
+	sta ListOutZp_TmpPtr+1
+;	ldx #EntryZp_FirstPtr
+ShowDir4:
+	lda ListOutZp_TmpPtr
+	sec
+	sbc #DirE_len
+	sta ListOutZp_TmpPtr
+	tax
+	lda ListOutZp_TmpPtr+1
+	sbc #0
+	sta ListOutZp_TmpPtr+1
+
+	cmp EntryZp_FirstPtr
+	sbc EntryZp_FirstPtr+1
+	bcc ShowDir5
+	dey
+	bne ShowDir4
+	lda ListOutZp_TmpPtr
+	sta ListOutZp_StartPtr
+	lda ListOutZp_TmpPtr+1
+	sta ListOutZp_StartPtr+1
+	jmp ShowDirMid
+ShowDir5:
+	dey
+	tya
+	eor #$ff
+	adc BarCrsrPos
+	tay
+
+ShowDir1:
+	; start at beginning of the list with y as barpos
+	sty BarCrsrPos
+	lda EntryZp_FirstPtr
+	sta ListOutZp_StartPtr
+	lda EntryZp_FirstPtr+1
+	sta ListOutZp_StartPtr+1
+	jmp ShowDirMid
+    .)
+
+;--------------------------------------
+
+MovePrevCache:
+    .(
+	; save header
+	lda EntryZp_ActHeader
+	sta MovePrevCache_LastHeader
+	lda EntryZp_ActHeader+1
+	sta MovePrevCache_LastHeader+1
+
+	; get pointer to previous header
+	lda EntryZp_HBuf+DirH_Prev
+	sta EntryZp_ActHeader
+	lda EntryZp_HBuf+DirH_Prev+1
+	sta EntryZp_ActHeader+1
+	; 0 means no prev
+	ora EntryZp_ActHeader
+	bne hasPrev
+	; no prev header!
+	sec
+	rts
+
+hasPrev:
+	; ok, entry has a previous header, load it into the buffer
+	jsr Entry_GetHeaderPtr
+
+	; search the last entry in the list (saved in MovePrevCache_LastHeader)
+
+	; start of list
+	lda EntryZp_FirstPtr
+	sta EntryZp_ActEntry
+	lda EntryZp_FirstPtr+1
+	sta EntryZp_ActEntry+1
+
+MovePrevCache0:
+	; reached end of list?
+	lda EntryZp_ActEntry
+	cmp EntryZp_LastPtr
+	lda EntryZp_ActEntry+1
+	sbc EntryZp_LastPtr+1
+	bcs MovePrevCache3
+
+	; no, not yet
+	; get entry to buffer
+	jsr Entry_GetPtr
+	; does this entry point to the one we came from?
+	lda Entry_EBuf+DirE_Ptr
+	cmp MovePrevCache_LastHeader
+	bne MovePrevCache1
+	lda Entry_EBuf+DirE_Ptr+1
+	cmp MovePrevCache_LastHeader+1
+	beq MovePrevCache2
+
+	; no, continue searching
+MovePrevCache1:
+	lda EntryZp_ActEntry
+	clc
+	adc #DirE_len
+	sta EntryZp_ActEntry
+	lda EntryZp_ActEntry+1
+	adc #0
+	sta EntryZp_ActEntry+1
+	jmp MovePrevCache0
+
+MovePrevCache2:
+	; entry found
+	lda EntryZp_ActEntry
+	sta BarPtr
+	lda EntryZp_ActEntry+1
+	sta BarPtr+1
+	clc
+	rts
+
+MovePrevCache3:
+	; entry not found, default to start of list
+	lda EntryZp_FirstPtr
+	sta BarPtr
+	lda EntryZp_FirstPtr+1
+	sta BarPtr+1
+	clc
+	rts
+    .)
+
+;--------------------------------------
+;
+; ListOut
+;
+; Displays List from ListOut_StartPtr
+;
+;--------------------------------------
+
+
+ListOut:
+    .(
+	jsr ComLib_ClearScreen
+
+	lda EntryZp_HBuf+DirH_Flags
+	and #DirHFlag_NoHeadLine
+	bne ListOut0
+	lda EntryZp_HeadPtr
+	sta EntryZp_ActEntry
+	lda EntryZp_HeadPtr+1
+	sta EntryZp_ActEntry+1
+	jsr Entry_GetPtr
+	ldx #0
+	jsr Entry_Print
+	lda ComLibZp_ScrPtr0+1
+	and #3
+	ora #$d8
+	sta ComLibZp_ScrPtr0+1
+	ldy #MaxXPos-1
+	lda #Palette_HeaderCol
+ListOut5:
+	sta (ComLibZp_ScrPtr0),y
+	dey
+	bpl ListOut5
+	ldx #0
+	jsr InvertLine
+ListOut0:
+	lda EntryZp_HBuf+DirH_Flags
+	and #DirHFlag_NoBFreeLine
+	bne ListOut1
+	lda EntryZp_BFreePtr
+	sta EntryZp_ActEntry
+	lda EntryZp_BFreePtr+1
+	sta EntryZp_ActEntry+1
+	jsr Entry_GetPtr
+	ldx #MaxYPos-1
+	jsr Entry_Print
+	lda ComLibZp_ScrPtr0+1
+	and #3
+	ora #$d8
+	sta ComLibZp_ScrPtr0+1
+	ldy #MaxXPos-1
+	lda #Palette_BFreeCol
+ListOut6:
+	sta (ComLibZp_ScrPtr0),y
+	dey
+	bpl ListOut6
+ListOut1:
+	lda EntryZp_FirstScrlLine
+	sta ListOutZp_Line
+	lda ListOutZp_StartPtr
+	sta EntryZp_ActEntry
+	lda ListOutZp_StartPtr+1
+	sta EntryZp_ActEntry+1
+ListOut2:
+	lda EntryZp_ActEntry
+	cmp EntryZp_LastPtr
+	lda EntryZp_ActEntry+1
+	sbc EntryZp_LastPtr+1
+	bcs ListOut4
+	jsr Entry_GetPtr
+	ldx ListOutZp_Line
+	jsr Entry_PrintCol
+	lda EntryZp_ActEntry
+	clc
+	adc #DirE_len
+	sta EntryZp_ActEntry
+	lda EntryZp_ActEntry+1
+	adc #0
+	sta EntryZp_ActEntry+1
+
+	inc ListOutZp_Line
+	ldx ListOutZp_Line
+	lda EntryZp_HBuf+DirH_Flags
+	and #DirHFlag_NoBFreeLine
+	bne ListOut3
+	inx
+ListOut3:
+	cpx #MaxYPos
+	bcc ListOut2
+ListOut4:
+	rts
+    .)
+
+;--------------------------------------

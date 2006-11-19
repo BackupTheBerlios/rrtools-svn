@@ -1,0 +1,257 @@
+/***************************************************************************
+ *   Copyright (C) 1998 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+
+;--------------------------------------
+
+level_entry_idx		= 0	; byte
+level_entry_actions	= 1	; word
+level_entry_actions_len	= 3	; byte
+level_entry_col_unknown = 4	; byte
+level_entry_size	= 5
+
+level_action_type	= 0	; byte
+level_action_new_level	= 1	; byte
+level_action_color_flag	= 2	; byte
+level_action_fn_enter	= 3	; word
+level_action_fn_action	= 5	; word
+level_action_fn_leave	= 7	; word
+level_action_size	= 9
+
+
+#macro level_def_start(name, fn_level0_init)
+{
+    .(
+	@0{name} = @level_list
+	@level_0_init = {fn_level0_init}
+}
+
+#macro level_def_end
+{
+    .)
+}
+
+#macro levels_start
+{
+@level_list:
+	.DW @level_0_init
+	.DB @level_list_len
+}
+
+#macro level_entry(idx, col_unknown)
+{
+	.DB {idx}
+	.DW level_{idx}_actions
+	.DB level_{idx}_actions_len
+	.DB {col_unknown}
+}
+
+#macro levels_end
+{
+@level_list_len = (*-@level_list)/level_entry_size
+}
+
+
+#macro level_actions_start(idx)
+{
+@level_{idx}_actions:
+}
+
+#macro level_action(type, new_level, color, fn_enter, fn_action, fn_leave)
+{
+	.DB {type}
+	.DB {new_level}
+	.DB {color}
+	.DW {fn_enter}
+	.DW {fn_action}
+	.DW {fn_leave}
+}
+
+#macro level_actions_end(idx)
+{
+@level_{idx}_actions_len = (*-@level_{idx}_actions)/level_action_size
+}
+
+;--------------------------------------
+
+	.segment "code"
+
+level_init:
+    .(
+	sta LevelTable
+	sty LevelTable+1
+
+	; first word is the level 0 init function
+	ldy #0
+	lda (LevelTable),y
+	sta Level0Init
+	iny
+	lda (LevelTable),y
+	sta Level0Init+1
+
+	; next is the table size
+	iny
+	lda (LevelTable),y
+	sta LevelMax
+
+	; rest of the table are the levels, advance pointer
+	lda LevelTable
+	clc
+	adc #3
+	sta LevelTable
+	bcc init0
+	inc LevelTable+1
+init0:
+
+	ldx #0
+	stx Level
+
+	jmp level_entry_get
+    .)
+
+
+level_0_init:
+    .(
+	jmp (Level0Init)
+    .)
+
+
+; copy level entry X to the buffer 'LevelBuf'
+level_entry_get:
+    .(
+	lda LevelTable
+	ldy LevelTable+1
+
+	cpx #0
+	beq entry2
+
+	cpx LevelMax
+	bcc entry0
+	rts
+
+entry0:
+	clc
+	adc #level_entry_size
+	bcc entry1
+	iny
+entry1:
+	dex
+	bne entry0
+
+entry2:
+	sta LevelPtr
+	sty LevelPtr+1
+
+	ldy #level_entry_size-1
+entry3:
+	lda (LevelPtr),y
+	sta LevelBuf.2,y
+	dey
+	bpl entry3
+
+	clc
+	rts
+    .)
+
+; copy action X to buffer
+level_action_get:
+    .(
+	cpx LevelBuf+level_entry_actions_len
+	bcc action0
+	rts
+
+action0:
+	lda LevelBuf+level_entry_actions
+	ldy LevelBuf+level_entry_actions+1
+	cpx #0
+	beq action3
+
+action1:
+	clc
+	adc #level_action_size
+	bcc action2
+	iny
+action2:
+	dex
+	bne action1
+
+action3:
+	sta LevelPtr
+	sty LevelPtr+1
+
+	ldy #level_action_size-1
+action4:
+	lda (LevelPtr),y
+	sta LevelAction,y
+	dey
+	bpl action4
+
+	clc
+	rts
+    .)
+
+; copy action for type X to buffer
+level_action_find:
+    .(
+	lda LevelBuf+level_entry_actions
+	sta LevelPtr
+	lda LevelBuf+level_entry_actions+1
+	sta LevelPtr+1
+
+	txa
+
+	ldx #0
+	ldy #level_action_type
+find0:
+	cmp (LevelPtr),y
+	beq find1
+
+	pha
+	lda LevelPtr
+	clc
+	adc #level_action_size
+	sta LevelPtr
+	lda LevelPtr+1
+	adc #0
+	sta LevelPtr+1
+	pla
+
+	inx
+	cpx LevelBuf+level_entry_actions_len
+	bcc find0
+	rts
+
+find1:
+	ldy #level_action_size-1
+find2:
+	lda (LevelPtr),y
+	sta LevelAction,y
+	dey
+	bpl find2
+
+	clc
+	rts
+    .)
+
+;--------------------------------------
+
+#include "actions.src"
+
+;--------------------------------------

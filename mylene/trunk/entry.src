@@ -1,0 +1,302 @@
+/***************************************************************************
+ *   Copyright (C) 1998 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+;--------------------------------------
+;
+; Entry Pool
+;
+;--------------------------------------
+
+	.segment "code"
+
+Entry_ClearAll:
+    .(
+	; set end of memory
+	lda #<EntryMem_End
+	sta EntryZp_MemEnd
+	lda #>EntryMem_End
+	sta EntryZp_MemEnd+1
+
+	; set end of list to start of memory (no entries)
+	lda #<EntryMem_Start
+	sta EntryZp_ListEnd
+	lda #>EntryMem_Start
+	sta EntryZp_ListEnd+1
+
+	; no header and no entry
+	lda #0
+	sta EntryZp_ActHeader
+	sta EntryZp_ActHeader+1
+	sta EntryZp_ActEntry
+	sta EntryZp_ActEntry+1
+	rts
+    .)
+
+
+Entry_AddNewHeader:
+    .(
+	; set current header as previous
+	lda EntryZp_ActHeader
+	sta EntryZp_HBuf+DirH_Prev
+	lda EntryZp_ActHeader+1
+	sta EntryZp_HBuf+DirH_Prev+1
+
+	; does an entry exist?
+	lda EntryZp_ActEntry
+	ora EntryZp_ActEntry+1
+	beq AddNewHeader0
+
+	lda EntryZp_ListEnd
+	sta Entry_EBuf+DirE_Ptr
+	lda EntryZp_ListEnd+1
+	sta Entry_EBuf+DirE_Ptr+1
+	jsr Entry_Write
+AddNewHeader0:
+
+	lda EntryZp_ListEnd
+	sta EntryZp_ActHeader
+	clc
+	adc #DirH_len
+	sta EntryZp_ListEnd
+	lda EntryZp_ListEnd+1
+	sta EntryZp_ActHeader+1
+	adc #0
+	sta EntryZp_ListEnd+1
+	rts
+    .)
+
+/*
+Entry_ShowMem:
+    .(
+	; just a test...
+	ldx #23
+	ldy #16
+	jsr ComLib_SetCursor
+
+	lda EntryZp_MemEnd
+	sec
+	sbc EntryZp_ListEnd
+	tax
+	lda EntryZp_MemEnd+1
+	sbc EntryZp_ListEnd+1
+	jsr ComLib_ByteOut
+	txa
+	jmp ComLib_ByteOut
+    .)
+*/
+
+Entry_AddNewEntry:
+    .(
+	lda EntryZp_ListEnd
+	sta EntryZp_ActEntry
+	lda EntryZp_ListEnd+1
+	sta EntryZp_ActEntry+1
+	jsr Entry_Write
+
+	lda EntryZp_ListEnd
+	clc
+	adc #DirE_len
+	sta EntryZp_HBuf+DirH_Last
+	sta EntryZp_ListEnd
+	lda EntryZp_ListEnd+1
+	adc #0
+	sta EntryZp_HBuf+DirH_Last+1
+	sta EntryZp_ListEnd+1
+	rts
+    .)
+
+
+Entry_Write:
+    .(
+	ldy #DirE_len-1
+Write0:
+	lda Entry_EBuf,y
+	sta (EntryZp_ActEntry),y
+	dey
+	bpl Write0
+	rts
+    .)
+
+
+Entry_WriteHeader:
+    .(
+	ldy #DirH_len-1
+WriteHeader0:
+	lda EntryZp_HBuf,y
+	sta (EntryZp_ActHeader),y
+	dey
+	bpl WriteHeader0
+	rts
+    .)
+
+
+Entry_GetHeaderPtr:
+    .(
+	ldy #DirH_len-1
+GetHeader0:
+	lda (EntryZp_ActHeader),y
+	sta EntryZp_HBuf,y
+	dey
+	bpl GetHeader0
+
+	; get pointer to the directory header
+	lda EntryZp_ActHeader
+	clc
+	adc #DirH_len
+	sta EntryZp_HeadPtr
+	sta EntryZp_FirstPtr
+	lda EntryZp_ActHeader+1
+	adc #0
+	sta EntryZp_HeadPtr+1
+	sta EntryZp_FirstPtr+1
+
+	; get pointer to the first directory entry
+	ldy #0
+	lda EntryZp_HBuf+DirH_Flags
+	and #DirHFlag_NoHeadLine
+	bne GetHeaderPtr1
+	lda EntryZp_FirstPtr
+	clc
+	adc #DirE_len
+	sta EntryZp_FirstPtr
+	lda EntryZp_FirstPtr+1
+	adc #0
+	sta EntryZp_FirstPtr+1
+	iny
+GetHeaderPtr1:
+	sty EntryZp_FirstScrlLine
+
+	; get pointer to the blocks free line
+	lda EntryZp_HBuf+DirH_Last
+	sec
+	sbc #DirE_len
+	sta EntryZp_BFreePtr
+	sta EntryZp_LastPtr
+	lda EntryZp_HBuf+DirH_Last+1
+	sbc #0
+	sta EntryZp_BFreePtr+1
+	sta EntryZp_LastPtr+1
+
+	; get pointer to the last directory entry (blocks free)
+	ldy #MaxYPos-2
+	lda EntryZp_HBuf+DirH_Flags
+	and #DirHFlag_NoBFreeLine
+	beq GetHeaderPtr2
+	lda EntryZp_HBuf+DirH_Last
+	sta EntryZp_LastPtr
+	lda EntryZp_HBuf+DirH_Last+1
+	sta EntryZp_LastPtr+1
+	iny
+GetHeaderPtr2:
+	sty EntryZp_LastScrlLine
+	rts
+    .)
+
+
+Entry_GetPtr:
+    .(
+	ldy #DirE_len-1
+GetPtr0:
+	lda (EntryZp_ActEntry),y
+	sta Entry_EBuf,y
+	dey
+	bpl GetPtr0
+	rts
+    .)
+
+
+	.SETSCR
+
+Entry_Print:
+    .(
+	jsr ComLib_ClearLine
+
+	; show blocks
+	lda Entry_EBuf+DirE_Blocks
+	ldx Entry_EBuf+DirE_Blocks+1
+	jsr ComLib_DezOut
+
+	; show filename
+	ldy #6
+Print1:
+	lda Entry_EBuf+DirE_Name-6,y
+	jsr ComLib_Ascii2Screen
+	beq Print2
+	sta (ComLibZp_ScrPtr0),y
+	iny
+	cpy #$18+6
+	bcc Print1
+
+	; show selected
+Print2:
+	lda #' '
+	bit Entry_EBuf+DirE_Typ
+	bpl Print3
+	lda #'#'
+Print3:
+	ldy #$1f
+	sta (ComLibZp_ScrPtr0),y
+
+	; show cached
+	ldx #' '
+	lda Entry_EBuf+DirE_Ptr
+	ora Entry_EBuf+DirE_Ptr+1
+	beq Print4
+	ldx #'c'
+Print4:
+	txa
+	iny
+	sta (ComLibZp_ScrPtr0),y
+
+	rts
+    .)
+
+
+Entry_PrintCol:
+    .(
+	jsr Entry_Print
+	lda ComLibZp_ScrPtr0+1
+	and #3
+	ora #$d8
+	sta ComLibZp_ScrPtr0+1
+	lda Entry_EBuf+DirE_Color
+	ldy #MaxXPos-1
+PrintCol0:
+	sta (ComLibZp_ScrPtr0),y
+	dey
+	bpl PrintCol0
+	rts
+    .)
+
+
+Entry_ClearBuffer:
+    .(
+	ldx #DirE_len-1
+	lda #0
+clearBuffer:
+	sta Entry_EBuf,x
+	dex
+	bpl clearBuffer
+	rts
+    .)
+
+/*-----------------------------------*/
+
+

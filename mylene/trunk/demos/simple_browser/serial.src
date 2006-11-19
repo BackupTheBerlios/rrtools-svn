@@ -1,0 +1,761 @@
+/***************************************************************************
+ *   Copyright (C) 1998 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+#include "iff_lib.src"
+
+;--------------------------------------
+
+PartitionEntry_41		= 0
+PartitionEntry_71		= 1
+PartitionEntry_81		= 2
+PartitionEntry_81c		= 3
+PartitionEntry_Nat		= 4
+PartitionEntry_Unknown		= 5
+
+FileEntry_Del			= 0
+FileEntry_Seq			= 1
+FileEntry_Prg			= 2
+FileEntry_Usr			= 3
+FileEntry_Rel			= 4
+FileEntry_Cbm			= 5
+FileEntry_Dir			= 6
+FileEntry_Unknown		= 7
+
+;--------------------------------------
+
+	.segment "zp"
+
+; this is the iff device type, set by serial_enter_device
+Serial_DeviceType		.DB 0
+; this is the partition type PartitionEntry_* set by serial_enter_partition.
+; it's only valid for devices supporting partitions.
+Serial_PartitionType		.DB 0
+
+; number of suffixes to recognize
+LoadDirZp_TypCnt		.DB 0
+; pointer to suffixes, each 3 chars long
+LoadDirZp_TypPtr		.DW 0
+
+;--------------------------------------
+
+	.segment "code"
+
+
+serial_enter_device:
+    .(
+	; current entry must be device -> blocks lo is device nr
+	lda Entry_EBuf+DirE_Blocks
+	sta iec_libZp_Device
+
+	; set type
+	lda Entry_EBuf+DirE_Typ
+	sta Serial_DeviceType
+
+	; no partition typ yet
+	lda #PartitionEntry_Unknown
+	sta Serial_PartitionType
+
+	; go back to root
+	jsr Disk2Root
+	clc
+	rts
+    .)
+
+
+serial_enter_partition:
+    .(
+	lda Entry_EBuf+DirE_Typ
+	sta Serial_PartitionType
+	jsr Disk2Root
+	clc
+	rts
+    .)
+
+
+serial_read_dir:
+    .(
+	lda #dir_typ_len
+	ldx #<dir_typ
+	ldy #>dir_typ
+	jsr LoadDir_SetTypes
+
+	lda #dir_name_len
+	ldx #<dir_name
+	ldy #>dir_name
+	jsr LoadDir
+
+	lda #0
+	sta EntryZp_HBuf+DirH_Flags
+	lda Level
+	sta EntryZp_HBuf+DirH_Level
+	lda Entry_LastTyp
+	sta EntryZp_HBuf+DirH_Typ
+	jsr Entry_WriteHeader
+	jmp ShowDirTop
+
+dir_name:
+	.pet "$"
+dir_name_len = * - dir_name
+
+dir_typ:
+	.PET "del"
+	.PET "seq"
+	.PET "prg"
+	.PET "usr"
+	.PET "rel"
+	.PET "cbm"
+	.PET "dir"
+dir_typ_len = (*-dir_typ)/3
+    .)
+
+
+serial_read_partitions_cmd:
+    .(
+	lda #partition_typ_len
+	ldx #<partition_typ
+	ldy #>partition_typ
+	jsr LoadDir_SetTypes
+
+	lda #partition_dir_name_len
+	ldx #<partition_dir_name
+	ldy #>partition_dir_name
+	jsr LoadDir
+
+	lda #DirHFlag_NoBFreeLine
+	sta EntryZp_HBuf+DirH_Flags
+	lda Level
+	sta EntryZp_HBuf+DirH_Level
+	lda Entry_LastTyp
+	sta EntryZp_HBuf+DirH_Typ
+	jsr Entry_WriteHeader
+	jmp ShowDirTop
+
+partition_dir_name:
+	.pet "$=p"
+partition_dir_name_len = * - partition_dir_name
+
+
+partition_typ:
+	.PET "41 "
+	.PET "71 "
+	.PET "81 "
+	.PET "81c"
+	.PET "nat"
+partition_typ_len = (*-partition_typ)/3
+    .)
+
+
+serial_change_dir_1581:
+serial_change_dir_cmd:
+serial_prev_dir_1581:
+serial_prev_dir_cmd:
+not_yet:
+	inc $d020
+	inc $d021
+	jmp not_yet
+
+serial_read_file:
+	inc $0400
+	jmp serial_read_file
+
+
+
+
+;--------------------------------------
+;
+; Make DeviceTab
+;
+;--------------------------------------
+
+serial_read_devices:
+    .(
+	; create new header for the device table
+	jsr Entry_AddNewHeader
+
+	; start at device 8
+	lda #8
+	sta iec_libZp_Device
+GetDev0:
+	jsr IFF
+	bcs GetDev4
+
+	; save type
+	stx Entry_EBuf+DirE_Typ
+	lda IFF_DriveTab,x
+	tax
+
+	; clear name ($18 cars hold $10 name, 2 quotes, 1 space and 5 type)
+	ldy #$18-1
+	lda #' '
+GetDev1:
+	sta Entry_EBuf+DirE_Name,y
+	dey
+	bpl GetDev1
+
+	; set device number as blocks
+	lda iec_libZp_Device
+	sta Entry_EBuf+DirE_Blocks
+	ldy #0
+	sty Entry_EBuf+DirE_Blocks+1
+	; y is 0 here
+	; copy descriptive text to filename
+GetDev2:
+	lda IFF_DriveTxt,x
+	beq GetDev3
+	sta Entry_EBuf+DirE_Name,y
+	inx
+	iny
+	bne GetDev2
+
+	; new entry, no nodes below yet
+GetDev3:
+	lda #0
+	sta Entry_EBuf+DirE_Ptr
+	sta Entry_EBuf+DirE_Ptr+1
+
+	ldx Entry_EBuf+DirE_Typ
+	jsr level_action_find
+	stx Entry_EBuf+DirE_ActionIdx
+	lda LevelAction+level_action_color_flag
+	and #$7f
+	bcc GetDev5
+	lda LevelBuf+level_entry_col_unknown
+GetDev5:
+	sta Entry_EBuf+DirE_Color
+
+	; add the new entry
+	jsr Entry_AddNewEntry
+
+	; next device
+GetDev4:
+	inc iec_libZp_Device
+	lda iec_libZp_Device
+	cmp #$1f
+	bcc GetDev0
+
+	; write header
+	lda #DirHFlag_NoHeadLine|DirHFlag_NoBFreeLine
+	sta EntryZp_HBuf+DirH_Flags
+	lda Level
+	sta EntryZp_HBuf+DirH_Level
+	lda Entry_LastTyp
+	sta EntryZp_HBuf+DirH_Typ
+	jsr Entry_WriteHeader
+	jmp ShowDirTop
+    .)
+
+;--------------------------------------
+
+LoadDir_SetTypes:
+    .(
+	sta LoadDirZp_TypCnt
+	stx LoadDirZp_TypPtr
+	sty LoadDirZp_TypPtr+1
+	rts
+    .)
+
+LoadDir:
+    .(	/* LoadDir */
+	jsr iec_lib_SetName
+	jsr ComLib_ClearScreen
+	ldx #9
+	jsr ComLib_SetLine
+
+	ldx #$0d
+	ldy #$0d+5
+LoadDirMsg0:
+	lda DirManBSS_Msg_ReadingDir,x
+	sta (ComLibZp_ScrPtr0),y
+	dey
+	dex
+	bpl LoadDirMsg0
+
+	lda #0
+	sta LoadZp_Cnt
+	sta LoadZp_Cnt+1
+	jsr Entry_AddNewHeader
+
+	lda #$60
+	sta iec_libZp_SecAdr
+	jsr iec_lib_Open
+	lda iec_libZp_Device
+	jsr iec_lib_Talk
+	lda #$60
+	jsr iec_lib_SecTalk
+	jsr iec_lib_ReadByte
+	jsr iec_lib_ReadByte
+LoadDir0:
+	jsr iec_lib_ReadByte
+	jsr iec_lib_ReadByte
+	lda iec_libZp_90
+	beq LoadDir7
+
+	jsr iec_lib_UnTalk
+	jsr iec_lib_Close
+	jsr ComLib_ClearScreen
+	clc
+	rts
+
+LoadDir7:
+	jsr iec_lib_ReadByte
+	sta Entry_EBuf+DirE_Blocks
+	jsr iec_lib_ReadByte
+	sta Entry_EBuf+DirE_Blocks+1
+	ldy #0
+;	sty LoadDLBuf+26
+;	sty LoadDLBuf+27
+LoadDir1:
+	jsr iec_lib_ReadByte
+	cmp #$20
+	beq LoadDir1
+	cmp #$12
+	bne LoadDir3
+LoadDir2:
+	jsr iec_lib_ReadByte
+LoadDir3:
+	sta Entry_EBuf+DirE_Name,y
+	beq LoadDir5
+	iny
+	cpy #$18
+	bcc LoadDir2
+LoadDir4:
+	jsr iec_lib_ReadByte
+	bne LoadDir4
+LoadDir5:
+	ldx #0
+	ldy #0
+LoadDir8:
+	lda Entry_EBuf+DirE_Name+$13
+	cmp (LoadDirZp_TypPtr),y
+	bne LoadDir10a
+	iny
+
+	lda Entry_EBuf+DirE_Name+$14
+	cmp (LoadDirZp_TypPtr),y
+	bne LoadDir10b
+	iny
+
+	lda Entry_EBuf+DirE_Name+$15
+	cmp (LoadDirZp_TypPtr),y
+	bne LoadDir10c
+
+LoadDir12:
+	stx Entry_EBuf+DirE_Typ
+	jsr level_action_find
+	stx Entry_EBuf+DirE_ActionIdx
+	lda LevelAction+level_action_color_flag
+	and #$7f
+	bcc LoadDir13
+	lda LevelBuf+level_entry_col_unknown
+LoadDir13:
+	sta Entry_EBuf+DirE_Color
+
+	lda #0
+	sta Entry_EBuf+DirE_Ptr
+	sta Entry_EBuf+DirE_Ptr+1
+
+	jsr Entry_AddNewEntry
+	inc LoadZp_Cnt
+	bne LoadDir6
+	inc LoadZp_Cnt+1
+LoadDir6:
+	lda #$18
+	sta ComLibZp_CrsrX
+	lda LoadZp_Cnt
+	ldx LoadZp_Cnt+1
+	jsr ComLib_DezOut
+	jmp LoadDir0
+
+
+LoadDir10a:
+	iny
+LoadDir10b:
+	iny
+LoadDir10c:
+	iny
+
+	inx
+	cpx LoadDirZp_TypCnt
+	bcc LoadDir8
+	bcs LoadDir12
+
+DirManBSS_Msg_ReadingDir:
+	.scr "reading dir..."
+    .)
+
+;--------------------------------------
+
+;--------------------------------------
+; hit return on an entry
+/*
+FileType:
+    .(
+	; copy entry under the cursor to the buffer
+	lda BarPtr
+	sta EntryZp_ActEntry
+	lda BarPtr+1
+	sta EntryZp_ActEntry+1
+	jsr Entry_GetPtr
+
+	; get the header type
+	lda EntryZp_HBuf+DirH_Flags
+	and #DirHFlag_TypeMask
+	cmp #DirHFlag_DevList
+	beq driveList
+	cmp #DirHFlag_PList
+	beq partitionList
+	; everything else is a root or subdirectory
+	jmp fileList
+
+driveList:
+	; get entry type
+	lda Entry_EBuf+DirE_Typ
+	and #$7f
+	cmp #IFFDevTyp_Unknown
+	beq driveList_unsupported
+	; cbm style drive -> no partition table, read root dir
+	cmp #IFFDevTyp_81
+	bcs driveList_hasPartitions
+	sta DriveTyp
+	lda Entry_EBuf+DirE_Blocks
+	sta iec_libZp_Device
+	jmp ReadRootDir
+driveList_hasPartitions:
+	; cmd style drive -> read partition table
+	sta DriveTyp
+	lda Entry_EBuf+DirE_Blocks
+	sta iec_libZp_Device
+	jmp ReadPTable
+
+driveList_unsupported:
+	; the drive type is not supported
+	jmp GetKey
+
+
+	; Partition
+partitionList:
+	; get entry type
+	lda Entry_EBuf+DirE_Typ
+	and #$7f
+	cmp #PartitionEntry_Unknown
+	bcs partitionList_unsupported
+	sta PartitionTyp
+	lda Entry_EBuf+DirE_Blocks
+	sta DirManBSS_EnterPartCmd+2
+	lda #3
+	ldx #<DirManBSS_EnterPartCmd
+	ldy #>DirManBSS_EnterPartCmd
+	jsr SendCmd
+	bcc partitionList_ok
+	jmp ShowDiskErr
+partitionList_ok:
+	jmp ReadRootDir
+
+partitionList_unsupported:
+	; the partition type is not supported
+	jmp GetKey
+
+
+fileList:
+	; get entry type
+	lda Entry_EBuf+DirE_Typ
+	and #$7f
+	cmp #FileEntry_Unknown
+	bcs fileList_unsupported
+
+	; 1581 subdir?
+	cmp #FileEntry_Cbm
+	bne FileType4
+	ldx #0
+FileType3a:
+	lda Entry_EBuf+DirE_Name+1,x
+	cmp #$22
+	beq FileType3b
+	sta DirManBSS_Move81Cmd+2,x
+	inx
+	cpx #$10
+	bcc FileType3a
+FileType3b:
+	inx
+	inx
+	txa
+	ldx #<DirManBSS_Move81Cmd
+	ldy #>DirManBSS_Move81Cmd
+	jsr SendCmd
+	bcc FileType3c
+	jmp ShowDiskErr
+FileType3c:
+	jmp ReadSubDir
+
+	; cmd subdirectory?
+FileType4:
+	cmp #FileEntry_Dir
+	bne FileType5
+	ldx #0
+FileType4a:
+	lda Entry_EBuf+DirE_Name+1,x
+	cmp #$22
+	beq FileType4b
+	sta DirManBSS_MoveSubDirCmd+3,x
+	inx
+	cpx #$10
+	bcc FileType4a
+FileType4b:
+	txa
+	clc
+	adc #3
+	ldx #<DirManBSS_MoveSubDirCmd
+	ldy #>DirManBSS_MoveSubDirCmd
+	jsr SendCmd
+	bcc FileType4c
+	jmp ShowDiskErr
+FileType4c:
+	jmp ReadSubDir
+
+FileType5:
+	cmp #FileEntry_Prg
+	bne fileList_unsupported
+	ldy #0
+FileType5a:
+	lda Entry_EBuf+DirE_Name+1,y
+	cmp #$22
+	beq FileType5b
+	iny
+	cpy #$10
+	bcc FileType5a
+FileType5b:
+	tya
+	ldx #<(Entry_EBuf+DirE_Name+1)
+	ldy #>(Entry_EBuf+DirE_Name+1)
+NotYet:
+	inc $d020
+	jmp NotYet
+
+fileList_unsupported:
+	jmp GetKey
+    .)
+*/
+;--------------------------------------
+
+Disk2Root:
+    .(
+	; cmd hd can have subdirs, depending on the partition
+	lda Serial_DeviceType
+	cmp #IFFDevTyp_HD
+	bcc Disk2Root3
+
+	; partition types 41 and 71 have no subdirs, nothing to do
+	lda Serial_PartitionType
+	cmp #PartitionEntry_Unknown
+	bcs Disk2Root2
+	cmp #PartitionEntry_81
+	bcc Disk2Root2
+
+	; native partitions have subdirs, send cmd style 'goto root'
+	cmp #PartitionEntry_Nat
+	beq Disk2Root0
+	; 81 and 81c partitions have subdirs, send 1581 style 'goto root'
+	bne Disk2Root4	; bra
+
+Disk2Root3:
+	; 1581 has subdirs
+	cmp #IFFDevTyp_81
+	bcc Disk2Root2
+	bne Disk2Root0
+
+Disk2Root4:
+	ldx #<GotoRoot81Cmd
+	ldy #>GotoRoot81Cmd
+	lda #GotoRoot81Cmd_len
+	bne Disk2Root1	; bra
+Disk2Root0:
+	ldx #<GotoRootHDCmd
+	ldy #>GotoRootHDCmd
+	lda #GotoRootHDCmd_len
+Disk2Root1:
+	jsr SendCmd
+	bcc Disk2Root2
+	jmp ShowDiskErr
+
+Disk2Root2:
+	rts
+
+
+GotoRoot81Cmd:
+	.PET "i"
+GotoRoot81Cmd_len = * - GotoRoot81Cmd
+
+GotoRootHDCmd:
+	.PET "cd",$2f
+GotoRootHDCmd_len = * - GotoRootHDCmd
+
+
+    .)
+
+;--------------------------------------
+
+Disk2Prev:
+    .(
+	; cmd hd can have subdirs, depending on the partition
+	lda Serial_DeviceType
+	cmp #IFFDevTyp_HD
+	bcc Disk2Prev3
+
+	; partition types 41 and 71 have no subdirs, nothing to do
+	lda Serial_PartitionType
+	cmp #PartitionEntry_81
+	bcc Disk2Prev2
+
+	; native partitions have subdirs, send cmd style 'goto prev'
+	cmp #PartitionEntry_Nat
+	beq Disk2Prev0
+	; 81 and 81c partitions have subdirs, send 1581 style 'goto prev'
+	bne Disk2Prev4	; bra
+
+Disk2Prev3:
+	; 1581 has subdirs
+	cmp #IFFDevTyp_81
+	bcc Disk2Prev2
+	bne Disk2Prev0
+
+Disk2Prev4:
+	ldx #<MovePrev81Cmd
+	ldy #>MovePrev81Cmd
+	lda #MovePrev81Cmd_len
+	bne Disk2Prev1	; bra
+Disk2Prev0:
+	ldx #<MovePrevHDCmd
+	ldy #>MovePrevHDCmd
+	lda #MovePrevHDCmd_len
+Disk2Prev1:
+	jsr SendCmd
+	bcc Disk2Prev2
+	jmp ShowDiskErr
+
+Disk2Prev2:
+	rts
+
+
+MovePrev81Cmd:
+	.pet $2f
+MovePrev81Cmd_len = * - MovePrev81Cmd
+
+MovePrevHDCmd:
+	.pet "cd",$5f
+MovePrevHDCmd_len = * - MovePrevHDCmd
+
+    .)
+
+;--------------------------------------
+
+SendCmd:
+    .(
+	jsr iec_lib_SetName
+	lda #$6f
+	sta iec_libZp_SecAdr
+	jsr iec_lib_Open
+	bcs SendCmdErr
+	lda iec_libZp_Device
+	jsr iec_lib_Talk
+	lda #$6f
+	jsr iec_lib_SecTalk
+	ldy #0
+SendCmd0:
+	jsr iec_lib_ReadByte
+	sta iec_lib_ErrBuf,y
+	cmp #$0d
+	beq SendCmd1
+	lda iec_libZp_90
+	bne SendCmdErr
+	iny
+	cpy #iec_libErrBufMaxLen
+	bcc SendCmd0
+SendCmd1:
+	lda iec_lib_ErrBuf
+	cmp #'0'
+	bne SendCmdErr
+	lda iec_lib_ErrBuf+1
+	cmp #'3'
+	bcs SendCmdErr
+	jmp iec_lib_Close
+
+SendCmdErr:
+	jsr iec_lib_Close
+	sec
+	rts
+    .)
+
+;--------------------------------------
+
+ShowDiskErr:
+    .(
+	jsr ComLib_ClearScreen
+	ldx #3
+	jsr ComLib_SetLine
+	ldy #0
+ShowDiskErr0:
+	lda iec_lib_ErrBuf,y
+	cmp #$0d
+	beq ShowDiskErr1
+	jsr ComLib_Ascii2Screen
+	jsr ComLib_PrintChar
+	iny
+	cpy #iec_libErrBufMaxLen
+	bcc ShowDiskErr0
+ShowDiskErr1:
+
+	ldx #4
+	jsr ComLib_SetLine
+	ldy #0
+ShowDiskErr2:
+	lda (iec_libZp_NamePtr),y
+	jsr ComLib_Ascii2Screen
+	jsr ComLib_PrintChar
+	iny
+	cpy #$28
+	bcs ShowDiskErr3
+	cpy iec_libZp_NameLen
+	bcc ShowDiskErr2
+
+ShowDiskErr3:
+	inc $d020
+	jmp ShowDiskErr3
+    .)
+
+;--------------------------------------
+
+DirManBSS_Move81Cmd:
+	.pet $2f,":                "
+
+
+DirManBSS_PartDirName:
+	.pet "$=p"
+
+DirManBSS_MoveSubDirCmd:
+	.pet "cd:                "
+
+DirManBSS_EnterPartCmd:
+	.pet "c",$d0,0
+
+iec_lib_ErrBuf:
+	.DSB $40
+iec_libErrBufMaxLen = * - iec_lib_ErrBuf
+
+;--------------------------------------
