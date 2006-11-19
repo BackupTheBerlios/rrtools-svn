@@ -436,7 +436,7 @@ bool CHexControl::SetCBMCharset(byte *buffer, int nLength)
 	{
 		wxColor colRed(255, 0, 0);
 		wxColor colWhite(255, 255, 255);
-		m_modifiedBitmapIndex = CreateSelectionBitmap(colRed, colWhite);		// Create Drawing-Bitmap for modified bytes (red on white)
+		m_modifiedBitmapIndex = CreateSelectionBitmap(colWhite, colRed);		// Create Drawing-Bitmap for modified bytes (white on red)
 	}
 	return result;
 }
