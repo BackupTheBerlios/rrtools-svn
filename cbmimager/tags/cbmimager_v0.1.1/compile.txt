@@ -1,0 +1,41 @@
+ CBMImager build howto
+-----------------------
+
+
+1) What do you need?
+
+* wxWidgets (http://www.wxwidgets.org/)
+
+You will need a recent version of wxWidgets to build the CBMImager executable. At the point of this writing (20061103) the stable wxWidgets release is 2.6.3 . CBMImager has been developed and tested with this version. Other releases of wxWidgets have not been tested.
+
+Download page:
+http://www.wxwidgets.org/downloads/
+
+
+* Bakefile (http://bakefile.sourceforge.net/)
+
+Bakefile generates a "Makefile" or VS6 project from a general project description (the bkl file).
+
+Download page:
+http://bakefile.sourceforge.net/download.php
+
+
+
+2) How to generate the buildfiles
+
+2.1) a Makefile
+
+Navigate a shell to the directory containing the "main.blk" file, and execute this command:
+
+  bakefile -f gnu -o Makefile main.bkl
+
+Or just execute the "_gengnu.bash" script. The "Makefile" will be generated in the current directory.
+
+
+2.2) a VS6 project
+
+tbd
+
+
+--
+Doc Bacardi/DRM
