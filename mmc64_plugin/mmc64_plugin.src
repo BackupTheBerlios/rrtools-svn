@@ -106,12 +106,12 @@ MMC64Plugin_Init:
 	sta MMC64_Ctrl
 
 	; save zeropage
-	ldx #0
+	ldx #2
 saveZp:
-	lda 2,x
+	lda 0,x
 	sta MMC64Plugin_ZeroPageSave,x
 	inx
-	bpl saveZp
+	bne saveZp
 
 	; send 80 bits of '0' to init the spi lines
 	ldx #10
@@ -159,12 +159,12 @@ MMC64Plugin_Exit:
 	lda $dd0d
 
 	; restore zeropage
-	ldx #0
+	ldx #2
 restoreZp:
 	lda MMC64Plugin_ZeroPageSave,x
-	sta 2,x
+	sta 0,x
 	inx
-	bpl restoreZp
+	bne restoreZp
 
 	lda #0
 	sta MMC64_Ctrl
