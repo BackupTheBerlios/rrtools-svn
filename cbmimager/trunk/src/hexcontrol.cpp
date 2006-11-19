@@ -82,12 +82,17 @@ void CHexControl::OnDrawItem(wxDC &dc, const wxRect &rect, size_t n)const
 	int startIndex;
 	wxString output;
 	wxString bTemp;
-	int i;
+	int i, cnt;
 	int len;
 	int specialBitmap;
 	byte pi;
 	int rowOffset = n * 8;						// Start of row in m_data
 	int colOffset;								// byte offset for the Column
+	bool forbidden;
+	char forbiddenCols[] = 
+	{
+		8,11,14,17,20,23,26,29,30
+	};
 
 
 	if (m_dataLength == 0)
@@ -139,6 +144,17 @@ void CHexControl::OnDrawItem(wxDC &dc, const wxRect &rect, size_t n)const
 				pi -= 64;
 		}
 		
+		// check, if we are in a "forbidden" column (a column between the single bytes)
+		forbidden = false;
+		for (cnt = 0; cnt < sizeof(forbiddenCols); cnt++)
+		{
+			if (i == forbiddenCols[cnt])
+			{
+				forbidden = true;
+				break;
+			}
+		}
+
 		if (m_selRow == (int)n && (m_colHex == i || m_colAscii == i))
 		{
 			tempDC.SelectObject(selBitmap);
@@ -154,7 +170,7 @@ void CHexControl::OnDrawItem(wxDC &dc, const wxRect &rect, size_t n)const
 			{
 				specialBitmap = ((CHexControl*)this)->IsSpecialSelection(rowOffset, i - 31);		// ASCII Part
 			}
-			if (specialBitmap >= 0)
+			if (specialBitmap >= 0 && i > 5 && !forbidden)
 				tempDC.SelectObject(selMaps[specialBitmap]);
 			else
 				tempDC.SelectObject(stdBitmap);
