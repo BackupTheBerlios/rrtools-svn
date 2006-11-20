@@ -189,11 +189,22 @@ foundFreeBuffer:
 ; NOTE: fallthrough to 'setChannelBuffer', don't move functions
 setChannelBuffer:
     .(
+	; check for command channel
 	lda $b9
 	and #$0f
+	cmp #$0f
+	bne normalChannel
+
+	; set buffer for command channel
+	lda #DfiFs_Cfg_SysBufferIdx
+	bne setBuffer	; bra
+
+normalChannel:
 	tax
 	lda DfiFs_ChannelToBufferTab,x
 	bmi noBuffer
+
+setBuffer:
 	sta DfiFs_ChannelBufferIdx
 	clc
 	adc #>DfiFs_BlockBuffer
