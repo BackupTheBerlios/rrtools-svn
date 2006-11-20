@@ -261,7 +261,7 @@ DfiFs_OpenFileForReading:
 	.bankJsr(L_findNextMatchingDirEntry)
 	bcs error
 	tax
-	bne fileNotFound
+	bmi fileNotFound
 
 	; read first file block
 	ldx DfiFs_ExchangeBuffer+DfiFs_paramOffs_DirEntry_Track
@@ -321,9 +321,9 @@ DfiFs_OpenFileForWriting:
 	; find the file
 	.bankJsr(L_findNextMatchingDirEntry)
 	bcs error
-	tax
 	; file not found -> normal save
-	bne filenameDoesNotExist
+	cmp #$ff
+	beq filenameDoesNotExist
 
 	; mark file as open
 	lda DfiFs_ExchangeBuffer+DfiFs_paramOffs_DirEntry_Typ
@@ -352,7 +352,7 @@ noReplace:
 	.bankJsr(L_findNextMatchingDirEntry)
 	bcs error
 	tax
-	bne filenameDoesNotExist
+	bmi filenameDoesNotExist
 
 	ldy DfiFs_ChannelBufferIdx
 	lda #$ff

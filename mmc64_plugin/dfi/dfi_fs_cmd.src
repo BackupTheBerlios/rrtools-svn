@@ -816,25 +816,18 @@ loopOverAllFiles:
 	; find file in directory
 	.bankJsr(L_findNextMatchingDirEntry)
 	bcs error
-	tax
-	bne fileNotFound
+	cmp #$ff
+	beq fileNotFound
 
 	; found a matching entry, scratch it
 
-;#error "save searchDir vars and invalidate buffer"
-
 	; copy the dir entry position
-;	lda DfiFs_SearchDir_Idx
 	sta DfiFs_ScratchFile_DirEntryIdx
-;	ldx DfiFs_SearchDir_Block
 	stx DfiFs_ScratchFile_DirEntryTrk
-;	ldy DfiFs_SearchDir_Block+1
 	sty DfiFs_ScratchFile_DirEntrySec
 
 	jsr scratchOneFile
 	bcs error
-
-;#error "restore searchDir vars and reload buffer"
 
 	; one file scratched
 	inc DfiFs_Cmd_ScratchCounter

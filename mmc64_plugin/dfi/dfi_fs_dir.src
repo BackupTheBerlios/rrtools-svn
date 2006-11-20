@@ -25,6 +25,11 @@ DfiFs_Dir_ReqSec			.DB 0		; requested sector for read/write dir block
 
 ;--------------------------------------
 
+DfiFs_Dir_DirentryIdxTab:
+	.DB $00, $20, $40, $60, $80, $a0, $c0, $e0
+
+;--------------------------------------
+
 DfiFs_Dir_Init:
 .defBJL(DfiFs_Dir_Init)
     .(
@@ -138,7 +143,7 @@ error:
 ; Read one dir entry and store it in the exchange buffer
 ;
 ; Parameters:
-;   A: dir entry index ($00, $20, $40, $60, $80, $a0, $c0, $e0)
+;   A: dir entry index (0 - 7)
 ;   X: dir track
 ;   Y: dir sector
 ;
@@ -149,13 +154,16 @@ DfiFs_Dir_ReadDirEntry:
 .defBJL(DfiFs_Dir_ReadDirEntry)
     .(
 	; save the dir entry idx
+	cmp #8
+	bcs error
 	sta readWriteDir_Idx
 
 	; read the directory block
 	jsr DfiFs_Dir_ReadDirBlock
 	bcs error
 
-	ldy readWriteDir_Idx
+	ldx readWriteDir_Idx
+	ldy DfiFs_Dir_DirentryIdxTab,x
 	ldx #0
 copyBlock:
 	lda DfiFs_DirBuffer,x
@@ -182,7 +190,7 @@ error:
 ; Get dir entry from the exchange buffer and write it.
 ;
 ; Parameters:
-;   A: dir entry index ($00, $20, $40, $60, $80, $a0, $c0, $e0)
+;   A: dir entry index (0 - 7)
 ;   X: dir track
 ;   Y: dir sector
 ;
@@ -194,13 +202,16 @@ DfiFs_Dir_WriteDirEntry:
 .defBJL(DfiFs_Dir_WriteDirEntry)
     .(
 	; save parameters
+	cmp #8
+	bcs error
 	sta readWriteDir_Idx
 
 	; read the directory block
 	jsr DfiFs_Dir_ReadDirBlock
 	bcs error
 
-	ldy readWriteDir_Idx
+	ldx readWriteDir_Idx
+	ldy DfiFs_Dir_DirentryIdxTab,x
 	ldx #0
 copyBlock:
 	lda DfiFs_ExchangeBuffer+2,x
@@ -309,15 +320,13 @@ fillNewDirBlk:
 	bcs error
 
 	; set block as free entry
-	lda #1
+	lda #0
 	sta DfiFs_SearchDir_Idx
+	ldx DfiFs_SearchDir_Block
+	ldy DfiFs_SearchDir_Block+1
 
 foundFreeEntry:
 	; ok, found a free block
-	ldx DfiFs_SearchDir_Idx
-	lda DfiFs_Dir_DirentryIdxTab,x
-	ldx DfiFs_SearchDir_Block
-	ldy DfiFs_SearchDir_Block+1
 	clc
 	rts
     .)
@@ -479,7 +488,7 @@ copyName:
 	bcs error
 
 	; reset the dir entry index
-	lda #0
+	lda #$ff
 	sta DfiFs_SearchDir_Idx
 
 	; read the first directory block to the channel buffer
@@ -500,13 +509,18 @@ findNextMatchingDirEntry:
 nextEntry:
 	; still something left in the current block?
 	ldy DfiFs_SearchDir_Idx
+	iny
 	cpy #8
 	bcc entryLeft
 
 	; get link trk/sec
 	ldx DfiFs_DirBuffer
 	bne anotherDirBlock
+
+	; nothing found
 	lda #$ff
+	ldx #0
+	ldy #0
 	clc
 	rts
 
@@ -514,6 +528,7 @@ anotherDirBlock:
 	stx DfiFs_SearchDir_Block
 	ldy DfiFs_DirBuffer+1
 	sty DfiFs_SearchDir_Block+1
+
 	; read the dir block
 	jsr DfiFs_Dir_ReadDirBlock
 	bcc readNewBlock
@@ -526,9 +541,8 @@ readNewBlock:
 	ldy #0
 
 entryLeft:
-	ldx DfiFs_Dir_DirentryIdxTab,y
-	iny
 	sty DfiFs_SearchDir_Idx
+	ldx DfiFs_Dir_DirentryIdxTab,y
 
 	lda DfiFs_DirBuffer+2,x
 	and #%10111111
@@ -577,14 +591,12 @@ copyDirEntry:
 	cpy #$20
 	bcc copyDirEntry
 
-	lda #0
+	lda DfiFs_SearchDir_Idx
+	ldx DfiFs_SearchDir_Block
+	ldy DfiFs_SearchDir_Block+1
 	clc
 	rts
     .)
-
-
-DfiFs_Dir_DirentryIdxTab:
-	.DB $00, $20, $40, $60, $80, $a0, $c0, $e0
 
 
 readDirFileEntry:
@@ -593,7 +605,7 @@ readDirFileEntry:
 	bcs error
 	; found entry?
 	tax
-	beq foundEntry
+	bpl foundEntry
 	; no more entries found -> end of dir
 	jmp getBlocksFreeLine
 
