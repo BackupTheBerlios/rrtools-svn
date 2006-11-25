@@ -779,13 +779,19 @@ loopFiles:
 	cpx DfiFs_Cmd_Entry_Len
 	bcc loopFiles
 
+	.bankJsr(L_DfiFs_Bam_flushBuffer)
+	bcs error
+
+	.bankJsr(L_DfiFs_Dir_FlushDirBlock)
+	bcs error
+
 	lda #Err_01_FilesScratched
 	ldx DfiFs_Cmd_ScratchCounter
 	ldy DfiFs_Cmd_ScratchCounter+1
 	.bankJsr(L_DfiFs_SetError)
-error:
 	; the errornumber was set, that's it
 	clc
+error:
 	rts
     .)
 
@@ -845,17 +851,16 @@ error:
 scratchOneFile:
     .(
 	; read first file block
-	lda DfiFs_ExchangeBuffer+3
+	ldx DfiFs_ExchangeBuffer+3
 	beq error
-	sta DfiFs_ScratchFile_Trk
-	lda DfiFs_ExchangeBuffer+4
-	sta DfiFs_ScratchFile_Sec
+	ldy DfiFs_ExchangeBuffer+4
 
 	; loop over all blocks and free them
 loopOverAllBlocks:
-	ldx DfiFs_ScratchFile_Trk
-	ldy DfiFs_ScratchFile_Sec
-	.bankJsr(L_readFileNewBlock)
+	lda #DfiFs_Cfg_SysBufferIdx
+	stx DfiFs_ScratchFile_Trk
+	sty DfiFs_ScratchFile_Sec
+	.bankJsr(L_DfiFs_ReadBlock)
 	bcs error
 
 	ldx DfiFs_ScratchFile_Trk
@@ -863,12 +868,9 @@ loopOverAllBlocks:
 	.bankJsr(L_DfiFs_Bam_Free)
 	bcs error
 
-	ldy #1
-	lda (DfiFsZp_BufPtr),y
-	sta DfiFs_ScratchFile_Sec
-	dey
-	lda (DfiFsZp_BufPtr),y
-	sta DfiFs_ScratchFile_Trk
+	.bankJsr(L_getSectorLink)
+	bcs error
+	txa
 	bne loopOverAllBlocks
 
 	; clear the dir entry
@@ -889,9 +891,6 @@ loopOverAllBlocks:
 	ldx DfiFs_ScratchFile_DirEntryTrk
 	ldy DfiFs_ScratchFile_DirEntrySec
 	.bankJsr(L_DfiFs_Dir_WriteDirEntry)
-	bcs error
-
-	.bankJsr(L_DfiFs_Bam_flushBuffer)
 	rts
 
 error:

@@ -317,12 +317,41 @@ setSectorLink:
 	sta (DfiFsZp_BufPtr),y		; set link track
 
 	; ok
-	clc
-	rts
-
-	; error
+	; carry is clear now
 error:
-	sec
+	rts
+    .)
+
+
+;-------------------------------------
+;
+; getSectorLink
+;
+; Get the link bytes for the sector in the buffer.
+;
+; Parameters:
+;   -
+;
+; Returns:
+;   X: link track
+;   Y: link sector
+;
+getSectorLink:
+.defBJL(getSectorLink)
+    .(
+	jsr setChannelBuffer
+	bcs error
+
+	ldy #0
+	lda (DfiFsZp_BufPtr),y		; set link sector
+	tax
+	iny
+	lda (DfiFsZp_BufPtr),y		; set link track
+	tay
+
+	; ok
+	; carry is clear now
+error:
 	rts
     .)
 
