@@ -309,7 +309,7 @@ void CBMImager::ShowVersionInfo(void)
 #endif
 
 #ifdef __DARWIN__
-	strOS.Append(wxT("Mac OS X using the BSD Unix C library (as opposed to using the Metrowerks MSL C/C++ library) 
+	strOS.Append(wxT("Mac OS X using the BSD Unix C library (as opposed to using the Metrowerks MSL C/C++ library)"));
 #endif
 
 #ifdef __DATA_GENERAL__
