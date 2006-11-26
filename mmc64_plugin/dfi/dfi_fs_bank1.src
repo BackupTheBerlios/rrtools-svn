@@ -309,6 +309,13 @@ DfiFs_OpenFileForWriting:
 	lda DfiFs_CurrentDir+1
 	sta DfiFs_WorkingDir+1
 
+	; get entry
+	ldx #0
+	stx DfiFs_Cmd_Entry_Cnt
+
+	; get the file entry
+	jsr DfiFs_Cmd_GetEntry
+
 	ldx DfiFs_WorkingDir
 	ldy DfiFs_WorkingDir+1
 	.bankJsr(L_searchDir_init)
@@ -443,15 +450,6 @@ setFilename:
 
 	; write dir entry
 writeDirEntry:
-/*
-	; copy the dir entry
-	ldx #DfiFs_paramOffs_DirEntry_len-1
-copyEntry:
-	lda DfiFs_DirEntryBuf,x
-	sta DfiFs_ExchangeBuffer,x
-	dex
-	bpl copyEntry
-*/
 	; write the modified sector
 	lda DfiFs_SaveFile_DirEntryIdx
 	ldx DfiFs_SaveFile_DirEntryTrk
@@ -459,7 +457,7 @@ copyEntry:
 	.bankJsr(L_DfiFs_Dir_WriteDirEntry)
 	bcs error2
 
-	; the first 2 bytes are reserved
+	; set buffer pointer for the new file, the first 2 bytes are reserved
 	ldy DfiFs_ChannelBufferIdx
 	lda #2
 	sta DfiFs_BlockPtr,y
@@ -623,9 +621,75 @@ error:
 closeReplaceFile:
 .defBJL(closeReplaceFile)
     .(
-notYet:
-	inc $d020
-	jmp notYet 
+	; write last block
+
+	ldx DfiFs_ChannelBufferIdx
+	ldy DfiFs_BlockPtr,x
+
+	; DfiFs_BlockPtr points to the next free buffer address,
+	; so DfiFs_BlockPtr-1 is the last used byte
+	ldx #0
+	dey
+	.bankJsr(L_setSectorLink)
+	bcs error
+
+	; write the modified sector
+	ldx DfiFs_SaveFile_Trk
+	ldy DfiFs_SaveFile_Sec
+	lda DfiFs_ChannelBufferIdx
+	.bankJsr(L_DfiFs_WriteBlock)
+	bcs error
+
+	; now finalize the directory entry
+
+	; first read the old entry
+	lda DfiFs_SaveFile_DirEntryIdx
+	ldx DfiFs_SaveFile_DirEntryTrk
+	ldy DfiFs_SaveFile_DirEntrySec
+	.bankJsr(L_DfiFs_Dir_ReadDirEntry)
+	bcs error
+
+	; scratch the old entry
+	ldx DfiFs_ExchangeBuffer+$03
+	ldy DfiFs_ExchangeBuffer+$04
+	jsr scratchOneFile
+	bcs error
+
+	; finalize the dir entry
+	lda DfiFs_ExchangeBuffer+$02
+	and #$ff-$20
+	sta DfiFs_ExchangeBuffer+$02
+
+	; copy replace trk/sec
+	lda DfiFs_ExchangeBuffer+$1c
+	sta DfiFs_ExchangeBuffer+$03
+	lda DfiFs_ExchangeBuffer+$1d
+	sta DfiFs_ExchangeBuffer+$04
+	lda #0
+	sta DfiFs_ExchangeBuffer+$1c
+	sta DfiFs_ExchangeBuffer+$1d
+
+	; write filesize
+	lda DfiFs_SaveFile_Blocks
+	sta DfiFs_ExchangeBuffer+$1e
+	lda DfiFs_SaveFile_Blocks+1
+	sta DfiFs_ExchangeBuffer+$1f
+
+	; write the modified sector
+	lda DfiFs_SaveFile_DirEntryIdx
+	ldx DfiFs_SaveFile_DirEntryTrk
+	ldy DfiFs_SaveFile_DirEntrySec
+	.bankJsr(L_DfiFs_Dir_WriteDirEntry)
+	bcs error
+
+	.bankJsr(L_DfiFs_Bam_flushBuffer)
+	bcs error
+
+	.bankJsr(L_DfiFs_Dir_FlushDirBlock)
+	rts
+
+error:
+	rts
     .)
 
 ;--------------------------------------

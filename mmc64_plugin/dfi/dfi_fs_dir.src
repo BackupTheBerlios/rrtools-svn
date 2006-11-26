@@ -240,7 +240,7 @@ error:
 ;
 ; Returns:
 ;   Carry: Clear=success / Set=error
-;   A: index in directory block (1-8)
+;   A: index in directory block (0 - 7)
 ;   X: directory track
 ;   Y: directory sector
 ;
@@ -262,8 +262,8 @@ getFreeDirEntry:
 
 	jsr findNextMatchingDirEntry
 	bcs error
-	tax
-	beq foundFreeEntry
+	cmp #$ff
+	bne foundFreeEntry
 
 	; nothing found, try to append a new directory block
 

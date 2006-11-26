@@ -287,6 +287,15 @@ space:
 	bne noAtSign
 	jsr DfiFs_Cmd_GetChar
 	sta DfiFs_Cmd_Entry_HasAtSign
+
+	; ignore all chars until ':'
+skipUntilColon:
+	jsr DfiFs_Cmd_PeekChar
+	cmp #':'
+	beq noDevNr
+	jsr DfiFs_Cmd_GetChar
+	bcc skipUntilColon
+
 noAtSign:
 
 	; chars between actual position and the colon, read them in
@@ -832,46 +841,14 @@ loopOverAllFiles:
 	stx DfiFs_ScratchFile_DirEntryTrk
 	sty DfiFs_ScratchFile_DirEntrySec
 
-	jsr scratchOneFile
-	bcs error
-
-	; one file scratched
-	inc DfiFs_Cmd_ScratchCounter
-	bne loopOverAllFiles
-	inc DfiFs_Cmd_ScratchCounter+1
-	jmp loopOverAllFiles
-
-fileNotFound:
-	clc
-error:
-	rts
-    .)
-
-
-scratchOneFile:
-    .(
 	; read first file block
 	ldx DfiFs_ExchangeBuffer+3
-	beq error
+	; skip file for illegal track
+	beq loopOverAllFiles
 	ldy DfiFs_ExchangeBuffer+4
 
-	; loop over all blocks and free them
-loopOverAllBlocks:
-	lda #DfiFs_Cfg_SysBufferIdx
-	stx DfiFs_ScratchFile_Trk
-	sty DfiFs_ScratchFile_Sec
-	.bankJsr(L_DfiFs_ReadBlock)
+	jsr scratchOneFile
 	bcs error
-
-	ldx DfiFs_ScratchFile_Trk
-	ldy DfiFs_ScratchFile_Sec
-	.bankJsr(L_DfiFs_Bam_Free)
-	bcs error
-
-	.bankJsr(L_getSectorLink)
-	bcs error
-	txa
-	bne loopOverAllBlocks
 
 	; clear the dir entry
 
@@ -891,6 +868,39 @@ loopOverAllBlocks:
 	ldx DfiFs_ScratchFile_DirEntryTrk
 	ldy DfiFs_ScratchFile_DirEntrySec
 	.bankJsr(L_DfiFs_Dir_WriteDirEntry)
+
+	; one file scratched
+	inc DfiFs_Cmd_ScratchCounter
+	bne loopOverAllFiles
+	inc DfiFs_Cmd_ScratchCounter+1
+	jmp loopOverAllFiles
+
+fileNotFound:
+	clc
+error:
+	rts
+    .)
+
+
+scratchOneFile:
+    .(
+	; loop over all blocks and free them
+loopOverAllBlocks:
+	lda #DfiFs_Cfg_SysBufferIdx
+	stx DfiFs_ScratchFile_Trk
+	sty DfiFs_ScratchFile_Sec
+	.bankJsr(L_DfiFs_ReadBlock)
+	bcs error
+
+	ldx DfiFs_ScratchFile_Trk
+	ldy DfiFs_ScratchFile_Sec
+	.bankJsr(L_DfiFs_Bam_Free)
+	bcs error
+
+	.bankJsr(L_getSectorLink)
+	bcs error
+	txa
+	bne loopOverAllBlocks
 	rts
 
 error:
