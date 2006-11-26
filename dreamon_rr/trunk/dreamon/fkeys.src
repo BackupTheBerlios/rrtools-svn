@@ -1,0 +1,677 @@
+/***************************************************************************
+ *   Copyright (C) 2000 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+
+;--------------------------------------
+
+
+	.(	;*** FKeys ***
+
+;--------------------------------------
+
+;--------------------------------------
+; Search FKey sucht den y-ten String im
+; Stringpool. Y steht im Y-Reg. ;-)
+; Return - Carry Clear=Success, Adress in Long Akku0
+;	Set=Error
+;
+; Aufbau des FKey-Stringpools
+;	length	(WORD) Length of Stringtext+2
+;	stringtext BYTE*(Laenge-2)
+;--------------------------------------
+
+@0FKeys_SearchText:
+	sty FKeysZp_Nr
+	ldx #StringBufZp_Start
+	.LongJsr(L_LongLib_LoadWORD)
+SearchFKey0:
+	ldy #2
+	jsr GetCRTRam
+	clc
+	dec FKeysZp_Nr				;1 - 16
+	beq SearchFKey2
+	lda LongLibZp_Akku0
+	adc CRTRamBSS_Buffer
+	sta LongLibZp_Akku0
+	lda LongLibZp_Akku0+1
+	adc CRTRamBSS_Buffer+1
+	sta LongLibZp_Akku0+1
+
+	lda LongLibZp_Akku0
+	cmp StringBufZp_FKeysEnd
+	lda LongLibZp_Akku0+1
+	sbc StringBufZp_FKeysEnd+1
+	bcc SearchFKey0
+SearchFKey2:
+	rts
+
+;--------------------------------------
+
+@0FKeys_GetChar:
+GetChar0:
+	ldx FKeysBSS_MacroStackPos
+	ldy FKeysBSS_MacroStackNr-1,x
+	jsr FKeys_SearchText
+	bcs GetCharMacEnd			; Bei Err Macro Play beenden
+	ldx FKeysBSS_MacroStackPos
+	inc FKeysBSS_MacroStackLo-1,x
+	bne GetChar1
+	inc FKeysBSS_MacroStackHi-1,x
+GetChar1:
+	ldy FKeysBSS_MacroStackLo-1,x		;Compare actual Length with...
+	lda FKeysBSS_MacroStackHi-1,x
+	cpy CRTRamBSS_Buffer			;...max Length
+	sbc CRTRamBSS_Buffer+1
+	bcs GetCharMacEnd			;End of Buffer
+	tya
+	adc LongLibZp_Akku0
+	sta LongLibZp_Akku0
+	lda FKeysBSS_MacroStackHi-1,x
+	adc LongLibZp_Akku0+1
+	sta LongLibZp_Akku0+1
+	ldy #1
+	jsr GetCRTRam
+	lda CRTRamBSS_Buffer
+	cmp #Spi_Idn
+	bne GetChar2
+	lda FKeysBSS_Flags
+	eor #KeyBFlag_KeyNrm|KeyBFlag_KeySpi
+	sta FKeysBSS_Flags
+	bcs GetChar0				;Carry is always set here as cmp returned equal
+GetChar2:
+	bit FKeysBSS_Flags
+	bpl GetChar3
+	jsr KeyB_AutoKeysFKeys
+GetChar3:
+	tax
+	lda FKeysBSS_Flags
+	rts
+
+GetCharMacEnd:
+	dec FKeysBSS_MacroStackPos
+	bne GetCharMacEnd0
+	jsr ComLibVect_CursorBlinkNorm
+GetCharMacEnd0:
+	lda #KeyBFlag_KeySpi
+	sta FKeysBSS_Flags
+	lda #0					; No Flags -> No Keys
+	rts
+
+;--------------------------------------
+
+@0FKeys_PutChar:
+	sta FKeysZp_Flags
+	stx FKeysZp_Key
+	and #$c0
+	cmp FKeysBSS_RecFlags
+	beq PutChar0
+	sta FKeysBSS_RecFlags
+	lda #Spi_Idn
+	jsr DecPtr
+	bcs TempMemFull
+PutChar0:
+	lda FKeysZp_Key
+	jsr DecPtr
+	bcc PutExit
+TempMemFull:
+	jsr FKeys_TempBufToFKey
+PutExit:
+	lda FKeysZp_Flags
+	ldx FKeysZp_Key
+	rts
+
+
+DecPtr:
+	sta CRTRamBSS_Buffer
+	;does this char still fit in the space between LabelsEnd and TempEnd?
+	;  --TempEnd >= LabelsEnd ?
+	sec
+	lda StringBufZp_TempEnd
+	sbc #1
+	sta StringBufZp_TempEnd
+	sta LongLibZp_Akku0
+	tay
+	lda StringBufZp_TempEnd+1
+	sbc #0
+	sta StringBufZp_TempEnd+1
+	sta LongLibZp_Akku0+1
+	bcc DecPtr_Full
+	tax
+	cpy StringBufZp_LabelsEnd
+	sbc StringBufZp_LabelsEnd+1
+	bcc DecPtr_Full				;Carry clear == [ --TempEnd >= LabelsEnd ]
+
+; 2*TempEnd-End is easier than TempEnd-(End-TempEnd)
+	tya
+	asl
+	tay
+	txa
+	rol
+	tax
+	sec
+	tya
+	sbc StringBufZp_End
+	tay
+	txa
+	sbc StringBufZp_End+1
+	tax
+	bcc DecPtr_Full
+
+	clc
+	tya
+	adc FKeysBSS_OldKeyLen
+	tay
+	bcc DecPtr0
+	inx
+	beq DecPtr_Full
+DecPtr0:
+	cpy StringBufZp_LabelsEnd
+	txa
+	sbc StringBufZp_LabelsEnd+1
+	bcc DecPtr_Full
+
+	ldy #1
+	jsr PutCRTRam
+	clc
+	rts
+
+
+DecPtr_Full:
+	inc StringBufZp_TempEnd
+	bne DecPtr_Full0
+	inc StringBufZp_TempEnd+1
+DecPtr_Full0:
+	sec
+	rts
+
+;--------------------------------------
+
+@0FKeys_TempBufToFKey:
+
+;Berechne die Laenge des eingelesenen FKeys
+;Das ist die Groesse des Buffers (End-TempEnd)
+;und 2 Byte fuer die Laenge. Also insgesammt
+; StringBufZp_TmpLen = StringBufZp_End - StringBufZp_TempEnd + 2
+	lda StringBufZp_End
+	sec
+	sbc StringBufZp_TempEnd
+	tay
+	lda StringBufZp_End+1
+	sbc StringBufZp_TempEnd+1
+	cpy #$fe
+	iny
+	iny
+	sty StringBufZp_TmpLen
+	adc #0
+	sta StringBufZp_TmpLen+1
+
+;Hole die Startadresse des zu ersetzenden FKeys
+;und speichere sie in FKeysZp_MoveFKeyAdr ab
+;Die Quelle beim Kopieren ist 'Hinter dem FKey Eintrag'
+;FKeysZp_FKeyAdr+FKeysBSS_OldKeyLen
+	ldy FKeysBSS_RecordKey
+	jsr FKeys_SearchText
+	lda LongLibZp_Akku0
+	sta FKeysZp_FKeyAdr
+	clc
+	adc FKeysBSS_OldKeyLen
+	sta CopyCRTZp_Src
+	lda LongLibZp_Akku0+1
+	sta FKeysZp_FKeyAdr+1
+	adc FKeysBSS_OldKeyLen+1
+	sta CopyCRTZp_Src+1
+
+;Die Laenge des zu verschiebenden Bereiches
+;ist das Ende aller Eintraege (StringBufZp_LabelsEnd)
+;minus dem Ende des alten FKey Eintrags ( CopyCRTZp_Src )
+;Also insgesammt
+;StringBufZp_LabelsEnd - CopyCRTZp_Src
+	lda StringBufZp_LabelsEnd
+	sec
+	sbc CopyCRTZp_Src
+	sta CopyCRTZp_Len
+	lda StringBufZp_LabelsEnd+1
+	sbc CopyCRTZp_Src+1
+	sta CopyCRTZp_Len+1
+
+;Passt der neue FKey komplett in den Platz des alten hinein?
+;D.h. ist FKeysBSS_OldKeyLen >= StringBufZp_TmpLen
+	lda FKeysBSS_OldKeyLen
+	sec
+	sbc StringBufZp_TmpLen
+	tay
+	lda FKeysBSS_OldKeyLen+1
+	sbc StringBufZp_TmpLen+1
+	bcs Move0
+
+;Der neue FKey ist laenger als der alte.
+;Alles hinter dem FKey Eintrag muss also nach hinten ver-
+;schoben werden, um genuegend Platz zu schaffen.
+;Die Anzahl der Bytes, um die der Bereich nach Hinten verschoben
+;werden soll, ist durch die Subtraktion schon berechnet,
+;muss aber noch invertiert werden.
+	eor #$ff
+	sta StringBufZp_TmpOver+1
+	tya
+	eor #$ff
+	sta StringBufZp_TmpOver
+
+;Das Ziel beim Kopieren ist StringBufZp_TmpOver+1 Bytes hinter
+;der Quelle
+	lda StringBufZp_TmpOver
+	sec
+	adc CopyCRTZp_Src
+	sta CopyCRTZp_Dst
+	lda StringBufZp_TmpOver+1
+	adc CopyCRTZp_Src+1
+	sta CopyCRTZp_Dst+1
+
+;Kopiere den Bereich nach hinten
+	jsr CopyCRTRam
+
+;Der neue Wert fuer StringBufZp_FKeysEnd und StringBufZp_LabelsEnd ist
+;jeweils um StringBufZp_TmpOver Bytes groesser
+	lda StringBufZp_FKeysEnd
+	clc
+	adc StringBufZp_TmpOver
+	sta StringBufZp_FKeysEnd
+	lda StringBufZp_FKeysEnd+1
+	adc StringBufZp_TmpOver+1
+	sta StringBufZp_FKeysEnd+1
+	lda StringBufZp_LabelsEnd
+	clc
+	adc StringBufZp_TmpOver
+	sta StringBufZp_LabelsEnd
+	lda StringBufZp_LabelsEnd+1
+	adc StringBufZp_TmpOver+1
+	sta StringBufZp_LabelsEnd+1
+
+;kopiere den neuen FKey in den geschaffenen Platz
+	jmp Move1
+
+Move0:
+;Die alte Laenge ist groesser oder gleich der neuen Laenge.
+;Der neue FKey passt also komplett in die alte Eintrag hinein
+	sty StringBufZp_TmpOver
+	sta StringBufZp_TmpOver+1
+
+;sind der alte und der neue Eintrag gleich lang (also ist StringBufZp_TmpOver
+;gleich 0), braucht nichts verschoben zu werden
+	ora StringBufZp_TmpOver
+	beq Move1
+
+;Der alte Eintrag ist StringBufZp_TmpOver Bytes zu gross.
+;Ziel des Kopierens ist also CopyCRTZp_Src - StringBufZp_TmpOver
+	lda CopyCRTZp_Src
+	;sec				;Carry is always set here (bcs)
+	sbc StringBufZp_TmpOver
+	sta CopyCRTZp_Dst
+	lda CopyCRTZp_Src+1
+	sbc StringBufZp_TmpOver+1
+	sta CopyCRTZp_Dst+1
+
+;Kopiere den Bereich nach vorne
+	jsr CopyCRTRam
+
+;Der neue Wert fuer StringBufZp_FKeysEnd und StringBufZp_LabelsEnd ist
+;jeweils um StringBufZp_TmpOver Bytes kleiner
+	lda StringBufZp_FKeysEnd
+	sec
+	sbc StringBufZp_TmpOver
+	sta StringBufZp_FKeysEnd
+	lda StringBufZp_FKeysEnd+1
+	sbc StringBufZp_TmpOver+1
+	sta StringBufZp_FKeysEnd+1
+	lda StringBufZp_LabelsEnd
+	sec
+	sbc StringBufZp_TmpOver
+	sta StringBufZp_LabelsEnd
+	lda StringBufZp_LabelsEnd+1
+	sbc StringBufZp_TmpOver+1
+	sta StringBufZp_LabelsEnd+1
+
+Move1:
+;Kopiere den neuen FKey ueber den alten
+;der Temp Buffer wurde rueckwaerts geschrieben
+	lda StringBufZp_TmpLen
+	sta CRTRamBSS_Buffer
+	lda StringBufZp_TmpLen+1
+	sta CRTRamBSS_Buffer+1
+	lda FKeysZp_FKeyAdr
+	sta LongLibZp_Akku0
+	clc
+	adc #2
+	sta CopyCRTZp_Dst
+	lda FKeysZp_FKeyAdr+1
+	sta LongLibZp_Akku0+1
+	adc #0
+	sta CopyCRTZp_Dst+1
+	ldy #2
+	jsr PutCRTRam
+
+	lda StringBufZp_End
+	sta CopyCRTZp_Src
+	lda StringBufZp_End+1
+	sta CopyCRTZp_Src+1
+	lda #1
+	sta CopyCRTZp_Len
+Move2:
+	lda CopyCRTZp_Src
+	bne Move3
+	dec CopyCRTZp_Src+1
+Move3:
+	dec CopyCRTZp_Src
+	lda CopyCRTZp_Src
+	cmp StringBufZp_TempEnd
+	lda CopyCRTZp_Src+1
+	sbc StringBufZp_TempEnd+1
+	bcc Move4
+
+	lda #0
+	sta CopyCRTZp_Len+1
+	jsr CopyCRTA
+	inc CopyCRTZp_Dst
+	bne Move2
+	inc CopyCRTZp_Dst+1
+	bne Move2			;bra
+
+Move4:
+	lda StringBufZp_End
+	sta StringBufZp_TempEnd
+	lda StringBufZp_End+1
+	sta StringBufZp_TempEnd+1
+
+	lda #0
+	sta FKeysBSS_RecordKey				; Record Off
+	jmp ComLibVect_CursorBlinkNorm
+
+
+
+;--------------------------------------
+; Will be used by FKeys_TempBufToFKeys
+; and some Label-Routines (I think)
+;
+; CopyCRTZp_Src (WORD) = Source Adress
+; CopyCRTZp_Dst (WORD) = Destination Adress
+; CopyCRTZp_Len (WORD) = Length in bytes
+;--------------------------------------
+CopyCRTRam:
+	lda CopyCRTZp_Src
+	cmp CopyCRTZp_Dst
+	lda CopyCRTZp_Src+1
+	sbc CopyCRTZp_Dst+1
+	bcc CopyCRTU
+;CopyCRTRam Down
+CopyCRTD:
+	jsr CopyCRTA
+	lda CopyCRTZp_SegSize
+	bne CopyCRTD1
+	inc CopyCRTZp_Src+1
+	inc CopyCRTZp_Dst+1
+	bne CopyCRTD			;bra
+CopyCRTD1:
+	rts
+
+CopyCRTU:
+	lda CopyCRTZp_Src
+	;clc				;Carry is always clear here
+	adc CopyCRTZp_Len
+	sta CopyCRTZp_Src
+	lda CopyCRTZp_Src+1
+	adc CopyCRTZp_Len+1
+	sta CopyCRTZp_Src+1
+
+	lda CopyCRTZp_Dst
+	;clc				;Carry should be clear here
+	adc CopyCRTZp_Len
+	sta CopyCRTZp_Dst
+	lda CopyCRTZp_Dst+1
+	adc CopyCRTZp_Len+1
+	sta CopyCRTZp_Dst+1
+
+CopyCRTU0:
+	lda CopyCRTZp_Len+1
+	bne CopyCRTU1
+	lda CopyCRTZp_Src
+	sec
+	sbc CopyCRTZp_Len
+	sta CopyCRTZp_Src
+	bcs CopyCRTU2
+CopyCRTU1:
+	dec CopyCRTZp_Src+1
+CopyCRTU2:
+	lda CopyCRTZp_Len+1
+	bne CopyCRTU3
+	lda CopyCRTZp_Dst
+	sec
+	sbc CopyCRTZp_Len
+	sta CopyCRTZp_Dst
+	bcs CopyCRTU4
+CopyCRTU3:
+	dec CopyCRTZp_Dst+1
+CopyCRTU4:
+	jsr CopyCRTA
+	lda CopyCRTZp_SegSize
+	beq CopyCRTU0
+	rts
+
+
+CopyCRTA:
+	ldy #0
+	lda CopyCRTZp_Len+1
+	bne CopyCRTA0
+	ldy CopyCRTZp_Len
+CopyCRTA0:
+	sty CopyCRTZp_SegSize
+	lda CopyCRTZp_Src
+	sta LongLibZp_Akku0
+	lda CopyCRTZp_Src+1
+	sta LongLibZp_Akku0+1
+	jsr GetCRTRam
+	ldy CopyCRTZp_SegSize
+	lda CopyCRTZp_Dst
+	sta LongLibZp_Akku0
+	lda CopyCRTZp_Dst+1
+	sta LongLibZp_Akku0+1
+	jsr PutCRTRam
+	dec CopyCRTZp_Len+1
+	rts
+
+;--------------------------------------
+
+/*
+; Move StringBuf
+
+
+; Zp_TmpLen = End - TempEnd + 2
+	ldx #StringBufZp_End
+	jsr LongLib_LoadPtr
+	ldx #StringBufZp_TempEnd
+	jsr LongLib_SubLONGPtrFrom
+	lda #2
+	jsr LongLib_AddBYTE
+	ldx #StringBufZp_TmpLen
+	jsr LongLib_StorePtr
+
+
+	ldy FKeysBSS_RecordKey
+	jsr SearchFKey
+	ldx #FKeysZp_MoveFKeyAdr
+	jsr LongLib_StorePtr
+	ldx #StringBufZp_LabelsEnd
+	jsr LongLib_LoadPtr
+	rep #%00110000
+    MSize_16
+    XSize_16
+	lda FKeysBSS_OldKeyLen
+	sec
+	sbc StringBufZp_TmpLen
+	bcs Move0
+	eor #$ffff
+	sta StringBufZp_TmpOver
+	tay
+	sep #%00100000
+    MSize_8
+MoveLoop0:
+	lda [LongLibZp_Akku0]
+	sta [LongLibZp_Akku0],y
+	lda #1
+	jsr LongLib_SubBYTE
+	ldx LongLibZp_Akku0
+	cpx FKeysZp_MoveFKeyAdr
+	lda LongLibZp_Akku0+2
+	sbc FKeysZp_MoveFKeyAdr+2
+	bcs MoveLoop0
+	sep #%00010000
+    XSize_8
+	stz StringBufZp_TmpOver+2
+	ldx #StringBufZp_TmpOver
+	jsr LongLib_LoadPtr
+	ldx #StringBufZp_FKeysEnd
+	jsr LongLib_AddLONGPtr
+	jsr LongLib_StorePtr
+	ldx #StringBufZp_TmpOver
+	jsr LongLib_LoadPtr
+	ldx #StringBufZp_LabelsEnd
+	jsr LongLib_AddLONGPtr
+	jsr LongLib_StorePtr
+	bra Move1
+
+    MSize_16
+    XSize_16
+Move0:
+	inc
+	sta StringBufZp_TmpOver
+	tay
+	sep #%00100000
+    MSize_8
+	ldx #FKeysZp_MoveFKeyAdr
+	jsr LongLib_LoadPtr
+MoveLoop1:
+	lda [LongLibZp_Akku0],y
+	sta [LongLibZp_Akku0]
+	jsr LongLib_Inc
+	ldx LongLibZp_Akku0
+	cpx StringBufZp_LabelsEnd
+	lda LongLibZp_Akku0+2
+	sbc StringBufZp_LabelsEnd+2
+	bcc MoveLoop1
+	sep #%00010000
+    XSize_8
+	stz StringBufZp_TmpOver+2
+	ldx #StringBufZp_TmpOver
+	jsr LongLib_LoadPtr
+	ldx #StringBufZp_FKeysEnd
+	jsr LongLib_SubFromLONGPtr
+	jsr LongLib_StorePtr
+	ldx #StringBufZp_TmpOver
+	jsr LongLib_LoadPtr
+	ldx #StringBufZp_LabelsEnd
+	jsr LongLib_SubFromLONGPtr
+	jsr LongLib_StorePtr
+Move1:
+	ldx #FKeysZp_MoveFKeyAdr
+	jsr LongLib_LoadPtr
+	rep #%00110000
+    MSize_16
+    XSize_16
+	lda StringBufZp_TmpLen
+	dec
+	tay
+	sta [LongLibZp_Akku0]
+	sep #%00100000
+    MSize_8
+	dey
+	dey
+	bmi Move3				; Empty FKey
+
+	lda #2
+	jsr LongLib_AddBYTE
+Move2:
+	lda [StringBufZp_TempEnd],y
+	sta [LongLibZp_Akku0]
+	jsr LongLib_Inc
+	dey
+	bpl Move2
+Move3:
+	sep #%00010000
+    XSize_8
+	ldx #StringBufZp_End
+	jsr LongLib_LoadPtr
+	ldx #StringBufZp_TempEnd
+	jsr LongLib_StorePtr
+	stz FKeysBSS_RecordKey				; Record Off
+	jmp ComLibVect_CursorBlinkNorm
+*/
+
+/*-----------------------------------*/
+
+	.)	; *** FKeys ***
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

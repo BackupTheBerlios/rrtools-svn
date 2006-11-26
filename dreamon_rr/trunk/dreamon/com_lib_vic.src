@@ -1,0 +1,381 @@
+/***************************************************************************
+ *   Copyright (C) 2000 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+
+	.(	/* ComLib_VIC */
+
+;--------------------------------------
+
+VICVects:
+	.DW ClearLine_VIC		;ClearLine
+	.DW CopyLine_VIC		;CopyLine
+	.DW GetLine_VIC			;GetLine
+	.DW PutLine_VIC			;PutLine
+
+	.DW CrsrOn_VIC			;CursorOn
+	.DW CrsrOff_VIC			;CursorOff
+	.DW CrsrBlink_VIC		;CursorBlink
+	.DW CrsrBlinkFast_VIC		;CursorBlinkFast
+	.DW CrsrBlinkNorm_VIC		;CursorBlinkNorm
+
+	.DW GetChar_VIC			;GetChar
+	.DW CharOut_VIC			;CharOut
+
+	.DW RevOn_VIC			;RevOn
+	.DW RevOff_VIC			;RevOff
+	.DW SwitchCharsets_VIC		;SwitchCharsets
+	.DW SetDebugBorder_VIC		;Bordercolor Black or Red
+
+	.DW Dummy_VIC			;Set VideoSubMode
+
+;--------------------------------------
+
+Dummy_VIC:
+	rts
+
+MakeLinePos_VIC:
+	tya
+	beq MakeXYPos_VIC
+	lda ComLib_LineConnect-1,y
+	beq MakeXYPos_VIC
+	dey
+MakeXYPos_VIC:
+	lda ComLib_ScrPosLo,y
+	sta ComLibZp_CursorPtr
+	sta ComLibZp_CursorColPtr
+	lda ComLib_ScrPosMi,y
+	ora #$04
+	sta ComLibZp_CursorPtr+1
+	eor #$dc
+	sta ComLibZp_CursorColPtr+1
+	rts
+
+
+GetChar_VIC:
+	ldy ComLibZp_CursorYPos
+	jsr MakeXYPos_VIC
+	ldy ComLibZp_CursorXPos
+	lda (ComLibZp_CursorPtr),y
+	rts
+
+
+CharOut_VIC:
+	ldy ComLibZp_CursorYPos
+	pha
+	jsr MakeXYPos_VIC
+	pla
+	ldy ComLibZp_CursorXPos
+	ora ComLibZp_VICAttrib
+	sta (ComLibZp_CursorPtr),y
+	lda ComLibZp_Color
+	sta (ComLibZp_CursorColPtr),y
+	rts
+
+
+GetLine_VIC:
+	jsr MakeLinePos_VIC
+	jsr ComLib_GetLineLen
+GetLine_VIC0:
+	lda (ComLibZp_CursorPtr),y
+	sta ComLibBSS_LineBuf,y
+	lda (ComLibZp_CursorColPtr),y
+	sta ComLibBSS_ColBuf,y
+	dey
+	bpl GetLine_VIC0
+	rts
+
+
+PutLine_VIC:
+	jsr MakeLinePos_VIC
+	jsr ComLib_GetLineLen
+PutLine_VIC0:
+	lda ComLibBSS_LineBuf,y
+	sta (ComLibZp_CursorPtr),y
+	lda ComLibBSS_ColBuf,y
+	sta (ComLibZp_CursorColPtr),y
+	dey
+	bpl PutLine_VIC0
+	rts
+
+
+;--------------------------------------
+
+RevOn_VIC:
+	lda ComLibZp_VICAttrib
+	ora #$80
+	sta ComLibZp_VICAttrib
+	rts
+
+RevOff_VIC:
+	lda ComLibZp_VICAttrib
+	and #$7f
+	sta ComLibZp_VICAttrib
+	rts
+
+SwitchCharsets_VIC:
+	sei
+	sta $d07f
+	lda $d018
+	eor #2
+	sta $d018
+	sta $d07e
+	sta $d073
+	cli
+	rts
+
+
+;--------------------------------------
+
+ClearLine_VIC:
+	txa
+	tay
+	jsr MakeXYPos_VIC
+	ldy ComLibZp_CursorMaxXPos
+	dey
+	lda #' '
+ClearLine_VIC0:
+	sta (ComLibZp_CursorPtr),y
+	dey
+	bpl ClearLine_VIC0
+	rts
+
+
+;--------------------------------------
+;
+;Copy Line X->Line Y with Colors
+;
+;--------------------------------------
+
+CopyLine_VIC:
+	tya
+	pha
+
+	lda ComLib_ScrPosLo,x
+	sta ComLibZp_VICLineAPtr
+	lda ComLib_ScrPosMi,x
+	ora #4
+	sta ComLibZp_VICLineAPtr+1
+	lda ComLib_ScrPosLo,y
+	sta ComLibZp_VICLineBPtr
+	lda ComLib_ScrPosMi,y
+	ora #4
+	sta ComLibZp_VICLineBPtr+1
+	ldy ComLibZp_CursorMaxXPos
+	dey
+CopyLineVIC0:
+	lda (ComLibZp_VICLineAPtr),y
+	sta (ComLibZp_VICLineBPtr),y
+	dey
+	bpl CopyLineVIC0
+
+	pla
+	tay
+	pha
+
+	lda ComLib_ScrPosLo,x
+	sta ComLibZp_VICLineAPtr
+	lda ComLib_ScrPosMi,x
+	ora #$d8
+	sta ComLibZp_VICLineAPtr+1
+	lda ComLib_ScrPosLo,y
+	sta ComLibZp_VICLineBPtr
+	lda ComLib_ScrPosMi,y
+	ora #$d8
+	sta ComLibZp_VICLineBPtr+1
+	ldy ComLibZp_CursorMaxXPos
+	dey
+CopyLineVIC1:
+	lda (ComLibZp_VICLineAPtr),y
+	sta (ComLibZp_VICLineBPtr),y
+	dey
+	bpl CopyLineVIC1
+
+	pla
+	tay
+	rts
+
+
+;--------------------------------------
+;
+; Fuer jedes Display CrsrOn, CrsrOff und CrsrBlink
+;
+;--------------------------------------
+
+
+CrsrOn_VIC:
+	sei
+	lda #0
+	sta ComLibZp_CrsrBlinkCnt
+	sta ComLibZp_CrsrBlink
+	ldy ComLibZp_CursorYPos
+	jsr MakeXYPos_VIC
+	ldy ComLibZp_CursorXPos
+	lda (ComLibZp_CursorPtr),y
+	sta ComLibZp_CrsrStoreChar
+	lda (ComLibZp_CursorColPtr),y
+	sta ComLibZp_CrsrStoreCol
+	lda #1
+	sta ComLibZp_CrsrFlag
+	cli
+	rts
+
+
+CrsrOff_VIC:
+	sei
+	lda #0
+	sta ComLibZp_CrsrFlag
+	sec
+	rol ComLibZp_CrsrBlink
+	jsr ShowCrsr_VIC
+	cli
+	rts
+
+
+CrsrBlink_VIC:
+	lda ComLibZp_CrsrFlag
+	beq CrsrBlink_VIC0
+	dec ComLibZp_CrsrBlinkCnt
+	bpl CrsrBlink_VIC0
+	lda ComLibZp_CrsrBlinkVal
+	sta ComLibZp_CrsrBlinkCnt
+	jsr ShowCrsr_VIC
+	inc ComLibZp_CrsrBlink
+CrsrBlink_VIC0:
+	rts
+
+
+ShowCrsr_VIC:
+	ldy ComLibZp_CursorYPos
+	lda ComLib_ScrPosLo,y
+	sta ComLibZp_BlinkPtr
+	sta ComLibZp_BlinkColPtr
+	lda ComLib_ScrPosMi,y
+	ora #4
+	sta ComLibZp_BlinkPtr+1
+	eor #$dc
+	sta ComLibZp_BlinkColPtr+1
+	ldx ComLibZp_CrsrStoreCol
+	ldy ComLibZp_CursorXPos
+	lda ComLibZp_CrsrBlink
+	lsr
+	lda ComLibZp_CrsrStoreChar
+	bcs ShowCrsr_VIC0
+	lda (ComLibZp_BlinkPtr),y
+	eor #$80
+	ldx Palette+Palette_Cursor
+ShowCrsr_VIC0:
+	sta (ComLibZp_BlinkPtr),y
+	txa
+	sta (ComLibZp_BlinkColPtr),y
+	rts
+
+
+;--------------------------------------
+
+@0ComLibVIC_InitDisplay:
+	lda #40
+	sta ComLibZp_CursorMaxXPos
+	lda #25
+	sta ComLibZp_CursorMaxYPos
+	sta ComLibZp_CursorMinLines
+	sta ComLibZp_CursorMaxLines
+	lda #0
+	sta ComLibZp_CursorXPos
+	sta ComLibZp_CursorYPos
+	sta ComLibZp_RedirOutput
+	jsr ComLib_MakeScrPosTab
+
+	lda #$1b
+	sta $d011
+	lda #0
+	sta $d015
+	lda #8
+	sta $d016
+	lda #$15
+	sta $d018
+	lda #0
+	sta $d021
+
+	jsr SetDebugBorder_VIC
+
+@0ComLibVIC_InitDisplayInstallerJMPIn:		;fuer Installer
+	lda #0
+	sta ComLibZp_VICAttrib
+
+	lda #<VICVects
+	ldx #>VICVects
+	.LongJsr(L_LongLib_LoadAXY)
+	jsr ComLib_InstallVects
+
+	lda #<VICPalette
+	ldx #>VICPalette
+	.LongJsr(L_LongLib_LoadAXY)
+	jsr ComLib_SetPalette
+
+	lda $dd02				;Hack to enable VIC-Bank0
+	and #%11111100
+	sta $dd02
+
+CrsrBlinkNorm_VIC:
+	lda #10
+	.DB $2c
+CrsrBlinkFast_VIC:
+	lda #7
+	sta ComLibZp_CrsrBlinkVal
+	rts
+
+
+SetDebugBorder_VIC:
+	lda #OptionFlag_MMap
+	bit OptionFlags
+	beq SetDebugBorder_VIC0
+	lda #2
+	.DB $2c
+SetDebugBorder_VIC0:
+	lda #0
+	sta $d020
+	rts
+
+;--------------------------------------
+
+/* ToDo: Copy VIC Palette from CRT Ram instead of Rom to enable editing of the colors */
+VICPalette:
+;	.DSB Palette_len
+	.DB 1   ;Default
+	.DB 2   ;Error
+	.DB 11  ;Command
+	.DB 1   ;Cursor
+	.DB 15  ;SystemTexts
+	.DB 12  ;Adress
+	.DB 11  ;DisAssBytes
+	.DB 15  ;DisAssMne
+	.DB 10  ;DisAssIll
+	.DB 1   ;DisAssFPoint
+	.DB 15  ;MDumpBytes
+	.DB 11  ;MDumpSeperator
+	.DB 12  ;MDumpChars
+
+;--------------------------------------
+
+	.)	/* ComLib_VIC */
+
+
+
+

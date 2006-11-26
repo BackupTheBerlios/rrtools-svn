@@ -1,0 +1,1901 @@
+/***************************************************************************
+ *   Copyright (C) 2000 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+
+;--------------------------------------
+;
+; OpcodeTabs fuer DreaMon
+;
+;--------------------------------------
+
+
+	.(	;*** Opcodes ***
+
+#if DREAMON_DEBUG_VERSION
+@0TestTrace:
+	.ShowMsg(Msg_CR)
+	jsr Opcodes_Trace
+	.LongJsr(L_LongLib_Akku0Out)
+	clc
+	rts
+#endif
+
+
+;--------------------------------------
+
+@0ReAss:
+	jsr NextSpaces
+	bcs ReAssErrMiss
+	jsr GetNum_GetHexLong
+	bcs ReAssErrNumber
+	ldx #Adress
+	jsr LongLib_StorePtr
+	bcc AssIn0			;bra
+ReAssErrMiss:
+	.ShowErr(Err_MissOp)
+	.DB $2c
+ReAssErrNumber:
+	.ShowErr(Err_Number)
+	sec
+AssExit:
+	rts
+
+@0Ass:
+	jsr NextSpaces
+	bcs Ass4Psy			;Fix weil zu weit!
+	jsr GetNum_GetHexLong
+	bcs ReAssErrNumber
+	ldx #Adress
+	jsr LongLib_StorePtr
+	jsr Spaces
+Ass4Psy:
+	bcs Ass4
+AssIn0:
+	jsr OutputBuf_Init
+	lda #0
+	sta RangeZp_Len
+Ass0:
+	jsr Spaces
+	bcs Ass1
+	lda CmdLinePos
+	sta RangeZp_Len+1
+;	jsr CheckPsy		;Psys not yet
+;	bcc Ass6
+	lda RangeZp_Len+1
+	sta CmdLinePos
+	jsr Opcodes_AssGet
+	ldy RangeZp_Len+1
+	bcc Ass2
+	tax
+	bne AssErr
+	sty CmdLinePos
+	lda #1
+	jsr GetNum_GetHexNDig
+	bcs Ass1
+	lda LongLibZp_Akku0
+	jsr OutputBuf_Byte
+	inc RangeZp_Len
+	jmp Ass0
+
+AssErr:
+	sec
+	rts
+
+Ass1:
+	jsr Spaces
+	bcs Ass7
+	cmp #';'
+	bne AssErr
+Ass7:
+	lda RangeZp_Len
+	beq AssErr
+	bne Ass3
+
+Ass2:
+	lda RangeZp_Len
+	beq Ass5
+	cpy CmdCursorXPos
+	bcs Ass3
+Ass5:
+	jsr OutputBuf_Clear
+	jsr Opcodes_AssMne
+	bcs AssErr
+Ass3:
+	jsr OutputBuf_Flush
+	bcs AssExit
+Ass6:
+	lda #0
+	sta ComLibZp_CursorXPos
+	jsr Opcodes_DisassNext
+	tay
+	ldx #Adress
+	jsr LongLib_LoadPtr
+	tya
+	.LongJsr(L_CmdRangeNextAdrAdd)
+Ass4:
+	.ShowMsg(Msg_CR)
+	lda #'a'
+	ldx Palette+Palette_Command
+	.LongJsr(L_ComLib_PrintRawColChar)
+	lda Palette+Palette_Adress
+	.LongJsr(L_ComLib_SetCol)
+	ldx #Adress
+	jsr LongLib_LoadPtr
+	jsr LongLib_Akku0Out
+	.LongJsr(L_ComLib_SpaceOut)
+	clc
+	rts
+
+
+CheckPsy:
+	jsr Spaces
+	bcs CheckPsyNo
+	.LongJsr(L_ComLib_ScrCode2Lower)
+/*
+	cmp #'z'
+	bne CheckPsyNo
+	jsr NextCmdChar
+	bcs CheckPsyNo
+	jmp FPoint_Parse
+*/
+CheckPsyNo:
+	sec
+	rts
+
+;--------------------------------------
+
+OpcodesExit:
+	rts
+@0Opcodes_StepIn:
+	lda #3
+	ldx #Adress
+	jsr InputBuf_Init
+	bcs OpcodesExit
+	ldx #3
+StepIn0:
+	lda InputBuffer,x
+	sta OpcodeZp_Copy,x
+	dex
+	bpl StepIn0
+        lda OpcodeZp_Copy
+	and #$e0
+	lsr
+	lsr
+	lsr
+	lsr
+	sta OpcodeZp_Row
+	lda OpcodeZp_Copy
+	and #$1f
+	tax
+	lda StepInJmpTabLo,x
+	sta OpcodesBSS_StepInJmp
+	lda StepInJmpTabHi,x
+	sta OpcodesBSS_StepInJmp+1
+	jmp (OpcodesBSS_StepInJmp)
+
+StepInJmpTabLo:
+	.DB <StepInR00, <StepInR01, <StepInR02, <StepInR03, <StepInR04, <StepInR05, <StepInR06, <StepInR07
+	.DB <StepInR08, <StepInR09, <StepInR0a, <StepInR0b, <StepInR0c, <StepInR0d, <StepInR0e, <StepInR0f
+	.DB <StepInR10, <StepInR11, <StepInR12, <StepInR13, <StepInR14, <StepInR15, <StepInR16, <StepInR17
+	.DB <StepInR18, <StepInR19, <StepInR1a, <StepInR1b, <StepInR1c, <StepInR1d, <StepInR1e, <StepInR1f
+StepInJmpTabHi:
+	.DB >StepInR00, >StepInR01, >StepInR02, >StepInR03, >StepInR04, >StepInR05, >StepInR06, >StepInR07
+	.DB >StepInR08, >StepInR09, >StepInR0a, >StepInR0b, >StepInR0c, >StepInR0d, >StepInR0e, >StepInR0f
+	.DB >StepInR10, >StepInR11, >StepInR12, >StepInR13, >StepInR14, >StepInR15, >StepInR16, >StepInR17
+	.DB >StepInR18, >StepInR19, >StepInR1a, >StepInR1b, >StepInR1c, >StepInR1d, >StepInR1e, >StepInR1f
+
+
+StepInR01:
+	jsr StepIn_LoadZpAdr
+	jsr StepIn_AddX
+	jsr StepIn_LoadInd
+	jsr StepIn_LoadAbsD
+	lda #2				;MemAsc Dump
+	clc
+	rts
+
+
+
+StepInR03:
+	jsr StepIn_LoadZpNum
+	jsr StepIn_AddS
+	lda #2				;MemAsc Dump
+	clc
+	rts
+
+StepInR04:
+	lda OpcodeZp_Row
+	cmp #$04
+	bne StepInR05
+	sec				;MPV not yet
+	rts
+
+StepInR05:
+StepInR06:
+	jsr StepIn_LoadZpAdr
+	lda #2				;MemAsc Dump
+	clc
+	rts
+
+
+StepInR07:
+	jsr StepIn_LoadZpAdr
+	jsr StepIn_LoadInd
+	jsr StepIn_LoadInd
+	lda #2				;MemAsc Dump
+	clc
+	rts
+
+StepInR08:
+	lda OpcodeZp_Row
+	cmp #$08
+	bcs StepInR08_Rts
+	jsr LongLib_SetZero
+	jsr StepIn_AddS
+	lda #2				;MemAsc Dump
+	clc
+StepInR08_Rts:
+	rts
+
+
+StepInR0a:
+	lda OpcodeZp_Row
+	cmp #$08
+	bcc StepInR0d
+	rts
+
+
+StepInR00:
+	lda OpcodeZp_Row
+	cmp #$0a
+	bcs StepInR00_Rts
+	cmp #$08
+	beq StepInR10
+
+	cmp #$02
+	beq StepInR0c_JmpAbs
+
+StepInR00_Rts:
+	rts
+
+
+StepInR10:
+	lda #2
+	jsr LongLib_AddBYTE		;Ersatz für OpcodeZp_Len
+	jsr Opcode_MakeRelBAdr
+	lda #0				;Disass
+	clc
+	rts
+
+
+StepInR0c:
+	lda OpcodeZp_Row
+	cmp #$04
+	beq StepInR0c_JmpAbs
+	cmp #$06
+	bne StepInR0d
+StepInR0c_JmpInd:
+	jsr StepIn_LoadAbsP		;Jmp Ind
+	jsr StepIn_LoadInd
+	jsr StepIn_LoadAbsP
+	jmp StepInR0c_DisAss
+StepInR0c_JmpAbs:
+	jsr StepIn_LoadAbsP
+StepInR0c_DisAss:
+	lda #0				;Disass
+	clc
+	rts
+
+
+StepInR0d:
+StepInR0e:
+	jsr StepIn_LoadAbsD
+	lda #2				;MemAsc Dump
+	clc
+	rts
+
+StepInR0f:
+	ldx #OpcodeZp_Copy+1
+	jsr LongLib_LoadPtr
+	lda #2				;MemAsc Dump
+	clc
+	rts
+
+
+StepInR1c:
+	lda OpcodeZp_Row
+	cmp #$04
+	beq StepInR1c_Jml
+	cmp #$0c
+	beq StepInR1c_JmlInd
+	and #$07
+	beq StepInR0d
+	cmp #$02
+	beq StepInR1d
+StepInR1c_AbsInd:
+	jsr StepIn_LoadAbsP		;Jmp/Jsr (Abs,x)
+	jsr StepIn_AddX
+	jsr StepIn_LoadInd
+	jsr StepIn_LoadAbsP
+	jmp StepInR1c_DisAss
+StepInR1c_Jml:
+	jsr StepIn_LoadLong
+	jmp StepInR1c_DisAss
+StepInR1c_JmlInd:
+	jsr StepIn_LoadAbsP
+	jsr StepIn_LoadInd
+	jsr StepIn_LoadLong
+StepInR1c_DisAss:
+	lda #0
+	clc
+	rts
+
+StepInR1d:
+	jsr StepIn_LoadAbsD
+	jsr StepIn_AddX
+	lda #2				;MemAsc Dump
+	clc
+	rts
+
+StepInR1e:
+	lda OpcodeZp_Row
+	cmp #$0a
+	bne StepInR1d
+	jsr StepIn_LoadAbsD
+	jsr StepIn_AddY
+	lda #2				;MemAsc Dump
+	clc
+	rts
+
+StepInR11:
+	jsr StepIn_LoadZpAdr
+	jsr StepIn_LoadInd
+	jsr StepIn_LoadAbsD
+	jsr StepIn_AddY
+	lda #2				;MemAsc Dump
+	clc
+	rts
+
+
+StepInR12:
+	jsr StepIn_LoadZpAdr
+	jsr StepIn_LoadInd
+	jsr StepIn_LoadAbsD
+	lda #2				;MemAsc Dump
+	clc
+	rts
+
+
+StepInR13:
+	jsr StepIn_LoadZpNum
+	jsr StepIn_AddS
+	jsr StepIn_LoadInd
+	jsr StepIn_LoadAbsD
+	jsr StepIn_AddY
+	lda #2				;MemAsc Dump
+	clc
+	rts
+
+StepInR15:
+	jsr StepIn_LoadZpAdr
+	jsr StepIn_AddX
+	lda #2				;MemAsc Dump
+	clc
+	rts
+
+StepInR16:
+	lda OpcodeZp_Row
+	and #$0c
+	cmp #80
+	bne StepInR15
+	jsr StepIn_LoadZpAdr
+	jsr StepIn_AddY
+	lda #2				;MemAsc Dump
+	clc
+	rts
+	
+
+StepInR17:
+	jsr StepIn_LoadZpAdr
+	jsr StepIn_LoadInd
+	jsr StepIn_LoadLong
+	jsr StepIn_AddY
+	lda #2				;MemAsc Dump
+	clc
+	rts
+
+StepInR19:
+	jsr StepIn_LoadAbsD
+	jsr StepIn_AddY
+	lda #2				;MemAsc Dump
+	clc
+	rts
+
+
+
+StepInR1f:
+	jsr StepIn_LoadLong
+	jsr StepIn_AddX
+	lda #2				;MemAsc Dump
+	clc
+	rts
+
+
+
+
+StepInR02:
+	lda OpcodeZp_Row
+	cmp #$0a
+	bcs StepInR02_Rts
+	cmp #$06
+	bcs StepInR02_RelLong
+	cmp #$02
+	beq StepInR02_Jsl
+	sec
+StepInR02_Rts:
+	rts
+StepInR02_RelLong:
+	lda #3
+	jsr LongLib_AddBYTE
+	clc
+	lda OpcodeZp_Copy+1
+	adc LongLibZp_Akku0
+	sta LongLibZp_Akku0
+	lda OpcodeZp_Copy+2
+	adc LongLibZp_Akku0+1
+	sta LongLibZp_Akku0+1
+	lda OpcodeZp_Row
+	and #2				;06 -> 02 (MemAscDump) und 08 -> 00 (Disass)
+	clc
+	rts
+StepInR02_Jsl:
+	jsr StepIn_LoadLong
+StepInR02_DisAss:
+	lda #0
+	clc
+	rts
+
+
+
+StepInR09:
+StepInR0b:
+
+StepInR14:
+
+StepInR18:
+StepInR1a:
+StepInR1b:
+	sec				;not yet implemented
+	rts
+
+
+StepIn_LoadCOP:
+	lda #$e4
+;	ldx SubZeroZp_Regs+SubZero_EBit
+	beq LoadVect0
+	lda #$f4
+	bne LoadVect0
+
+StepIn_LoadBRK:
+	lda #$e6
+;	ldx SubZeroZp_Regs+SubZero_EBit
+	beq LoadVect0
+	lda #$fe
+LoadVect0:
+	ldx #$ff
+	ldy #0
+	jsr LongLib_LoadAXY
+	jsr StepIn_LoadInd
+	jmp StepIn_LoadLong
+	
+StepIn_LoadZpAdr:
+;	lda SubZeroZp_Regs+SubZero_DirectPage
+;	ldx SubZeroZp_Regs+SubZero_DirectPage+1
+	ldy #0
+	jsr LongLib_LoadAXY
+	lda OpcodeZp_Copy+1
+	jmp LongLib_AddBYTE
+
+StepIn_LoadZpNum:
+	lda OpcodeZp_Copy+1
+	ldx #0
+	ldy #0
+	jmp LongLib_LoadAXY
+
+StepIn_LoadAbsD:
+;	ldy SubZeroZp_Regs+SubZero_DataBank
+	.DB $2c
+StepIn_LoadAbsP:
+	ldy Adress+2
+;StepIn_LoadAbs:
+	lda OpcodeZp_Copy+1
+	ldx OpcodeZp_Copy+2
+;	ldy #0
+	jmp LongLib_LoadAXY
+
+StepIn_LoadLong:
+	ldx #OpcodeZp_Copy+1
+	jmp LongLib_LoadPtr
+
+StepIn_LoadInd:
+	lda #3
+	ldx #LongLibZp_Akku0
+	jsr InputBuf_Init
+	bcs StepIn_LoadIndExit
+	ldx #2
+StepIn_LoadInd0:
+	lda InputBuffer,x
+	sta OpcodeZp_Copy+1,x
+	dex
+	bpl StepIn_LoadInd0
+	clc
+StepIn_LoadIndExit:
+	rts
+
+StepIn_AddX:
+	ldx #0
+	lda #%00010000
+	bit Intern_MX
+	bne StepIn_AddX0
+	ldx SubZeroZp_Regs+SubZero_X+1
+StepIn_AddX0:
+	lda SubZeroZp_Regs+SubZero_X
+	jmp LongLib_AddWORD
+
+StepIn_AddY:
+	ldx #0
+	lda #%00010000
+	bit Intern_MX
+	bne StepIn_AddY0
+	ldx SubZeroZp_Regs+SubZero_Y+1
+StepIn_AddY0:
+	lda SubZeroZp_Regs+SubZero_Y
+	jmp LongLib_AddWORD
+
+StepIn_AddS:
+	lda SubZeroZp_Regs+SubZero_StackPtr
+	ldx SubZeroZp_Regs+SubZero_StackPtr+1
+	jmp LongLib_AddWORD
+
+
+;--------------------------------------
+
+@0Opcodes_Trace:
+	ldx #SubZeroZp_Regs+SubZero_PC
+@0Opcodes_TraceIn0:
+	jsr LongLib_LoadWORD
+	lda Intern_01
+	pha
+	lda Intern_MX
+	pha
+	lda SubZeroZp_Regs+SubZero_01
+	sta Intern_01
+	lda SubZeroZp_Regs+SubZero_Status
+	sta Intern_MX
+	jsr TraceRts
+	pla
+	sta Intern_MX
+	pla
+	sta Intern_01
+	rts
+
+TraceRts:
+	jsr Opcodes_DisassIn0
+	lda OpcodeZp_Copy
+	ldx #14
+Trace0:
+	cmp Trace_OpcTab,x
+	beq Trace1
+	dex
+	bpl Trace0
+	and #$1f
+	cmp #$10
+	bne Trace2
+	ldx #4				;Rel
+Trace1:
+	jsr TraceTabJmp
+	jmp Trace3
+
+Trace2:
+	lda OpcodeZp_Len
+	jsr LongLib_AddBYTE
+Trace3:
+	ldx #OpcodeZp_Adr
+	jmp LongLib_StorePtr
+
+
+Trace_RTS:
+	jsr LongLib_SetZero
+	jsr StepIn_AddS
+	jsr LongLib_Inc
+	jsr StepIn_LoadInd
+	jsr StepIn_LoadAbsP
+	jmp LongLib_Inc
+
+Trace_RTL:
+	jsr LongLib_SetZero
+	jsr StepIn_AddS
+	jsr LongLib_Inc
+	jsr StepIn_LoadInd
+	jsr StepIn_LoadLong
+	jmp LongLib_Inc
+
+Trace_RTI:
+	jsr LongLib_SetZero
+	jsr StepIn_AddS
+	lda #2
+	jsr LongLib_AddBYTE
+	jsr StepIn_LoadInd
+	jmp StepIn_LoadAbsP
+
+
+TraceTabJmp:
+	lda Trace_JmpTabLo,x
+	sta OpcodesBSS_TraceJmp
+	lda Trace_JmpTabHi,x
+	sta OpcodesBSS_TraceJmp+1
+	jmp (OpcodesBSS_TraceJmp)
+
+
+Trace_JmpTabLo:
+	.DB <StepIn_LoadBRK,	<StepIn_LoadAbsP,	<Trace_RTI,		<Trace_RTS,		<StepInR10
+	.DB <StepIn_LoadCOP,	<StepIn_LoadLong,	<StepInR02_RelLong
+	.DB <Trace_RTL
+	.DB <StepIn_LoadAbsP,	<StepInR0c_JmpInd
+	.DB <StepIn_LoadLong,	<StepInR1c_AbsInd,	<StepInR1c_JmlInd,	<StepInR1c_AbsInd
+Trace_JmpTabHi:
+	.DB >StepIn_LoadBRK,	>StepIn_LoadAbsP,	>Trace_RTI,		>Trace_RTS,		>StepInR10
+	.DB >StepIn_LoadCOP,	>StepIn_LoadLong,	>StepInR02_RelLong
+	.DB >Trace_RTL
+	.DB >StepIn_LoadAbsP,	>StepInR0c_JmpInd
+	.DB >StepIn_LoadLong,	>StepInR1c_AbsInd,	>StepInR1c_JmlInd,	>StepInR1c_AbsInd
+
+;--------------------------------------
+
+
+@0Opcodes_DisassScrl:
+	bvs DisassPre
+	ldx #Adress
+	jsr LongLib_LoadPtr
+	ldx #OpcodeZp_Adr
+	jsr LongLib_StorePtr
+	jsr Opcodes_Disass
+	bcs DisassRExit
+	lda OpcodeZp_Len
+	jsr LongLib_AddBYTE
+	jmp DisassNextIn0
+
+@0Opcodes_DisassRange:
+	bvs DisassPre
+@0Opcodes_DisassNext:
+	ldx #Adress
+	jsr LongLib_LoadPtr
+DisassNextIn0:
+	ldx #OpcodeZp_Adr
+	jsr LongLib_StorePtr
+	jsr Opcodes_Disass
+	bcs DisassRExit
+	jsr Opcodes_ShowOpcode
+	lda OpcodeZp_Len
+	clc
+DisassRExit:
+	rts
+
+DisassPre:
+	ldx #Adress
+	jsr LongLib_LoadPtr
+	lda #32
+	jsr LongLib_SubBYTE
+DisassPre0:
+	ldx #OpcodeZp_Adr
+	jsr LongLib_StorePtr
+	jsr Opcodes_Disass
+	ldx #OpcodeZp_Adr
+	jsr LongLib_LoadPtr
+	lda OpcodeZp_Len
+	jsr LongLib_AddBYTE
+	ldx #Adress
+	jsr LongLib_CmpWithLONGPtr
+	bcc DisassPre0
+
+	jsr LongLib_SubLONGPtrFrom
+	jsr LongLib_IsZero
+	bne DisassPre1				;Mist -> Geb Nur Bytes aus
+	jsr Opcodes_ShowOpcode
+	lda OpcodeZp_Len
+	clc
+	rts
+
+DisassPre1:
+	lda OpcodeZp_Len
+	sec
+	sbc LongLibZp_Akku0
+	sta OpcodeZp_Zp0
+	lda #'>'
+	ldx Palette+Palette_Command
+	.LongJsr(L_ComLib_PrintColChar)
+	ldx #OpcodeZp_Adr
+	jsr LongLib_LoadPtr
+	jsr LongLib_Akku0Out
+	.LongJsr(L_ComLib_SpaceOut)
+	ldy #0
+DisassPre2:
+	lda OpcodeZp_Copy,y
+	.LongJsr(L_ComLib_ByteOut)
+	.LongJsr(L_ComLib_SpaceOut)
+	iny
+	cpy OpcodeZp_Zp0
+	bcc DisassPre2
+	.LongJsr(L_ComLib_FillRestline)
+	tya
+	clc
+	rts
+
+;--------------------------------------
+
+@0Opcodes_ShowOpcode:
+	ldx #OpcodeZp_Adr
+	jsr LongLib_LoadPtr
+	lda #'>'
+	ldx Palette+Palette_Command
+	.LongJsr(L_ComLib_PrintRawColChar)
+	lda Palette+Palette_Adress
+	.LongJsr(L_ComLib_SetCol)
+	jsr LongLib_Akku0Out
+	lda Palette+Palette_DisAssBytes
+	.LongJsr(L_ComLib_SetCol)
+	ldx #0
+ShowOpcode0:
+	.LongJsr(L_ComLib_SpaceOut)
+	lda OpcodeZp_Copy,x
+	.LongJsr(L_ComLib_ByteOut)
+	inx
+	cpx OpcodeZp_Len
+	bcc ShowOpcode0
+ShowOpcode1:
+	cpx #3
+	bcs ShowOpcode5
+	ldy #3
+	.LongJsr(L_ComLib_SpacesOut)
+	inx
+	bne ShowOpcode1
+ShowOpcode5:
+	.LongJsr(L_ComLib_SpaceOut)
+
+	ldx OpcodeZp_Offset
+	lda POpcodes,x
+	sta OpcodeZp_Zp0
+	lda POpcodes+1,x
+	sta OpcodeZp_Zp1
+
+	lda Palette+Palette_DisAssMne
+	ldx OpcodeZp_Zp1
+	bpl ShowOpcode8
+	lda Palette+Palette_DisAssIll
+ShowOpcode8:
+	.LongJsr(L_ComLib_SetCol)
+
+	ldx #2
+ShowOpcode2:
+	lda OpcodeZp_Zp0
+	and #$1f
+	ldy #9
+ShowOpcode4:
+	cmp POpcTransTab,y
+	beq ShowOpcode7
+	dey
+	bpl ShowOpcode4
+	bmi ShowOpcode6
+ShowOpcode7:
+	tya
+	ora #$30
+ShowOpcode6:
+	.LongJsr(L_ComLib_PrintRawChar)
+	ldy #4
+ShowOpcode3:
+	lsr OpcodeZp_Zp1
+	ror OpcodeZp_Zp0
+	dey
+	bpl ShowOpcode3
+	dex
+	bpl ShowOpcode2
+	ldx OpcodeZp_AdrMode
+	lda OpcodeAdrFlagTab,x
+	sta OpcodeZp_Zp0
+
+	.LongJsr(L_ComLib_SpaceOut)
+
+	lda OpcodeZp_Len		;fuer rel-zeugs
+	jsr LongLib_WORDAddBYTE
+
+	asl OpcodeZp_Zp0
+	bcc AdressMode1
+	lda #'#'
+	.LongJsr(L_ComLib_PrintRawChar)
+AdressMode1:
+	asl OpcodeZp_Zp0
+	bcc AdressMode2
+	lda #'('
+	.LongJsr(L_ComLib_PrintRawChar)
+AdressMode2:
+	asl OpcodeZp_Zp0
+	bcc AdressMode3
+	lda OpcodeZp_Copy+1
+	.LongJsr(L_ComLib_DollarByteOut)
+AdressMode3:
+	asl OpcodeZp_Zp0
+	bcc AdressMode4
+	ldx OpcodeZp_Copy+1
+	lda OpcodeZp_Copy+2
+	.LongJsr(L_ComLib_DollarWordOut)
+AdressMode4:
+	asl OpcodeZp_Zp0
+	bcc AdressMode5
+	lda #','
+	.LongJsr(L_ComLib_PrintRawChar)
+	lda #'x'
+	.LongJsr(L_ComLib_PrintRawChar)
+AdressMode5:
+	asl OpcodeZp_Zp0
+	bcc AdressMode6
+	lda #')'
+	.LongJsr(L_ComLib_PrintRawChar)
+AdressMode6:
+	asl OpcodeZp_Zp0
+	bcc AdressMode7
+	lda #','
+	.LongJsr(L_ComLib_PrintRawChar)
+	lda #'y'
+	.LongJsr(L_ComLib_PrintRawChar)
+AdressMode7:
+	asl OpcodeZp_Zp0
+	bcc AdressMode8
+	jsr Opcode_MakeRelBAdr
+	ldx LongLibZp_Akku0
+	lda LongLibZp_Akku0+1
+	.LongJsr(L_ComLib_DollarWordOut)
+AdressMode8:
+	ldx #OpcodeZp_Adr
+	jsr LongLib_LoadPtr
+/*
+	jsr FPoint_FindEntry
+	bcs ShowOpcode4
+	jsr FPoint_GetEntry
+	bit FPointZp_Temp+FPE_Flags
+	bmi ShowOpcode4
+	lda #35
+	sbc ComLibZp_CursorXPos
+	tay
+	.LongJsr(L_ComLib_SpacesOut
+	lda Palette+Palette_DisAssFPoint
+	.LongJsr(L_ComLib_SetCol
+	lda #';'
+	.LongJsr(L_ComLib_PrintRawChar
+	ldx FPointZp_Temp+FPE_Typ
+	lda FPointBSS_ParseTab0,x
+	.LongJsr(L_ComLib_PrintRawChar
+	ldx FPointZp_Temp+FPE_Mode
+	lda FPointBSS_ParseTab1,x
+	.LongJsr(L_ComLib_PrintRawChar
+	txa
+	beq ShowOpcode4
+	tya
+	tax
+	lda FPointZp_Temp+FPE_Par
+	.LongJsr(L_ComLib_ByteOut
+ShowOpcode4:
+*/
+	.LongJsr(L_ComLib_FillRestline)
+	rts
+
+
+Opcode_MakeRelBAdr:
+	lda OpcodeZp_Copy+1
+	bmi Opcode_MakeRelBAdr0
+	jmp LongLib_WORDAddBYTE
+Opcode_MakeRelBAdr0:
+	eor #$ff
+	clc
+	adc #1
+	jmp LongLib_WORDSubBYTE
+
+@0Opcodes_Disass:
+	ldx #OpcodeZp_Adr
+@0Opcodes_DisassIn0:
+	lda #3
+	jsr InputBuf_Init
+	bcs DisassExit
+	ldx #3
+OpcodeCopy0:
+	lda InputBuffer,x
+	sta OpcodeZp_Copy,x
+	dex
+	bpl OpcodeCopy0
+	and #$e0
+	lsr
+	lsr
+	lsr
+	lsr
+	sta OpcodeZp_Row
+	jsr OpcodeMne
+	clc
+	adc OpcodeZp_Row
+	sta OpcodeZp_Offset
+	lda OpcodeZp_Copy		;liegt der Opcode im
+	and #$d6			;Sonderbereich wo
+	cmp #$96			;,X zu ,Y wird?
+	bne Disass0
+	iny				;Ja, dann ,X -> ,Y
+Disass0:
+	sty OpcodeZp_AdrMode
+	lda OpcodeAdrLenTab,y
+	sta OpcodeZp_Len
+	clc
+DisassExit:
+	rts
+
+
+SpecOpcs:
+	.DB $00				;BRK
+	.DB $20				;JSR $FFFF
+	.DB $40				;RTI
+	.DB $60				;RTS
+	.DB $80				;NOY #$FF
+	.DB $82				;NOX #$FF
+	.DB $9B				;TAS $FFFF,Y
+	.DB $BB				;LAS $FFFF,Y
+	.DB $9E				;SHX $FFFF,Y		;must be at the end of SpecOpcs Ass part to
+	.DB $9F				;AHX $FFFF,Y		;realize ',y' -> ',x'
+SpecOpcsAssCnt=*-SpecOpcs
+	.DB $9E				;SHX $FFFF,Y		;must be at the end of SpecOpcs Ass part to
+	.DB $9F				;AHX $FFFF,Y		;realize ',y' -> ',x'
+	.DB $24				;BIT $FF
+	.DB $89				;NO8 #$FF
+	.DB $AB				;LAX #$FF
+	.DB $0C				;NO0 $FFFF
+	.DB $6C				;JMP ($FFFF)
+	.DB $93				;AHX ($FF),Y
+	.DB $94				;STY $FF,X
+	.DB $B4				;LDY $FF,X
+	.DB $BC				;LDY $FFFF,X
+SpecOpcsCnt=*-SpecOpcs
+SpecOpcs_POpc:
+	.DB POpcBRK-POpcodes		;BRK
+	.DB POpcJSR-2-POpcodes		;JSR $FFFF
+	.DB POpcRTI-4-POpcodes		;RTI
+	.DB POpcRTS-6-POpcodes		;RTS
+	.DB POpcNOY-8-POpcodes		;NOY #$FF
+	.DB POpcNOX-8-POpcodes		;NOX #$FF
+	.DB POpcTAS-8-POpcodes		;TAS $FFFF,Y
+	.DB POpcLAS-10-POpcodes		;LAS $FFFF,Y
+	.DB POpcSHX-8-POpcodes		;SHX $FFFF,Y
+	.DB POpcAHX-8-POpcodes		;AHX $FFFF,Y
+	.DB POpcSHX-8-POpcodes		;SHX $FFFF,Y
+	.DB POpcAHX-8-POpcodes		;AHX $FFFF,Y
+	.DB POpcBlue-POpcodes		;BIT $FF
+	.DB POpcNop-POpcodes		;NO8 #$FF
+	.DB POpcRed-POpcodes		;LAX #$FF
+	.DB POpcNop-POpcodes		;NO0 $FFFF
+	.DB (POpcJMP-6-POpcodes)&$ff	;JMP ($FFFF)
+	.DB POpcAHX-8-POpcodes		;AHX ($FF),Y
+	.DB POpcBlue-POpcodes		;STY $FF,X
+	.DB POpcBlue-POpcodes		;LDY $FF,X
+	.DB POpcBlue-POpcodes		;LDY $FFFF,X
+
+
+AssAdrModes:
+AssAdrModes_Tab1=*-AssAdrModes
+OpcodeMne_AdrModeTab1:
+	.DB AdrModeRZp
+	.DB AdrModeZp
+	.DB AdrModeNone
+	.DB AdrModeAbs
+	.DB $ff
+	.DB AdrModeZpCx
+	.DB $ff
+	.DB AdrModeAbsCx
+
+	.DB AdrModeBrZpCxBr
+	.DB AdrModeZp
+	.DB AdrModeRZp
+	.DB AdrModeAbs
+	.DB AdrModeBrZpBrCy
+	.DB AdrModeZpCx
+	.DB AdrModeAbsCy
+	.DB AdrModeAbsCx
+
+	.DB AdrModeRZp
+	.DB AdrModeZp
+	.DB AdrModeNone
+	.DB AdrModeAbs
+	.DB $ff
+	.DB AdrModeZpCx
+	.DB $ff
+	.DB AdrModeAbsCx
+
+OpcodeMne_AdrModeTab0:
+	.DB AdrModeBrZpCxBr
+	.DB AdrModeZp
+	.DB AdrModeRZp
+	.DB AdrModeAbs
+	.DB AdrModeBrZpBrCy
+	.DB AdrModeZpCx
+	.DB AdrModeAbsCy
+	.DB AdrModeAbsCx
+
+OpcodeMne_AdrModeNop:
+	.DB AdrModeRZp
+	.DB AdrModeZp
+	.DB $ff
+	.DB AdrModeAbs
+	.DB $ff
+	.DB AdrModeZpCx
+	.DB AdrModeNone
+	.DB AdrModeAbsCx
+
+SpecRows_AdrMode:
+	.DB AdrModeNone
+	.DB AdrModeRZp
+	.DB AdrModeRel
+	.DB AdrModeNone
+	.DB AdrModeNone
+	.DB AdrModeNone
+
+SpecOpcs_AdrMode:
+	.DB AdrModeRZp			;BRK
+	.DB AdrModeAbs			;JSR $FFFF
+	.DB AdrModeNone			;RTI
+	.DB AdrModeNone			;RTS
+	.DB AdrModeRZp			;NOY #$FF
+	.DB AdrModeRZp			;NOX #$FF
+	.DB AdrModeAbsCy		;TAS $FFFF,Y
+	.DB AdrModeAbsCy		;LAS $FFFF,Y
+	.DB AdrModeAbsCy		;SHX $FFFF,Y muss ,X Mode sein damit die nachfolgende Umwandlung in ,Y passt
+	.DB AdrModeAbsCy		;AHX $FFFF,Y muss ,X Mode sein damit die nachfolgende Umwandlung in ,Y passt
+AssAdrModes_SpecOpcsLen=*-SpecOpcs_AdrMode
+	.DB AdrModeAbsCx		;SHX $FFFF,Y muss ,X Mode sein damit die nachfolgende Umwandlung in ,Y passt
+	.DB AdrModeAbsCx		;AHX $FFFF,Y muss ,X Mode sein damit die nachfolgende Umwandlung in ,Y passt
+	.DB AdrModeZp			;BIT $FF
+	.DB AdrModeRZp			;NO8 #$FF
+	.DB AdrModeRZp			;LAX #$FF
+	.DB AdrModeAbs			;NO0 $FFFF
+	.DB AdrModeBrAbsBr		;JMP ($FFFF)
+	.DB AdrModeBrZpBrCy		;AHX ($FF),Y
+	.DB AdrModeZpCx			;STY $FF,X
+	.DB AdrModeZpCx			;LDY $FF,X
+	.DB AdrModeAbsCx		;LDY $FFFF,X
+
+SpecRows:
+	.DB $08
+	.DB $0B
+SpecRowsRel=*-SpecRows
+	.DB $10
+	.DB $12
+	.DB $18
+SpecRowsCnt=*-SpecRows
+	.DB $1A
+SpecRowsAssCnt=*-SpecRows
+SpecRows_POpc:
+	.DB POpcRow08-POpcodes
+	.DB POpcRow0B-POpcodes
+	.DB POpcRow10-POpcodes
+	.DB POpcRow12-POpcodes
+	.DB POpcRow18-POpcodes
+	.DB POpcRow1A-POpcodes
+
+OpcodeMne_SOpc1:
+	lda SpecOpcs_POpc,x
+	ldy SpecOpcs_AdrMode,x
+	rts
+
+OpcodeMne_SRow1:
+	lda SpecRows_POpc,x
+	ldy SpecRows_AdrMode,x
+	rts
+
+OpcodeMne:
+	lda OpcodeZp_Copy
+	ldx #SpecOpcsCnt-1
+OpcodeMne_SOpc0:
+	cmp SpecOpcs,x
+	beq OpcodeMne_SOpc1
+	dex
+	bpl OpcodeMne_SOpc0
+	and #$1f
+	ldx #SpecRowsCnt-1
+OpcodeMne_SRow0:
+	cmp SpecRows,x
+	beq OpcodeMne_SRow1
+	dex
+	bpl OpcodeMne_SRow0
+	lsr
+	lsr
+	tax
+	lda OpcodeZp_Copy
+	and #3
+	tay
+	bne OpcodeMne_NoGroup0
+;Group 0
+	cpx #($0c>>2)
+	beq OpcodeMne_Blue
+	bcs OpcodeMne_Nop
+	lda OpcodeZp_Copy
+	bpl OpcodeMne_Nop
+OpcodeMne_Blue:
+	lda #POpcBlue-POpcodes
+	.DB $2C
+OpcodeMne_Brown:
+	lda #POpcBrown-POpcodes
+OpcodeMne_MakeAdrMode1:
+	ldy OpcodeMne_AdrModeTab1,x
+	rts
+
+OpcodeMne_NoGroup0:
+	dey
+	bne OpcodeMne_NoGroup1
+;Group 1
+	lda #POpcGreen-POpcodes
+	.DB $2C
+OpcodeMne_NoGroup2:
+	lda #POpcRed-POpcodes
+OpcodeMne_MakeAdrMode0:
+	ldy OpcodeMne_AdrModeTab0,x
+	rts
+
+OpcodeMne_NoGroup1:
+	dey
+	bne OpcodeMne_NoGroup2
+;Group 2
+	txa
+	lsr
+	bcs OpcodeMne_Brown
+	lda OpcodeZp_Copy
+	and #$c0
+	cpx #($0a>>2)
+	bcc OpcodeMne_Row02
+	beq OpcodeMne_Row0A
+	cmp #$80
+	bne OpcodeMne_Nop
+	lda #POpcRow1A-POpcodes
+	bne OpcodeMne_MakeAdrModeNop
+OpcodeMne_Row02:
+	cmp #$80
+	beq OpcodeMne_Brown
+	bcs OpcodeMne_Nop
+	ldy #AdrModeNone
+	lda #POpcRowKi0A-POpcodes	;ki0 bis ki6
+	rts
+OpcodeMne_Nop:
+	lda #POpcNop-POpcodes
+OpcodeMne_MakeAdrModeNop:
+	ldy OpcodeMne_AdrModeNop,x
+	rts
+OpcodeMne_Row0A:
+	cmp #$80
+	bcc OpcodeMne_Brown
+OpcodeMne_RowKi0A:
+	lda #POpcRowKi0A-POpcodes	;txa bis nop
+	bne OpcodeMne_MakeAdrMode1
+
+;--------------------------------------
+
+@0Opcodes_AssGet:
+	lda #0
+	sta OpcodeZp_Zp0+1
+	jsr Spaces
+	ldy #2
+	bne AssGet0b
+
+AssGet0:
+	jsr NextCmdChar
+AssGet0b:
+	bcs AssGetErrNoMne
+	.LongJsr(L_ComLib_ScrCode2Lower)
+	cmp #'0'
+	bcc AssGet0c
+	cmp #'9'+1
+	bcs AssGet0c
+	and #$0f
+	tax
+	lda POpcTransTab,x
+AssGet0c:
+	cmp #$20
+	bcs AssGetErrNoMne
+	ldx #4
+AssGet1:
+	lsr
+	ror OpcodeZp_Zp0+1
+	ror OpcodeZp_Zp0
+	dex
+	bpl AssGet1
+	dey
+	bpl AssGet0
+	lsr OpcodeZp_Zp0+1
+	ror OpcodeZp_Zp0
+	ldx #POpcodesEnd-POpcodes
+AssGet2:
+	lda POpcodes-2,x
+	cmp OpcodeZp_Zp0
+	bne AssGet2a
+	lda POpcodes-1,x
+	and #$7f
+	cmp OpcodeZp_Zp0+1
+	beq AssGet3
+AssGet2a:
+	dex
+	dex
+	bne AssGet2
+AssGetErrNoMne:
+	lda #0
+	sec
+	rts
+AssGet3:
+	lda #0
+	sta OpcodeZp_Zp0
+	dex
+	dex
+	stx OpcodeZp_Offset
+	txa
+	asl
+	asl
+	asl
+	asl
+	sta OpcodeZp_Row
+
+	jsr NextSpaces
+	bcs AssGetModeEnd		;end of line after opcode?
+	ldy #1				;test for '#' and '('
+	ldx #1
+	jsr AssGetModeOC
+	bcs AssGetModeEnd
+	jsr GetNum_GetHexLong		;try to read a number
+	bcs AssGetMode4
+	cmp #2				;is number 3 bytes long?
+	bcc AssGetMode7			;no -> no problem with the number
+	lda LongLibZp_Akku0+2		;is the arguments bank byte equal to...
+	cmp Adress+2			;...the bank we're assembling to?
+	bne AssGetErr_NumberTooLarge	;no -> the number can not be corrected, show error
+	lda #1				;cut long number down to word
+AssGetMode7:
+	tax
+	lda AssGetModeTab2,x		;set bit for Zp or Abs adresssing
+	ora OpcodeZp_Zp0
+	sta OpcodeZp_Zp0
+	ldx #OpcodeZp_Copy+1		;save number
+	jsr LongLib_StoreWORD
+AssGetMode4:
+	jsr Spaces
+	bcs AssGetModeEnd
+	ldx #2				;test for ')'
+	ldy #0
+	jsr AssGetModeOC
+	bcs AssGetModeEnd
+	cmp #','			;is next char ','?
+	bne AssGetMode5			;no -> skip tests for ',x' and ',y'
+	jsr NextSpaces
+	bcs AssGetErr			;a comma without 'x' or 'y' is ?
+	ldx #4				;test for 'x' and 'y'
+	ldy #1
+	jsr AssGetModeOC
+	iny				;test if nothing matched (then y is $ff, so y+1 is 0)
+	beq AssGetErr			;this prevents 'mne $ffff,' from being accepted
+	bcs AssGetModeEnd
+AssGetMode5:
+	ldx #2				;test for ')' again
+	ldy #0
+	jsr AssGetModeOC
+AssGetModeEnd:
+	jsr Spaces
+	bcs AssGetModeEndOk
+	cmp #';'
+	bne AssGetErr
+AssGetModeEndOk:
+
+	ldx #OpcodeAdrFlagTab_Len-1
+	lda OpcodeZp_Zp0
+	cmp #%01100100			;(Zp) becomes (Abs)
+	bne AssGet4
+	eor #%00110000			;Zp to Abs
+AssGet4:
+	cmp OpcodeAdrFlagTab,x
+	beq AssGet6
+	dex
+	bpl AssGet4
+AssGetErr:
+	.ShowErr(Err_Ass_IllAdrMode)
+	.DB $2c
+AssGetErr_NumberTooLarge:
+	.ShowErr(Err_Ass_NumberTooLarge)
+	sec
+	rts
+
+AssGet6:
+	stx OpcodeZp_AdrMode
+	lda OpcodeAdrLenTab,x
+	sta OpcodeZp_Len
+	clc
+	rts
+
+
+;--------------------------------------
+
+
+@0Opcodes_AssMne:
+	jsr AssMne0
+	bcs AssMnePre1
+	lda OpcodeZp_AdrMode
+	tax
+	lda OpcodeAdrLenTab,x
+	sta OpcodeZp_Len
+	ldx #0
+AssMnePre0:
+	lda OpcodeZp_Copy,x
+	jsr OutputBuf_Byte
+	inx
+	cpx OpcodeZp_Len
+	bcc AssMnePre0
+	clc
+AssMnePre1:
+	rts
+
+
+AssMne_ReplaceAdrMode:
+	ldy #3
+AssMne_ReplaceAdrMode0:
+	cmp AssMne_RTab0,y
+	beq AssMne_ReplaceAdrMode1
+	dey
+	bpl AssMne_ReplaceAdrMode0
+	sec
+	rts
+AssMne_ReplaceAdrMode1:
+	lda AssMne_RTab1,y
+	sta OpcodeZp_AdrMode
+	clc
+	rts
+
+
+AssMne_RTab0:
+	.DB AdrModeZp
+	.DB AdrModeZpCx
+	.DB AdrModeZpCy
+	.DB AdrModeAbs
+AssMne_RTab1:
+	.DB AdrModeAbs
+	.DB AdrModeAbsCx
+	.DB AdrModeAbsCy
+	.DB AdrModeRel
+
+
+AssMne_SpecOpcs1:
+	lda SpecOpcs,x
+	sta OpcodeZp_Copy
+	cpx #SpecOpcsAssCnt-2			;is opcode 'ahx'?
+	beq AssMne_SpecOpcs3
+	lda OpcodeZp_AdrMode
+	cmp #AdrModeBrZpBrCy			;yes -> check for second possible adressmode
+	bne AssMne_SpecOpcs3
+	lda #$93				;ahx ($ff),y
+	sta OpcodeZp_Copy
+	clc
+	rts
+AssMne_SpecOpcs3:
+	lda OpcodeZp_AdrMode
+	cmp SpecOpcs_AdrMode,x
+	beq AssMne_SpecEnd
+	jsr AssMne_ReplaceAdrMode
+	bcc AssMne_SpecOpcs3
+	rts
+
+AssMne_SpecRowsEnd:
+	cpx #SpecRowsRel
+	bne AssMne_SpecEnd
+	jsr AssMneBranchOk
+	bcs AssMne_SpecErr
+AssMne_SpecEnd:
+	sta OpcodeZp_AdrMode
+	clc
+AssMne_SpecErr:
+	rts
+
+AssMne_SpecRows1:
+	lda SpecRows,x
+	ora OpcodeZp_Row
+	sta OpcodeZp_Copy
+AssMne_SpecRows3:
+	lda OpcodeZp_AdrMode
+	cmp SpecRows_AdrMode,x
+	beq AssMne_SpecRowsEnd
+	jsr AssMne_ReplaceAdrMode
+	bcc AssMne_SpecRows3
+AssMne_Error:
+	sec					;used for branch to AssMne_Error
+	rts
+
+
+AssMne0:
+	ldx #SpecOpcsAssCnt-1
+AssMne_SpecOpcs0:
+	lda SpecOpcs,x
+	and #%11100000
+	lsr
+	lsr
+	lsr
+	lsr
+	adc SpecOpcs_POpc,x
+	cmp OpcodeZp_Offset
+	beq AssMne_SpecOpcs1
+	dex
+	bpl AssMne_SpecOpcs0
+
+	lda OpcodeZp_Offset
+	and #%11110000
+	ldx #SpecRowsAssCnt-1
+AssMne_SpecRows0:
+	cmp SpecRows_POpc,x
+	beq AssMne_SpecRows1
+	dex
+	bpl AssMne_SpecRows0
+
+	lda OpcodeZp_Offset
+	cmp #POpcJMP-POpcodes
+	bne AssMne_NoJmpInd
+	ldx OpcodeZp_AdrMode
+	cpx #AdrModeBrAbsBr
+	bne AssMne_NoJmpInd
+	lda #$6c
+	bne AssMne_Opc
+AssMne_NoJmpInd:
+	cmp #POpcRowKi0A-POpcodes
+	bcc AssMne1
+	ldx OpcodeZp_AdrMode
+#if AdrModeNone==0
+	bne AssMne_Error
+#else
+#error "optimisation bases on AdrModeNone==0"
+#endif
+	and #8
+	adc #2-1			;carry is always set here (cmp, bne)
+	ora OpcodeZp_Row
+AssMne_Opc:
+	clc
+	sta OpcodeZp_Copy
+	rts
+
+AssMne1:
+	cmp #POpcNop-POpcodes
+	bcs AssMne_Nop
+	lda OpcodeZp_Offset
+	and #$ed
+	cmp #$28
+	bne SwapYX_End
+	lda OpcodeZp_AdrMode
+	cmp #AdrModeZpCx
+	bcc SwapYX_End
+	eor #1			;swap ',x' to ',y'
+	sta OpcodeZp_AdrMode
+SwapYX_End:
+
+AssMne_CheckAdrMode:
+	lda OpcodeZp_Offset
+	and #$70
+	lsr
+	adc #7				;carry is always clear here (and #$70, lsr)
+	tax
+	ldy #7
+	lda OpcodeZp_AdrMode
+AssMne_CheckAdrMode0:
+	cmp AssAdrModes,x
+	beq AssMne_CheckAdrMode3
+	dex
+	dey
+	bpl AssMne_CheckAdrMode0
+AssMne_CheckAdrMode2:
+	lda OpcodeZp_AdrMode		;needed for jumpin via AssMne_CheckAdrMode2
+	jsr AssMne_ReplaceAdrMode
+	bcs AssMne_Exit			;rts
+	bcc AssMne_CheckAdrMode		;bra
+AssMne_CheckAdrMode3:
+	sty OpcodeZp_Zp0
+	lda OpcodeZp_Row
+	asl
+	rol
+	rol
+	rol
+	tay
+	lda BitMaps,x
+AssMne_CheckAdrMode4:
+	asl
+	dey
+	bpl AssMne_CheckAdrMode4
+	bcs AssMne_CheckAdrMode2
+AssMne_CheckAdrMode5:
+
+	lda OpcodeZp_Offset
+	and #$30			;#%00xx0000
+	asl
+	asl
+	asl
+	ora OpcodeZp_Zp0		;#%x0000yyy
+	rol
+	rol                             ;#%0000yyyx -> #%000yyyxx
+	ora OpcodeZp_Row		;#%000yyyxx -> #%zzzyyyxx
+	sta OpcodeZp_Copy
+AssMne_Exit:
+	rts				;carry is always clear here
+
+AssMne_Nop:
+	jsr AssMne_CheckAdrMode
+	bcs AssMne_Exit			;rts
+	lda OpcodeZp_Zp0
+	and #1
+	asl
+	eor #2
+	ora OpcodeZp_Copy
+	cmp #$82
+	bne AssMne_Opc
+	lda #$89
+	bne AssMne_Opc
+
+
+BitMaps:
+BitMapBlue:
+	.DB %11110000
+	.DB %10110000
+	.DB %11111111
+	.DB %10010000
+	.DB %11111111
+	.DB %11110011
+	.DB %11111111
+	.DB %11111011
+BitMapGrn:
+	.DB %00000000
+	.DB %00000000
+	.DB %00001000
+	.DB %00000000
+	.DB %00000000
+	.DB %00000000
+	.DB %00000000
+	.DB %00000000
+BitMapBrown
+	.DB %11111011
+	.DB %00000000
+	.DB %00001111
+	.DB %00000000
+	.DB %11111111
+	.DB %00000000
+	.DB %11111111
+	.DB %00001000
+BitMapRed:
+	.DB %00000000
+	.DB %00000000
+	.DB %11111011
+	.DB %00000000
+	.DB %00001000
+	.DB %00000000
+	.DB %00001100
+	.DB %00001000
+BitMapNop:
+	.DB %11110100
+	.DB %01001111
+	.DB %11111111
+	.DB %01111111
+	.DB %11111111
+	.DB %00001100
+	.DB %00001100
+	.DB %00000100
+
+OffsetNop:
+	.DB $02
+	.DB $04
+	.DB $ff
+	.DB $0c
+	.DB $ff
+	.DB $14
+	.DB $1a
+	.DB $1c
+
+
+AssGetModeTab2:
+	.DB $20,$10
+
+AssGetModeOC:
+	.LongJsr(L_ComLib_ScrCode2Lower)
+AssGetModeOC0:
+	cmp AssGetModeOCTab0,x
+	beq AssGetModeOC1
+	dex
+	dey
+	bpl AssGetModeOC0
+	clc
+	rts
+AssGetModeOC1:
+	lda OpcodeZp_Zp0
+	ora AssGetModeOCTab1,x
+	sta OpcodeZp_Zp0
+	jmp NextSpaces
+
+AssGetModeOCTab0:
+	.DB '#','('
+	.DB ')'
+	.DB 'x','y'
+AssGetModeOCTab1:
+	.DB $80,$40
+	.DB $04
+	.DB $08,$02
+
+
+AssMneBranchOk:
+	lda OpcodeZp_Copy+1
+	sec
+	sbc Adress
+	tax
+	lda OpcodeZp_Copy+2
+	sbc Adress+1
+	tay
+	txa
+	sec
+	sbc #2
+	bcs AssMneBranchOk0
+	dey
+AssMneBranchOk0:
+	sta OpcodeZp_Copy+1
+	tya
+	beq AssMneBranchOk1
+	iny
+	bne AssMneBranchOk_Err
+AssMneBranchOk1:
+	eor OpcodeZp_Copy+1
+	bmi AssMneBranchOk_Err
+	clc
+	rts
+AssMneBranchOk_Err:
+	sec
+	rts
+
+
+/*
+;AssMneBranchOk:
+	lda OpcodeZp_Copy
+	and #$1f
+	cmp #$10
+	bne
+	lda OpcodeZp_AdrMode
+	cmp #AdrModeAbs
+	bne
+	lda Adress
+	adc #2-1			;carry is always set here
+	ldx OpcodeZp_Copy+1
+	bpl AssMneBranch0
+	eor #$ff
+	sec
+AssMneBranch0:
+	adc OpcodeZp_Copy+1
+	sta OpcodeZp_Copy+1
+	bvc AssMneBranch1
+	sec
+AssMneBranch1:
+	rts
+*/
+
+;--------------------------------------
+
+
+POpcodes:
+
+POpcBlue:
+POpcBRK:
+	.POE('b','r','k',0)
+	.POE('b','i','t',0)
+POpcJMP:
+	.POE('j','m','p',0)
+POpcJSR:
+	.POE('j','s','r',0)
+	.POE('s','t','y',0)
+	.POE('l','d','y',0)
+	.POE('c','p','y',0)
+	.POE('c','p','x',0)
+
+POpcGreen:
+	.POE('o','r','a',0)
+	.POE('a','n','d',0)
+	.POE('e','o','r',0)
+	.POE('a','d','c',0)
+	.POE('s','t','a',0)
+	.POE('l','d','a',0)
+	.POE('c','m','p',0)
+	.POE('s','b','c',0)
+
+POpcBrown:
+	.POE('a','s','l',0)
+	.POE('r','o','l',0)
+	.POE('l','s','r',0)
+	.POE('r','o','r',0)
+	.POE('s','t','x',0)
+	.POE('l','d','x',0)
+	.POE('d','e','c',0)
+	.POE('i','n','c',0)
+
+POpcRed:
+	.POE('s','l','o',1)
+	.POE('r','l','a',1)
+	.POE('s','r','e',1)
+	.POE('r','r','a',1)
+	.POE('s','a','x',1)
+POpcLAX:
+	.POE('l','a','x',1)
+	.POE('d','c','p',1)
+	.POE('i','s','c',1)
+
+POpcNop:
+	.POE('n','o',PO0,1)
+	.POE('n','o',PO2,1)
+	.POE('n','o',PO4,1)
+	.POE('n','o',PO6,1)
+	.POE('n','o',PO8,1)
+POpcRTS:
+	.POE('r','t','s',0)
+	.POE('n','o','c',1)
+	.POE('n','o','e',1)
+
+POpcRow10:
+	.POE('b','p','l',0)
+	.POE('b','m','i',0)
+	.POE('b','v','c',0)
+	.POE('b','v','s',0)
+	.POE('b','c','c',0)
+	.POE('b','c','s',0)
+	.POE('b','n','e',0)
+	.POE('b','e','q',0)
+
+POpcRow08:
+	.POE('p','h','p',0)
+	.POE('p','l','p',0)
+	.POE('p','h','a',0)
+	.POE('p','l','a',0)
+	.POE('d','e','y',0)
+	.POE('t','a','y',0)
+	.POE('i','n','y',0)
+	.POE('i','n','x',0)
+
+POpcRow0B:
+	.POE('a','n','c',1)
+	.POE('a','c','n',1)
+	.POE('a','l','r',1)
+	.POE('a','r','r',1)
+	.POE('x','a','a',1)
+POpcRTI:
+	.POE('r','t','i',0)
+	.POE('a','x','s',1)
+	.POE('s','b','i',1)
+
+POpcRow12:
+	.POE('k','i',PO1,1)
+	.POE('k','i',PO3,1)
+	.POE('k','i',PO5,1)
+	.POE('k','i',PO7,1)
+	.POE('k','i',PO9,1)
+	.POE('k','i','b',1)
+	.POE('k','i','d',1)
+	.POE('k','i','f',1)
+
+POpcRow18:
+	.POE('c','l','c',0)
+	.POE('s','e','c',0)
+	.POE('c','l','i',0)
+	.POE('s','e','i',0)
+	.POE('t','y','a',0)
+	.POE('c','l','v',0)
+	.POE('c','l','d',0)
+	.POE('s','e','d',0)
+
+POpcRowKi0A:
+	.POE('k','i',PO0,1)
+	.POE('k','i',PO2,1)
+	.POE('k','i',PO4,1)
+	.POE('k','i',PO6,1)
+	.POE('t','x','a',0)
+	.POE('t','a','x',0)
+	.POE('d','e','x',0)
+	.POE('n','o','p',0)
+
+POpcRow1A:
+POpcTAS:
+	.POE('t','a','s',1)
+POpcLAS:
+	.POE('l','a','s',1)
+POpcSHX:
+	.POE('s','h','x',1)
+POpcAHX:
+	.POE('a','h','x',1)
+	.POE('t','x','s',0)
+	.POE('t','s','x',0)
+POpcNOY:
+	.POE('n','o','y',1)
+POpcNOX:
+	.POE('n','o','x',1)
+
+POpcodesEnd:
+
+
+POpcTransTab:
+	.DB PO0
+	.DB PO1
+	.DB PO2
+	.DB PO3
+	.DB PO4
+	.DB PO5
+	.DB PO6
+	.DB PO7
+	.DB PO8
+	.DB PO9
+
+;--------------------------------------
+
+OpcodeAdrFlagTab:
+;               A   R
+;              Zb, ,e
+;            #(psx)yl
+	.DB %00000000			;-
+	.DB %10100000			;#Zp
+	.DB %00100000			;Zp
+	.DB %01101100			;(Zp,x)
+	.DB %01100110			;(Zp),y
+	.DB %00010000			;Abs
+	.DB %01010100			;(Abs)
+	.DB %00000001			;Rel
+	.DB %00101000			;Zp,x
+	.DB %00100010			;Zp,y
+	.DB %00011000			;Abs,x
+	.DB %00010010			;Abs,y
+OpcodeAdrFlagTab_Len=*-OpcodeAdrFlagTab
+
+OpcodeAdrLenTab:
+	.DB 1				;-
+	.DB 2				;#Zp
+	.DB 2				;Zp
+	.DB 2				;(Zp,x)
+	.DB 2				;(Zp),y
+	.DB 3				;Abs
+	.DB 3				;(Abs)
+	.DB 2				;Rel
+	.DB 2				;Zp,x
+	.DB 2				;Zp,y
+	.DB 3				;Abs,x
+	.DB 3				;Abs,y
+
+;--------------------------------------
+
+Trace_OpcTab:
+	.DB $00,$20,$40,$60,$80
+	.DB $02,$22,$82
+	.DB $6b
+	.DB $4c,$6c
+	.DB $5c,$7c,$dc,$fc
+
+;--------------------------------------
+
+	.)	/* Opcodes */
+
+
+
+
+
+

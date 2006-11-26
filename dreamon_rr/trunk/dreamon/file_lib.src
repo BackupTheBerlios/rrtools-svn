@@ -1,0 +1,1832 @@
+/***************************************************************************
+ *   Copyright (C) 2000 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+
+;--------------------------------------
+;
+;  Bus routines
+;
+;--------------------------------------
+
+/*
+#include "dload.cfg"
+
+;--------------------------------------
+
+#include "dload/iff.hx"
+#include "dload/dload.hx"
+
+;--------------------------------------
+
+#include "dload/dload.src"
+#include "dload/iff.src"
+
+#include "dload/ld41.src"
+#include "dload/ldhd.src"
+*/
+;--------------------------------------
+
+	.(	;FileLib
+
+;--------------------------------------
+
+    .SETPET
+
+/*
++FileLib_MW:
+	lda #"m"
+	sta FileNameBuf
+	lda #"-"
+	sta FileNameBuf+1
+	lda #"w"
+	sta FileNameBuf+2
+	lda OutputBufZp_Adr
+	sta FileNameBuf+3
+	lda OutputBufZp_Adr+1
+	sta FileNameBuf+4
+	lda OutputBufZp_Dev
+	sta FileZp_Device
+	lda #$6f
+	sta FileZp_SecAdr
+	lda #0
+	sta FileZp_WhereToLoad
+MW0:
+	lda OutputBufZp_Len
+	sec
+	sbc FileZp_WhereToLoad
+	beq MW1
+	cmp #32
+	bcc MW2
+MW1:
+	lda #32
+MW2:
+	sta FileNameBuf+5
+	clc
+	adc #7
+	sta FileZp_NameLen
+	ldy #0
+	ldx FileZp_WhereToLoad
+MW3:
+	lda OutputBuffer,x
+	sta FileNameBuf+6,y
+	inx
+	iny
+	cpy FileNameBuf+5
+	bcc MW3
+	stx FileZp_WhereToLoad
+	lda #$0d
+	sta FileNameBuf+6,y
+	lda FileZp_NameLen
+	ldx #<FileNameBuf
+	ldy #>FileNameBuf
+	jsr File_OpenAXY
+	bcs MWErr
+	jsr File_Close
+	lda FileNameBuf+3
+	clc
+	adc FileNameBuf+5
+	sta FileNameBuf+3
+	bcc MW4
+	inc FileNameBuf+4
+MW4:
+	lda FileZp_WhereToLoad
+	cmp OutputBufZp_Len
+	bne MW0
+	clc
+	rts
+MWErr:
+	jsr ShowDriveStErr
+	sec
+	rts
+
+
++FileLib_MR:
+	lda #"m"
+	sta FileNameBuf
+	lda #"-"
+	sta FileNameBuf+1
+	lda #"r"
+	sta FileNameBuf+2
+	lda InputBufZp_Adr
+	sta FileNameBuf+3
+	lda InputBufZp_Adr+1
+	sta FileNameBuf+4
+	lda InputBufZp_Dev
+	sta FileZp_Device
+	lda #$6f
+	sta FileZp_SecAdr
+	lda #0
+	sta FileZp_WhereToLoad
+MR0:
+	lda InputBufZp_Len
+	sec
+	sbc FileZp_WhereToLoad
+	beq MR1
+	cmp #32
+	bcc MR2
+MR1:
+	lda #32
+MR2:
+	tax
+	clc
+	adc FileNameBuf+3
+	bcc MR5
+	lda FileNameBuf+3
+	eor #$ff
+	clc
+	adc #1
+	tax
+MR5:
+	stx FileNameBuf+5
+	lda #6
+	ldx #<FileNameBuf
+	ldy #>FileNameBuf
+	jsr File_OpenAXY
+	bcs MRErr
+	lda FileZp_Device
+	jsr File_Talk
+	lda #$6f
+	jsr File_SecTalk
+	bcs MRErr
+	ldx FileZp_WhereToLoad
+	ldy #0
+MR3:
+	stx FileZp_WhereToLoad
+	jsr File_ReadByte
+	ldx FileZp_WhereToLoad
+	bcs MRErr
+	sta InputBuffer,x
+	inx
+	iny
+	cpy FileNameBuf+5
+	bcc MR3
+	jsr File_UnTalk
+	jsr File_Close
+	lda FileNameBuf+3
+	clc
+	adc FileNameBuf+5
+	sta FileNameBuf+3
+	bcc MR4
+	inc FileNameBuf+4
+MR4:
+	lda FileZp_WhereToLoad
+	clc
+	adc FileNameBuf+5
+	sta FileZp_WhereToLoad
+	cmp InputBufZp_Len
+	bne MR0
+	clc
+	rts
+MRErr:
+	jsr ShowDriveStErr
+	sec
+	rts
+*/
+
+;--------------------------------------
+
+BlockCmd:
+	jsr ComLib_RedirOutputOn
+	lda #'u'
+	jsr ComLib_PrintRawChar
+	txa
+	jsr ComLib_PrintRawChar
+	ldx #4
+BlockCmd0:
+	lda BlockCmd2Txt,x
+	jsr ComLib_PrintRawChar
+	dex
+	bpl BlockCmd0
+	jsr NextSpaces
+	lda #0
+	jsr GetNum_GetHexNDig
+	bcs BlockCmdErr
+	jsr ComLib_DezWordOut
+	jsr ComLib_SpaceOut
+	lda #0
+	jsr GetNum_GetHexNDig
+	bcs BlockCmdErr
+	jsr ComLib_DezWordOut
+	jsr ComLib_RedirOutputOff
+	jsr GetNum_GetHexLong
+	bcs BlockCmdErr
+
+	lda #$65
+	sta FileZp_SecAdr
+	lda #1
+	ldx #<BlockCmd0Txt
+	ldy #>BlockCmd0Txt
+	jsr File_OpenAXY
+	bcs BlockCmdErr
+
+	lda #$6f
+	sta FileZp_SecAdr
+	lda #7
+	ldx #<BlockCmd1Txt
+	ldy #>BlockCmd1Txt
+	jsr File_OpenAXY
+	bcs BlockCmdErr0
+	jsr GetStatus
+	bcs BlockCmdErr
+	jsr TestStatus
+	bcs BlockCmdErr1
+	rts
+
+BlockCmdErr1:
+	jsr ShowGottenStatus
+BlockCmdErr0:
+	lda #$65
+	sta FileZp_SecAdr
+	jsr File_Close
+	sec
+BlockCmdErr:
+	jmp ComLib_RedirOutputOff
+
+BlockSend:
+	lda #0
+	sta FileZp_90
+	lda FileZp_Device
+	jsr File_Listen
+	lda #$6f
+	sta FileZp_SecAdr
+	jsr File_SecListen
+	ldy #0
+BlockSend0:
+	lda OutputBuffer,y
+	jsr File_WriteByte
+	iny
+	cpy ComLibZp_CursorXPos
+	bcc BlockSend0
+	jsr File_UnListen
+	jsr GetStatus
+	bcs BlockSend1
+	jsr TestStatus
+	bcc BlockSend1
+	jsr ShowGottenStatus
+	sec
+BlockSend1:
+	rts
+
+
+MemExec:
+	jsr NextSpaces
+	lda #1
+	jsr GetNum_GetHexNDig
+	bcs MemExecErr
+	lda LongLibZp_Akku0
+	sta MemExecCmd+3
+	lda LongLibZp_Akku0+1
+	sta MemExecCmd+4
+	lda #$6f
+	sta FileZp_SecAdr
+	lda #5
+	ldx #<MemExecCmd
+	ldy #>MemExecCmd
+	jsr File_OpenAXY
+	bcs MemExec1
+	.ShowMsg(Msg_CR)
+MemExecErr:
+	rts
+MemExec1:
+	jmp File_IOErr
+
+
+BlockRead:
+	ldx #'1'
+	jsr BlockCmd
+	bcs BlockReadErr
+	jsr BlockSend
+	bcs BlockReadErr0
+	ldx #LongLibZp_Akku0
+	jsr OutputBuf_Init
+
+	lda #0
+	sta FileZp_90
+	lda FileZp_Device
+	jsr File_Talk
+	lda #$65
+	sta FileZp_SecAdr
+	jsr File_SecTalk
+	ldy #0
+BlockRead0:
+	jsr File_ReadByte
+	bcs BlockReadErr0
+	jsr OutputBuf_Byte
+	bcs BlockReadErr0
+	iny
+	bne BlockRead0
+	jsr File_UnListen
+	jsr File_Close
+	lda #$6f
+	sta FileZp_SecAdr
+	jsr File_UnListen
+	jsr File_Close
+	jsr OutputBuf_Flush
+	.ShowMsg(Msg_CR)
+BlockReadErr0:
+	lda #$65
+	sta FileZp_SecAdr
+	jsr File_Close
+	lda #$6f
+	sta FileZp_SecAdr
+	jsr File_Close
+	sec
+BlockReadErr:
+	rts
+
+BlockWrite:
+	ldx #'2'
+	jsr BlockCmd
+	bcs BlockWriteErr
+
+	lda #0
+	sta FileZp_90
+	lda FileZp_Device
+	jsr File_Listen
+	lda #$65
+	sta FileZp_SecAdr
+	jsr File_SecListen
+	ldy #0
+BlockWrite0:
+	lda (LongLibZp_Akku0),y
+	jsr File_WriteByte
+	bcs BlockWriteErr
+	iny
+	bne BlockWrite0
+	jsr File_UnListen
+	jsr BlockSend
+	bcs BlockWriteErr0
+	jsr GetStatus
+	bcs BlockWriteErr0
+	jsr TestStatus
+	bcs BlockWriteErr1
+	jsr File_Close
+	lda #$6f
+	sta FileZp_SecAdr
+	jsr File_Close
+	.ShowMsg(Msg_CR)
+	rts
+
+BlockWriteErr1:
+	jsr ShowGottenStatus
+BlockWriteErr0:
+	jsr File_Close
+	lda #$6f
+	sta FileZp_SecAdr
+	jsr File_Close
+	sec
+BlockWriteErr:
+	rts
+
+
+GetStatus:
+	lda #0
+	sta FileZp_NameLen
+	sta FileZp_90
+	lda #$6f
+	sta FileZp_SecAdr
+	lda FileZp_Device
+	jsr File_Talk
+	lda FileZp_SecAdr
+	jsr File_SecTalk
+	bcs GetStatusErr
+	ldy #0
+GetStatus0:
+	jsr File_ReadByte
+	cmp #$0d
+	beq GetStatus1
+	sta FileNameBuf,y
+	iny
+	bne GetStatus0
+GetStatus1:
+	sty FileZp_NameLen
+	jsr File_UnTalk
+GetStatusErr:
+	rts
+
+TestStatus:
+	lda FileNameBuf
+	cmp #'0'			;Zehner <> 0 -> auf jeden Fall Err
+	bne TestStatusErr
+	lda FileNameBuf+1
+	cmp #'0'			;Einer kein Ascii -> Err
+	bcc TestStatusErr
+	cmp #'3'			;Einer >2 -> Err
+	rts
+TestStatusErr:
+	sec
+	rts
+
+
+;--------------------------------------
+
+PrintThis:
+	lda #$20
+	ora ComLibZp_RedirOutput
+	sta ComLibZp_RedirOutput
+	lda #0
+	sta ComLibZp_PrinterRevMode
+	jsr NextSpaces
+	jsr ExecCmd
+	lda ComLibZp_RedirOutput
+	and #$ff-$20
+	sta ComLibZp_RedirOutput
+	clc
+	rts
+
+
+    .SETPET
+@0FileLib_DCmd:
+	jsr NextSpaces
+	bcs DCmdExit
+	cmp #'#'
+	bne DCmd0
+	jsr NextSpaces
+	jsr GetDevice
+	bcs DCmdErr
+	jsr Spaces
+	bcc DCmd0
+DCmdExit:
+	jmp ShowDriveSt
+DCmd0:
+	ldy #0
+	cmp #$22
+	bne DCmd2
+DCmd1:
+	.LongJsr(L_NextCmdChar)
+	bcs DCmd3
+	cmp #$22
+	beq DCmd3
+	.LongJsr(L_ComLib_Screen2Ascii)
+	sta FileNameBuf,y
+	iny
+	bne DCmd1
+
+DCmdErr:
+	sec
+	rts
+
+
+JBlockRead:
+	jmp BlockRead
+JBlockWrite:
+	jmp BlockWrite
+JPrintThis:
+	jmp PrintThis
+
+
+DCmd2:
+	.LongJsr(L_ComLib_Screen2Ascii)
+	sta FileNameBuf,y
+	cpy #1
+	bne DCmd2b		;schon 2 bytes da -> auf 'me' 'br' und 'bw' pruefen
+	ldx FileNameBuf
+	cpx #'m'
+	bne DCmdNoME
+	cmp #'e'
+	bne DCmdNoME
+	jmp MemExec
+DCmdNoME:
+	cpx #'b'
+	bne DCmd2a		;war nix von den Sonderbefehlen
+	cmp #'r'
+	beq JBlockRead
+	cmp #'w'
+	beq JBlockWrite
+DCmd2a:
+	cpx #'p'
+	bne DCmd2b
+	cmp #':'
+	beq JPrintThis
+DCmd2b:
+	iny
+	.LongJsr(L_NextCmdChar)
+	bcc DCmd2
+DCmd3:
+	sty FileZp_NameLen
+	lda FileNameBuf
+        cmp #'$'
+	beq ShowDir
+	cmp #'s'
+	beq DCmd4
+	cmp #'n'
+	bne DCmd5
+    .SETSCR
+DCmd4:
+	.ShowMsg(Msg_AreYouSure)
+	.LongJsr(L_YesNo)
+	bcs DCmd6
+DCmd5:
+	lda #$6f
+	sta FileZp_SecAdr
+	lda FileZp_NameLen
+	ldx #<FileNameBuf
+	ldy #>FileNameBuf
+	jsr File_OpenAXY
+	bcs ShowDriveStErr
+	jmp ShowDriveSt
+DCmd6:
+	clc
+	rts
+
+
+ShowDriveSt:
+	jsr GetStatus
+	bcs ShowDriveStErr
+	jsr File_Close
+ShowGottenStatus:
+	.ShowMsg(Msg_CR)
+	ldy #0
+ShowDriveSt0:
+	lda FileNameBuf,y
+	.LongJsr(L_ComLib_Ascii2Screen)
+	.LongJsr(L_ComLib_PrintChar)
+	iny
+	cpy FileZp_NameLen
+	bne ShowDriveSt0
+	.ShowMsg(Msg_CR)
+	jsr File_UnTalk
+	jmp File_Close
+ShowDriveStErr:
+	jmp File_IOErr
+
+
+ShowDir:
+	lda #0
+	sta FileZp_SecAdr
+	lda FileZp_NameLen
+	ldx #<FileNameBuf
+	ldy #>FileNameBuf
+	jsr File_OpenAXY
+	bcs ShowDirErr
+	lda FileZp_Device
+	jsr File_Talk
+	lda #0
+	jsr File_SecTalk
+	bcs ShowDirErr
+
+	jsr File_ReadByte
+	bcs ShowDirErr
+	jsr File_ReadByte
+	jsr File_ReadByte
+	jsr File_ReadByte
+	.ShowMsg(Msg_CR)
+	jsr ShowDir_LineNo
+	bcs ShowDirErr
+	jsr File_ReadByte
+ShowDir0:
+	jsr File_ReadByte
+	bcs ShowDirErr
+	tax
+	beq ShowDir1
+	.LongJsr(L_ComLib_Ascii2Screen)
+	eor #$80
+	.LongJsr(L_ComLib_PrintChar)
+	jmp ShowDir0
+ShowDir1:
+	.ShowMsg(Msg_CR)
+	.LongJsr(L_KeyB_CheckStop)
+	bne ShowDirStop
+	jsr File_ReadByte
+	jsr File_ReadByte
+	jsr ShowDir_LineNo
+	bcs ShowDir3
+ShowDir2:
+	jsr File_ReadByte
+	tax
+	bcs ShowDir3
+	beq ShowDir1
+	.LongJsr(L_ComLib_Ascii2Screen)
+	.LongJsr(L_ComLib_PrintChar)
+	jmp ShowDir2
+ShowDir3:
+	lda FileZp_90
+	cmp #ErrNo_IEC_EOF
+	beq ShowDirEnd
+ShowDirErr:
+	jmp File_IOErr
+
+ShowDirStop:
+	.ShowMsg(Msg_LoadSave_Break)
+ShowDirEnd:
+	jsr File_UnTalk
+	jsr File_Close
+	clc
+	rts
+
+ShowDir_LineNo:
+	jsr File_ReadByte
+	bcs ShowDir_LineNoErr
+	sta LongLibZp_Akku0
+	jsr File_ReadByte
+	bcs ShowDir_LineNoErr
+	sta LongLibZp_Akku0+1
+	.LongJsr(L_ComLib_DezWordOut)
+	.LongJsr(L_ComLib_SpaceOut)
+	clc
+	rts
+ShowDir_LineNoErr:
+	tax
+	rts
+
+;--------------------------------------
+
+/*
+LoadFKeysErr0:
+        .ShowErr(Err_LoadSave_NoFileName)
+        .DB $2c
+LoadFKeysErr1:
+        .ShowErr(Err_LoadSave_Syntax0)
+        .DB $2c
+LoadFKeysErr2:
+        .ShowErr(Err_MissAfterComma)
+        .DB $2c
+LoadFKeysErr3:
+        .ShowErr(Err_LoadSave_Syntax1)
+        .DB $2c
+LoadFKeysErr:
+	sec
+	rts
+
+LoadFKeyErrB:
+	jmp File_IOErr
+
+
+LoadFKeys:
+	jsr NextSpaces
+	bcs LoadFKeysErr0
+	jsr GetFileName
+	bcs LoadFKeysErr0
+
+	jsr NextSpaces
+	cmp #$22
+	bne LoadFKeysErr0
+	ldy #0
+LoadFKeys0:
+	sty FileZp_NameLen
+	jsr NextCmdChar
+	bcs LoadFKeys2
+	cmp #$22
+	beq LoadFKeys1
+	jsr ComLib_Screen2Ascii
+	sta FileNameBuf,y
+	iny
+	bne LoadFKeys0
+LoadFKeys1:
+
+	jsr NextSpaces
+	bcs LoadFKeys2
+	cmp #','
+	bne LoadFKeysErr1
+	jsr NextSpaces
+	bcs LoadFKeysErr2
+	jsr GetDevice
+	bcs LoadFKeysErr
+	jsr Spaces
+	bcc LoadFKeysErr3
+LoadFKeys2:
+        .ShowMsg(Msg_Load_Searching0)
+	ldy #0
+LoadFKeys11:
+	lda FileNameBuf,y
+	jsr ComLib_Ascii2Screen
+	jsr ComLib_PrintChar
+	iny
+	cpy FileZp_NameLen
+	bcc LoadFKeys11
+        .ShowMsg(Msg_LoadSave_Dots)
+	jsr LoadOpenChannel
+	bcs LoadFKeyErrB
+	jsr File_ReadByte
+	bcc LoadFKeys12
+;        .ShowMsg(Msg_Load_NotFound)
+	clc
+	rts
+LoadFKeys12:
+        .ShowMsg(Msg_Load_Found0)
+	sta FileZp_RelocAdr
+	jsr File_ReadByte
+	bcs LoadFKeyErrB
+	sta FileZp_RelocAdr+1
+	jsr File_ReadByte
+	bcs LoadFKeyErrB
+	sta FileZp_RelocAdr+2
+
+	ldx #StringBufZp_FKeysEnd
+	jsr LongLib_LoadPtr
+	ldx #StringBufZp_Start
+	jsr LongLib_SubLONGPtrFrom		;FKeysEnd - Start = FKeys_Len
+	ldx #FileZp_RelocAdr
+	jsr LongLib_SubLONGPtrFrom		;current FKeys bigger than file?
+	jsr LongLib_StorePtr
+	bcc LoadFKeys5
+	ldx #StringBufZp_FKeysEnd		;Yes -> move down
+	jsr LongLib_SubFromLONGPtr
+	ldx #RangeZp_With			;dest adr
+	jsr LongLib_StorePtr
+	ldx #StringBufZp_FKeysEnd		;src adr
+	jsr LongLib_LoadPtr
+	ldx #StringBufZp_TempEnd
+LoadFKeys3:
+	ldy #0	;*** JUST TO FIX IT FOR NOW ***
+	lda (LongLibZp_Akku0),y
+	sta (RangeZp_With),y
+	jsr LongLib_Inc
+	inc RangeZp_With
+	bne LoadFKeys4
+	inc RangeZp_With+1
+	bne LoadFKeys4
+	inc RangeZp_With+2
+LoadFKeys4:
+	jsr LongLib_CmpWithLONGPtr
+	bcc LoadFKeys3
+	bcs LoadFKeys10				;Ready to load
+
+LoadFKeys5:
+	jsr LongLib_Inc
+	ldx #StringBufZp_TempEnd		;Curr FKeys smaller than File - move mem up
+	jsr LongLib_AddLONGPtr
+	ldx #RangeZp_With			;dest adr
+	jsr LongLib_StorePtr
+	ldx #StringBufZp_TempEnd		;src adr
+	jsr LongLib_LoadPtr
+	ldx #StringBufZp_FKeysEnd
+	bne LoadFKeys7				;bra
+LoadFKeys6:
+	ldy #0	;*** JUST TO FIX IT FOR NOW ***
+	lda (RangeZp_With),y
+	sta (LongLibZp_Akku0),y
+	lda #1
+	jsr LongLib_SubBYTE
+LoadFKeys7:
+	lda RangeZp_With
+	bne LoadFKeys9
+	lda RangeZp_With+1
+	bne LoadFKeys8
+	dec RangeZp_With+2
+LoadFKeys8:
+	dec RangeZp_With+1
+LoadFKeys9:
+	dec RangeZp_With
+
+	jsr LongLib_CmpWithLONGPtr
+	bcs LoadFKeys6
+	
+LoadFKeys10:
+	ldx #StringBufZp_FKeysEnd
+	jsr LongLib_LoadPtr
+	ldx #FileZp_RelocAdr
+	jsr LongLib_SubLONGPtrFrom
+	ldx #StringBufZp_FKeysEnd
+	jsr LongLib_StorePtr
+
+	ldx #StringBufZp_LabelsEnd
+	jsr LongLib_LoadPtr
+	ldx #FileZp_RelocAdr
+	jsr LongLib_SubLONGPtrFrom
+	ldx #StringBufZp_LabelsEnd
+	jsr LongLib_StorePtr
+
+	ldx #StringBufZp_TempEnd
+	jsr LongLib_LoadPtr
+	ldx #FileZp_RelocAdr
+	jsr LongLib_SubLONGPtrFrom
+	ldx #StringBufZp_TempEnd
+	jsr LongLib_StorePtr
+
+	.ShowMsg(Msg_Load_Load)
+	.ShowMsg(Msg_LoadSave_FKeys)
+	.ShowMsg(Msg_LoadSave_From)
+	ldx #StringBufZp_Start
+	jsr LongLib_LoadPtr
+	jsr LongLib_Akku0Out
+	.ShowMsg(Msg_LoadSave_To)
+	jmp Load7
+*/
+;--------------------------------------
+/*
+LoadLabelsErr0:
+        .ShowErr(Err_LoadSave_NoFileName)
+        .DB $2c
+LoadLabelsErr1:
+        .ShowErr(Err_LoadSave_Syntax0)
+        .DB $2c
+LoadLabelsErr2:
+        .ShowErr(Err_MissAfterComma)
+        .DB $2c
+LoadLabelsErr3:
+        .ShowErr(Err_LoadSave_Syntax1)
+        .DB $2c
+LoadLabelsErr:
+	sec
+	rts
+
+LoadLabelErrB:
+	jmp File_IOErr
+
+
+LoadLabels:
+	jsr NextSpaces
+	bcs LoadLabelsErr0
+	jsr GetFileName
+	bcs LoadLabelsErr0
+
+	jsr NextSpaces
+	cmp #$22
+	bne LoadLabelsErr0
+	ldy #0
+LoadLabels0:
+	sty FileZp_NameLen
+	jsr NextCmdChar
+	bcs LoadLabels2
+	cmp #$22
+	beq LoadLabels1
+	jsr ComLib_Screen2Ascii
+	sta FileNameBuf,y
+	iny
+	bne LoadLabels0
+LoadLabels1:
+
+	jsr NextSpaces
+	bcs LoadLabels2
+	cmp #','
+	bne LoadLabelsErr1
+	jsr NextSpaces
+	bcs LoadLabelsErr2
+	jsr GetDevice
+	bcs LoadLabelsErr
+	jsr Spaces
+	bcc LoadLabelsErr3
+LoadLabels2:
+        .ShowMsg(Msg_Load_Searching0)
+	ldy #0
+LoadLabels11:
+	lda FileNameBuf,y
+	jsr ComLib_Ascii2Screen
+	jsr ComLib_PrintChar
+	iny
+	cpy FileZp_NameLen
+	bcc LoadLabels11
+        .ShowMsg(Msg_LoadSave_Dots)
+	jsr LoadOpenChannel
+	bcs LoadLabelErrB
+	jsr File_ReadByte
+	bcc LoadLabels12
+;        .ShowMsg(Msg_Load_NotFound)
+	clc
+	rts
+LoadLabels12:
+        .ShowMsg(Msg_Load_Found0)
+	sta FileZp_RelocAdr
+	jsr File_ReadByte
+	bcs LoadLabelErrB
+	sta FileZp_RelocAdr+1
+	jsr File_ReadByte
+	bcs LoadLabelErrB
+	sta FileZp_RelocAdr+2
+
+	ldx #StringBufZp_LabelsEnd
+	jsr LongLib_LoadPtr
+	ldx #StringBufZp_FKeysEnd
+	jsr LongLib_SubLONGPtrFrom		;LabelsEnd - Start = Labels_Len
+	ldx #FileZp_RelocAdr
+	jsr LongLib_SubLONGPtrFrom		;current Labels bigger than file?
+	jsr LongLib_StorePtr
+	bcc LoadLabels5
+	ldx #StringBufZp_LabelsEnd		;Yes -> move down
+	jsr LongLib_SubFromLONGPtr
+	ldx #RangeZp_With			;dest adr
+	jsr LongLib_StorePtr
+	ldx #StringBufZp_LabelsEnd		;src adr
+	jsr LongLib_LoadPtr
+	ldx #StringBufZp_TempEnd
+LoadLabels3:
+	ldy #0	;***JUST TO FIX IT FOR NOW ***
+	lda (LongLibZp_Akku0),y
+	sta (RangeZp_With),y
+	jsr LongLib_Inc
+	inc RangeZp_With
+	bne LoadLabels4
+	inc RangeZp_With+1
+	bne LoadLabels4
+	inc RangeZp_With+2
+LoadLabels4:
+	jsr LongLib_CmpWithLONGPtr
+	bcc LoadLabels3
+	bcs LoadLabels10				;Ready to load
+
+LoadLabels5:
+	jsr LongLib_Inc
+	ldx #StringBufZp_TempEnd		;Curr Labels smaller than File - move mem up
+	jsr LongLib_AddLONGPtr
+	ldx #RangeZp_With			;dest adr
+	jsr LongLib_StorePtr
+	ldx #StringBufZp_TempEnd		;src adr
+	jsr LongLib_LoadPtr
+	ldx #StringBufZp_LabelsEnd
+	bne LoadLabels7				;bra
+LoadLabels6:
+	ldy #0	;***JUST TO FIX IT FOR NOW ***
+	lda (RangeZp_With),y
+	sta (LongLibZp_Akku0),y
+	lda #1
+	jsr LongLib_SubBYTE
+LoadLabels7:
+	lda RangeZp_With
+	bne LoadLabels9
+	lda RangeZp_With+1
+	bne LoadLabels8
+	dec RangeZp_With+2
+LoadLabels8:
+	dec RangeZp_With+1
+LoadLabels9:
+	dec RangeZp_With
+
+	jsr LongLib_CmpWithLONGPtr
+	bcs LoadLabels6
+	
+LoadLabels10:
+	ldx #StringBufZp_LabelsEnd
+	jsr LongLib_LoadPtr
+	ldx #FileZp_RelocAdr
+	jsr LongLib_SubLONGPtrFrom
+	ldx #StringBufZp_LabelsEnd
+	jsr LongLib_StorePtr
+
+	ldx #StringBufZp_TempEnd
+	jsr LongLib_LoadPtr
+	ldx #FileZp_RelocAdr
+	jsr LongLib_SubLONGPtrFrom
+	ldx #StringBufZp_TempEnd
+	jsr LongLib_StorePtr
+
+	.ShowMsg(Msg_Load_Load)
+	.ShowMsg(Msg_LoadSave_Labels)
+	.ShowMsg(Msg_LoadSave_From)
+	ldx #StringBufZp_FKeysEnd
+	jsr LongLib_LoadPtr
+	jsr LongLib_Akku0Out
+	.ShowMsg(Msg_LoadSave_To)
+	jmp Load7
+*/
+;--------------------------------------
+
+/*
+LoadFKeys_Jmp:
+	jmp LoadFKeys
+LoadLabels_Jmp:
+	jmp LoadLabels
+*/
+
+@0Verify:
+	sec
+	rts
+/*
+	lda #1
+	sta FileZp_SaveTo		;Flag 4 Load/Verify
+	jsr NextSpaces
+	bcs Load4
+	bcc Load0			;Skip f and l
+*/
+@0Load:
+	lda #0
+	sta FileZp_SaveTo		;Flag 4 Load/Verify
+	jsr NextSpaces
+	bcs Load4
+/*
+	cmp #'f'
+	beq LoadFKeys_Jmp
+	cmp #'l'
+	beq LoadLabels_Jmp
+*/
+Load0:
+	jsr GetFileName
+	bcc Load1
+
+LoadErr0:
+        .ShowErr(Err_LoadSave_NoFileName)
+        .DB $2c
+LoadErr1:
+        .ShowErr(Err_LoadSave_Syntax0)
+        .DB $2c
+LoadErr2:
+        .ShowErr(Err_MissAfterComma)
+        .DB $2c
+LoadErr3:
+        .ShowErr(Err_LoadSave_Syntax1)
+        .DB $2c
+LoadErr4:
+        .ShowErr(Err_Area_From)
+        .DB $2c
+LoadErr5:
+        .ShowErr(Err_Area_AFrom)
+LoadErr:
+	sec
+	rts
+
+
+Load1:
+	jsr NextSpaces
+	bcs Load10
+	cmp #','
+	bne LoadErr1
+	jsr NextSpaces
+	bcs LoadErr2
+	jsr GetDevice
+	bcs LoadErr
+	jsr Spaces
+	bcs Load10
+        cmp #','
+	bne LoadErr3
+	jsr NextSpaces
+	bcs LoadErr2
+	.LongJsr(L_GetNum_GetHexLong)
+	bcs LoadErr4
+	ldx #FileZp_RelocAdr
+	.LongJsr(L_LongLib_StorePtr)
+	jsr Spaces
+	bcc LoadErr5
+	lda #1
+	bne Load3
+Load10:
+	lda #0
+Load3:
+	sta FileZp_WhereToLoad
+Load4:
+        .ShowMsg(Msg_Load_Searching0)
+	ldy #0
+Load5:
+	lda FileNameBuf,y
+	.LongJsr(L_ComLib_Ascii2Screen)
+	.LongJsr(L_ComLib_PrintChar)
+	iny
+	cpy FileZp_NameLen
+	bcc Load5
+	.ShowMsg(Msg_LoadSave_Dots)
+
+	lda Option_Speeder
+	and #1
+	tax
+
+	lda LoadJmpTab_Open_Lo,x
+	sta LoadVect_Open+1
+	lda LoadJmpTab_Open_Hi,x
+	sta LoadVect_Open+2
+
+	lda LoadJmpTab_NextBlock_Lo,x
+	sta LoadVect_NextBlock+1
+	lda LoadJmpTab_NextBlock_Hi,x
+	sta LoadVect_NextBlock+2
+
+	lda LoadJmpTab_Close_Lo,x
+	sta LoadVect_Close+1
+	lda LoadJmpTab_Close_Hi,x
+	sta LoadVect_Close+2
+
+	lda LoadJmpTab_ShowSt_Lo,x
+	sta LoadVect_ShowSt+1
+	lda LoadJmpTab_ShowSt_Hi,x
+	sta LoadVect_ShowSt+2
+
+;*** Open
+	jsr LoadVect_Open
+	bcs LoadEnd
+	jsr LoadVect_NextBlock
+	bcs LoadEnd
+	lda LdBfZp_Len
+	cmp #3
+	bcc LoadEnd			;File Too Small
+	.ShowMsg(Msg_Load_Found0)
+	lda FileZp_SaveTo		;Flag 4 Load/Verify
+	bne Load11
+	.ShowMsg(Msg_Load_Load)
+	.DB $2c
+Load11:
+	.ShowMsg(Msg_Verify_Verify)
+	.ShowMsg(Msg_LoadSave_ing)
+	.ShowMsg(Msg_LoadSave_From)
+	lda LdBf+2
+	sta LongLibZp_Akku0
+	lda LdBf+3
+	sta LongLibZp_Akku0+1
+	lda #0
+	sta LongLibZp_Akku0+2
+	lda FileZp_WhereToLoad
+	beq Load6
+	ldx #FileZp_RelocAdr
+	.LongJsr(L_LongLib_LoadPtr)
+Load6:
+	ldx #LongLibZp_Akku0
+	.LongJsr(L_OutputBuf_Init)
+	.LongJsr(L_LongLib_Akku0Out)
+	.ShowMsg(Msg_LoadSave_To)
+;	lda FileZp_SaveTo		;Flag 4 Load/Verify
+;	bne Verify0
+	ldx #2
+	.DB $2c
+Load7:
+	ldx #0
+	ldy #0		;NICHT txy wegen  ldx #2  da oben!
+Load8:
+	lda LdBf+2,x
+	.LongJsr(L_OutputBuf_Byte)
+	inx
+	iny
+	cpx LdBfZp_Len
+	bne Load8
+	jsr LoadAdd
+	jsr LoadVect_NextBlock
+	bcs LoadEnd
+	lda LdBfZp_Len
+	beq LoadEnd
+	.LongJsr(L_KeyB_CheckStop)
+	beq Load7
+	.ShowMsg(Msg_LoadSave_Break)
+LoadEnd:
+	.LongJsr(L_OutputBuf_Flush)
+	jsr LoadVect_Close
+	jmp LoadVect_ShowSt
+
+
+LoadAdd:
+	tya
+	.LongJsr(L_LongLib_AddBYTE)
+	.LongJsr(L_LongLib_Akku0Out)
+	ldx #5
+	lda #Key_CLe
+LoadAdd1:
+	.LongJsr(L_ComLib_PrintSpiChar)
+	dex
+	bpl LoadAdd1
+	rts
+
+/*
+Verify0:
+	ldy #0
+Verify1:
+	lda FileZp_90
+	bne Verify3
+	jsr File_ReadByte
+	sta FileZp_SaveTo+1
+;	jsr Mapping_LdByteY
+	cmp FileZp_SaveTo+1
+	beq Verify2
+	lda #0
+	sta FileZp_SaveTo
+Verify2:
+	iny
+	bpl Verify1
+	jsr LoadAdd
+	.LongJsr(L_KeyB_CheckStop)
+	beq Verify0
+	bne LoadStop			;bra
+Verify3:
+	cmp #ErrNo_IEC_EOF
+	bne LoadErrB
+	jsr LoadAdd
+	.ShowMsg(Msg_Verify_Hi)
+	lda FileZp_SaveTo
+	beq Verify4
+	.ShowMsg(Msg_Verify_Ok)
+	.DB $2c
+Verify4:
+	.ShowMsg(Msg_Verify_NotOk)
+	beq LoadEnd			;bra
+*/
+
+;--------------------------------------
+
+LoadJmpTab_Open_Lo:
+	.DB <SlowLoad_Open
+	.DB <SlowLoad_Open
+LoadJmpTab_Open_Hi:
+	.DB >SlowLoad_Open
+	.DB >SlowLoad_Open
+
+LoadJmpTab_NextBlock_Lo:
+	.DB <SlowLoad_NextBlock
+	.DB <SlowLoad_NextBlock
+LoadJmpTab_NextBlock_Hi:
+	.DB >SlowLoad_NextBlock
+	.DB >SlowLoad_NextBlock
+
+LoadJmpTab_Close_Lo:
+	.DB <SlowLoad_Close
+	.DB <SlowLoad_Close
+LoadJmpTab_Close_Hi:
+	.DB >SlowLoad_Close
+	.DB >SlowLoad_Close
+
+LoadJmpTab_ShowSt_Lo:
+	.DB <SlowLoad_ShowSt
+	.DB <SlowLoad_ShowSt
+LoadJmpTab_ShowSt_Hi:
+	.DB >SlowLoad_ShowSt
+	.DB >SlowLoad_ShowSt
+
+LoadVect_Open:
+	jmp SlowLoad_Open
+LoadVect_NextBlock:
+	jmp SlowLoad_NextBlock
+LoadVect_Close:
+	jmp SlowLoad_Close
+LoadVect_ShowSt:
+	jmp SlowLoad_ShowSt
+
+;--------------------------------------
+
+@0SlowLoad_Open:
+	jsr LoadOpenChannel
+	clc
+	rts
+
+@0SlowLoad_NextBlock:
+	ldy #0
+FillBufferLoop:
+	lda FileZp_90
+	bne FillBuffer1
+	jsr File_ReadByte
+	bcs FillBuffer_ReadErr
+	sta LdBf+2,y
+	iny
+	cpy #$fe
+	bcc FillBufferLoop
+FillBuffer0:
+	sty LdBfZp_Len
+	clc
+	rts
+FillBuffer1:
+	cmp #ErrNo_IEC_EOF
+	beq FillBuffer0
+FillBuffer_ReadErr:
+	sec
+	rts
+
+@0SlowLoad_Close:
+	jsr File_UnTalk
+	jmp File_Close
+
+
+@0SlowLoad_ShowSt:
+	.ShowMsg(Msg_CR)
+	lda FileZp_90
+	bmi ShowSt0
+	jmp ShowDriveSt
+ShowSt0:
+	.ShowMsg(Msg_IEC_DevNPresent)
+	rts
+
+;--------------------------------------
+
+
+FastLoadErr:
+	sec
+	rts
+
+@0FastLoad_Open:
+	;DEBUG ONLY
+	sec
+	rts
+/*
+	lda FileZp_NameLen
+	pha
+	jsr DLoad_Install
+	sta FileZp_90
+	pla
+	bcs FastLoadErr
+	sta FileZp_NameLen
+
+	ldx #0
+	ldy #0
+delay:
+	bit $d012
+	dex
+	bne delay
+	dey
+	bne delay
+
+	ldx #0
+	ldy #1
+LdSearch0:
+	sei
+	sta $d072
+	jsr DLoadVect_ReadBlock
+	sta $d073
+	cli
+	bcs Ld_ReadError
+	ldx #0
+LdSearch1:
+	lda LdBf+2,x
+	and #$87
+	eor #$82
+	bne LdSearch3
+	tay
+LdSearch2:
+	lda FileNameBuf,y
+	cmp #'?'
+	beq LdSearch2a
+	cmp #'*'
+	beq LdSearch4
+	cmp LdBf+5,x
+	bne LdSearch3
+LdSearch2a:
+	inx
+	iny
+	cpy FileZp_NameLen
+	bcc LdSearch2
+	cpy #16
+	bcs LdSearch4
+	lda #$a0
+	cmp LdBf+5,x
+	beq LdSearch4
+LdSearch3:
+	txa
+	clc
+	and #$e0
+	adc #$20
+	tax
+	bcc LdSearch1
+	ldy LdBf+1
+	ldx LdBf
+	bne LdSearch0
+;Ld_FileNotFound:
+	lda #SpeederError_FileNotFound
+	.DB $2c
+Ld_ReadError:
+	lda #SpeederError_ReadError
+;Ld_Error:
+	sta FileZp_90
+	jsr LoaderOff
+	sec
+	rts
+
+LdSearch4:
+	txa
+	and #$e0
+	tax
+	lda LdBf+3,x
+	sta LdBf
+	lda LdBf+4,x
+	sta LdBf+1
+	clc
+	rts
+
+
++FastLoad_NextBlock:
+	ldx LdBf
+	beq NextBlock_End
+	ldy LdBf+1
+	sei
+	sta $d072
+	jsr DLoadVect_ReadBlock
+	sta $d073
+	cli
+	bcs Ld_ReadError
+	rts
+NextBlock_End:
+	jsr LoaderOff
+	stz LdBfZp_Len
+	clc
+	rts
+
+
+LoaderOff:
+	ldx #0
+	txy
+	sei
+	sta $d072
+	jsr DLoadVect_SendH
+	sta $d073
+	cli
+	rts
+
+
+@0FastLoad_Close:
+	clc
+	rts
+
+
+@0FastLoad_ShowSt:
+	.ShowMsg(Msg_CR)
+	lda FileZp_90
+	bne FastLoad_ShowSt0
+	.ShowMsg(Msg_Speeder_FileNotFound)
+	rts
+FastLoad_ShowSt0:
+	cmp #1
+	bne FastLoad_ShowSt1
+	.ShowMsg(Msg_Speeder_DeviceOff)
+	rts
+FastLoad_ShowSt1:
+	cmp #5
+	bne FastLoad_ShowSt2
+	.ShowMsg(Msg_Speeder_ReadError)
+FastLoad_ShowSt2:
+	rts
+*/
+;--------------------------------------
+
+@0Save:
+	jsr NextSpaces
+	bcs SaveErr0
+/*
+	cmp #'f'
+	bne NoSFKeys
+;SFKeys
+	jsr NextSpaces
+	bcs SaveErr0
+	jsr GetSaveFLPar
+	bcs SaveErr
+	jsr Spaces
+	bcc SaveErr2
+        .ShowMsg(Msg_Save_Save)
+	.ShowMsg(Msg_LoadSave_FKeys)
+	.ShowMsg(Msg_LoadSave_From)
+	ldy #StringBufZp_Start
+	ldx #StringBufZp_FKeysEnd
+	jmp Save3
+NoSFKeys:
+	cmp #'l'
+	bne NoSLab
+;SLab
+	jsr NextSpaces
+	bcs SaveErr0
+	jsr GetSaveFLPar
+	bcs SaveErr
+	jsr Spaces
+	bcc SaveErr2
+        .ShowMsg(Msg_Save_Save)
+	.ShowMsg(Msg_LoadSave_Labels)
+	.ShowMsg(Msg_LoadSave_From)
+	ldy #StringBufZp_FKeysEnd
+	ldx #StringBufZp_LabelsEnd
+	jmp Save3
+NoSLab:
+*/
+	jsr GetSavePar
+	bcc Save1
+	rts
+
+SaveErr0:
+	.ShowErr(Err_LoadSave_NoFileName)
+	.DB $2c
+SaveErr2:
+	.ShowErr(Err_LoadSave_Syntax0)
+	.DB $2c
+SaveErr3:
+	.ShowErr(Err_MissAfterComma)
+	.DB $2c
+SaveErr4:
+	.ShowErr(Err_Area_NoFrom)
+	.DB $2c
+SaveErr5:
+	.ShowErr(Err_LoadSave_Syntax1)
+	.DB $2c
+SaveErr6:
+	.ShowErr(Err_Area_From)
+	.DB $2c
+SaveErr7:
+	.ShowErr(Err_Area_AFrom)
+	.DB $2c
+SaveErr8:
+	.ShowErr(Err_Area_NoTo)
+	.DB $2c
+SaveErr9:
+	.ShowErr(Err_Area_To)
+	.DB $2c
+SaveErr10:
+	.ShowErr(Err_Area_ATo)
+	.DB $2c
+SaveErr11:
+	.ShowErr(Err_Save_Syntax4)
+	.DB $2c
+SaveErr12:
+	.ShowErr(Err_Save_Syntax5)
+SaveErr:
+	sec
+	rts
+
+
+Save1:
+	jsr Spaces
+	bcs SaveErr4
+	cmp #','
+	bne SaveErr5
+	jsr NextSpaces
+	bcs SaveErr3
+	.LongJsr(L_GetNum_GetHexLong)
+	bcs SaveErr6
+	ldx #FileZp_SaveFrom
+	.LongJsr(L_LongLib_StorePtr)
+	ldx #FileZp_RelocAdr
+	.LongJsr(L_LongLib_StorePtr)
+	jsr Spaces
+	bcs SaveErr8
+	cmp #','
+	bne SaveErr7
+	jsr NextSpaces
+	bcs SaveErr3
+	.LongJsr(L_GetNum_GetHexLong)
+	bcs SaveErr9
+	ldx #FileZp_SaveTo
+	.LongJsr(L_LongLib_StorePtr)
+	jsr Spaces
+	bcs Save2
+        cmp #','
+	bne SaveErr10
+	jsr NextSpaces
+	bcs SaveErr3
+	.LongJsr(L_GetNum_GetHexLong)
+	bcs SaveErr11
+	jsr Spaces
+	bcc SaveErr12
+	ldx #FileZp_RelocAdr
+	.LongJsr(L_LongLib_StorePtr)
+Save2:
+        .ShowMsg(Msg_Save_Save)
+	.ShowMsg(Msg_LoadSave_ing)
+	.ShowMsg(Msg_LoadSave_From)
+	ldx #FileZp_SaveFrom
+	.LongJsr(L_LongLib_LoadPtr)
+	.LongJsr(L_LongLib_Akku0Out)
+	.ShowMsg(Msg_LoadSave_To)
+	jsr SaveOpenChannel
+	bcc SaveJumpIn0
+SaveErrB:
+	jmp File_IOErr
+
+/*
+Save3:
+	.LongJsr(L_LongLib_LoadPtr)
+	ldx #FileZp_SaveTo
+	.LongJsr(L_LongLib_StorePtr)
+	tya
+	tax
+	.LongJsr(L_LongLib_SubLONGPtrFrom)
+	ldx #FileZp_RelocAdr
+	.LongJsr(L_LongLib_StorePtr)
+	tya
+	tax
+	.LongJsr(L_LongLib_LoadPtr)
+	.LongJsr(L_LongLib_Akku0Out)
+	.ShowMsg(Msg_LoadSave_To)
+	ldx #FileZp_SaveFrom
+	.LongJsr(L_LongLib_StorePtr)
+	jsr SaveOpenChannel
+	bcs SaveErrB
+	lda FileZp_RelocAdr+2
+	jsr File_WriteByte
+	bcs SaveErrB
+*/
+
+
+SaveJumpIn0:
+	ldx #FileZp_SaveTo
+	.LongJsr(L_LongLib_LoadPtr)
+	ldx #FileZp_SaveFrom
+	.LongJsr(L_LongLib_SubLONGPtrFrom)
+Save4:
+	lda LongLibZp_Akku0+1
+	ora LongLibZp_Akku0+2
+	bne Save7
+	lda LongLibZp_Akku0
+	beq Save6
+	.DB $2c
+Save7:
+	lda #254
+	sta FileZp_BlockSize
+	ldx #FileZp_SaveFrom
+	.LongJsr(L_InputBuf_Init)
+	ldy #0
+Save5:
+	lda InputBuffer,y
+	jsr File_WriteByte
+	lda FileZp_90
+	bne SaveErrB
+	iny
+	cpy FileZp_BlockSize
+	bne Save5
+	.LongJsr(L_KeyB_CheckStop)
+	bne SaveBreak
+	ldx #FileZp_SaveFrom
+	.LongJsr(L_LongLib_LoadPtr)
+	lda FileZp_BlockSize
+	.LongJsr(L_LongLib_AddBYTE)
+	.LongJsr(L_LongLib_StorePtr)
+	jsr SaveAdd
+	jmp SaveJumpIn0
+
+SaveBreak:
+	.ShowMsg(Msg_LoadSave_Break)
+	bne SaveStop
+
+Save6:
+SaveStop:
+	jsr File_UnListen
+	jsr File_Close
+	.ShowMsg(Msg_CR)
+	jmp ShowDriveSt
+
+SaveAdd:
+	.LongJsr(L_LongLib_Akku0Out)
+	ldx #5
+	lda #Key_CLe
+SaveAdd0:
+        .LongJsr(L_ComLib_PrintSpiChar)
+	dex
+	bpl SaveAdd0
+	rts
+
+
+;--------------------------------------
+
+LoadOpenChannel:
+	lda #$60
+	sta FileZp_SecAdr
+	lda FileZp_NameLen
+	ldx #<FileNameBuf
+	ldy #>FileNameBuf
+	jsr File_OpenAXY
+	bcs LoadOpenChannelErr
+	lda FileZp_Device
+	jsr File_Talk
+	lda #$60
+	jsr File_SecTalk
+	clc
+LoadOpenChannelErr:
+	rts
+
+SaveOpenChannel:
+	lda #$61
+	sta FileZp_SecAdr
+	lda FileZp_NameLen
+	ldx #<FileNameBuf
+	ldy #>FileNameBuf
+	jsr File_OpenAXY
+	bcs SaveOpenChannelErr
+	lda FileZp_Device
+	jsr File_Listen
+	lda #$61
+	jsr File_SecListen
+	lda FileZp_RelocAdr
+	jsr File_WriteByte
+	bcs SaveOpenChannelErr
+	lda FileZp_RelocAdr+1
+	jmp File_WriteByte
+SaveOpenChannelErr:
+	rts
+
+/*-----------------------------------*/
+
+GetSavePar:
+	jsr GetFileName
+	bcs GetSaveParErr0
+	jsr NextSpaces
+	bcs GetSaveParErr1
+        cmp #','
+	bne GetSaveParErr2
+	jsr NextSpaces
+	bcs GetSaveParErr1
+	jmp GetDevice
+
+GetSaveParErr0:
+        .ShowErr(Err_LoadSave_NoFileName)
+        .DB $2c
+GetSaveParErr1:
+        .ShowErr(Err_Save_NoDev)
+        .DB $2c
+GetSaveParErr2:
+        .ShowErr(Err_LoadSave_Syntax0)
+	sec
+	rts
+
+;-------------------------------------
+/*
+GetSaveFileName:
+	jsr Spaces
+	bcs GetSaveFileNameErr0
+	cmp #$22
+	bne GetSaveFileNameErr0
+	ldy #0
+GetSaveFileName0:
+	jsr NextCmdChar
+	bcs GetSaveFileNameErr1
+	cmp #$22
+	beq GetSaveFileName1
+	jsr ComLib_Screen2Ascii
+	sta FileNameBuf,y
+	iny
+	bne GetSaveFileName0
+GetSaveFileNameErr1:
+        .ShowErr(Err_LoadSave_NoFileName)
+        .DB $2c
+GetSaveFileNameErr0:
+        .ShowErr(Err_LoadSave_Syntax0)
+	sec
+	rts
+GetSaveFileName1:
+	clc
+	rts
+*/
+;--------------------------------------
+
+GetSaveFLPar:
+	jsr GetFileName
+	bcs GetSaveFLParErr0
+	jsr NextSpaces
+	bcc GetSaveFLPar0
+	clc
+	rts
+GetSaveFLPar0:
+        cmp #','
+	bne GetSaveFLParErr2
+	jsr NextSpaces
+	bcs GetSaveFLParErr1
+	jmp GetDevice
+
+GetSaveFLParErr0:
+        .ShowErr(Err_LoadSave_NoFileName)
+        .DB $2c
+GetSaveFLParErr1:
+        .ShowErr(Err_Save_NoDev)
+        .DB $2c
+GetSaveFLParErr2:
+        .ShowErr(Err_LoadSave_Syntax0)
+	sec
+	rts
+
+;--------------------------------------
+
+GetFileName:
+	jsr Spaces
+	bcs GetFileNameErr0
+	cmp #$22
+	bne GetFileNameErr0
+	ldy #0
+GetFileName0:
+	.LongJsr(L_NextCmdChar)
+	bcs GetFileName1
+	cmp #$22
+	beq GetFileName1
+	.LongJsr(L_ComLib_Screen2Ascii)
+	sta FileNameBuf,y
+	iny
+	bne GetFileName0
+GetFileNameErr0:
+	sec
+	rts
+GetFileName1:
+	tya
+	beq GetFileNameErr0
+	sta FileZp_NameLen
+	clc
+	rts
+
+;--------------------------------------
+
+GetDevice:
+	.LongJsr(L_GetNum_GetDezLong)
+	bcs GetDeviceErr0
+	cmp #1
+	bcs GetDeviceErr1
+	lda LongLibZp_Akku0
+	cmp #4
+	bcc GetDeviceErr1
+	cmp #31
+	bcs GetDeviceErr1
+	sta FileZp_Device
+	rts
+
+GetDeviceErr0:
+        .ShowErr(Err_DevNo_Syntax)
+        .DB $2c
+GetDeviceErr1:
+        .ShowErr(Err_DevNo_Ill)
+	sec
+	rts
+
+;--------------------------------------
+
+#include "file_lib_iec.src"
+
+;--------------------------------------
+
+	.)	;*** FileLib ***
+

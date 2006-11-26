@@ -1,0 +1,75 @@
+/***************************************************************************
+ *   Copyright (C) 2000 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+;--------------------------------------
+;
+; Messages
+;
+;--------------------------------------
+
+
+	.(	;** Messages **
+
+;--------------------------------------
+
+@0MessageServer:
+	tay
+	bpl MessageServer1		; >= $80, dann ist es eine Fehlermeldung
+
+	ldx Palette+Palette_Error	;Es ist eine Fehlermeldung, hole Errorfarbe aus der Palette
+	lda #Key_CR			;CR ausgeben
+	jsr ComLib_PrintColChar		;und Farbe setzen
+	tya				;MsgNr wiederholen
+	and #$7f			;bit 7 ausmaskieren
+MessageServer1:
+/*
+	bne MessageServer0		;Ist das Parameterbyte == 0?
+	tsx
+	lda $0104,x
+MessageServer0:
+*/
+;---msg---
+	tax
+	ldy #<MsgTexts
+	lda #0
+	sta MsgZp_Ptr
+	lda #>MsgTexts
+	sta MsgZp_Ptr+1
+Msg0:
+	dex
+	beq Msg3
+Msg1:
+	lda (MsgZp_Ptr),y
+	iny
+	bne Msg2
+	inc MsgZp_Ptr+1
+Msg2:
+	and #$ff
+	beq Msg0
+	bne Msg1
+Msg3:
+	tya
+	ldy MsgZp_Ptr+1
+	jmp ComLib_PrintString
+
+;--------------------------------------
+
+	.)	;** /Messages **
+

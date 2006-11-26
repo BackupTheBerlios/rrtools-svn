@@ -1,0 +1,167 @@
+/***************************************************************************
+ *   Copyright (C) 2000 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+
+;--------------------------------------
+
+ShowRegsA:
+	.ShowMsg(Msg_CR)
+	jsr ComLib_PrinterEnable
+	lda Palette+Palette_SysTxt
+	jsr ComLib_SetCol
+	.ShowMsg(Msg_ShowRegs0)
+ShowRegsAIn0:
+	lda #'r'
+	ldx Palette+Palette_Command
+	jsr ComLib_PrintColChar
+	lda Palette+Palette_Adress
+	jsr ComLib_SetCol
+	ldx SubZeroZp_Regs+SubZero_PC
+	lda SubZeroZp_Regs+SubZero_PC+1
+	jsr ComLib_WordOut
+	jsr ComLib_SpaceOut
+	lda SubZeroZp_Regs+SubZero_A
+	jsr ComLib_ByteOut
+	jsr ComLib_SpaceOut
+	lda SubZeroZp_Regs+SubZero_X
+	jsr ComLib_ByteOut
+	jsr ComLib_SpaceOut
+	lda SubZeroZp_Regs+SubZero_Y
+	jsr ComLib_ByteOut
+	jsr ComLib_SpaceOut
+	lda SubZeroZp_Regs+SubZero_StackPtr
+	jsr ComLib_ByteOut
+	jsr ComLib_SpaceOut
+	lda SubZeroZp_Regs+SubZero_Status
+	ldx #7
+ShowRegsA1:
+	asl
+	pha
+	lda #$30
+	adc #0
+	jsr ComLib_PrintRawChar
+	pla
+	dex
+	bpl ShowRegsA1
+	jsr ComLib_SpaceOut
+	lda SubZeroZp_Regs+SubZero_01
+	jsr ComLib_ByteOut
+	jsr ComLib_FillRestline
+	.ShowMsg(Msg_CR)
+	jmp ComLib_PrinterDisable
+
+;--------------------------------------
+
+@0ShowRegs
+	jsr NextSpaces
+	bcc SetRegsA2
+	jmp ShowRegsA
+
+SetRegsA2:
+	ldx #SubZero_len-1
+ToTmp0:
+	lda SubZeroZp_Regs,x
+	sta Regs_TmpRegs,x
+	dex
+	bpl ToTmp0
+
+	lda #1
+	.LongJsr(L_GetNum_GetHexNDig)
+	bcs SetRegsAErr
+	lda LongLibZp_Akku0
+	sta SubZeroZp_Regs+SubZero_PC
+	lda LongLibZp_Akku0+1
+	sta SubZeroZp_Regs+SubZero_PC+1
+	jsr Spaces
+	bcs SetRegsAErr
+
+	lda #0
+	.LongJsr(L_GetNum_GetHexNDig)
+	bcs SetRegsAErr
+	lda LongLibZp_Akku0
+	sta SubZeroZp_Regs+SubZero_A
+	jsr Spaces
+	bcs SetRegsAErr
+
+	lda #0
+	.LongJsr(L_GetNum_GetHexNDig)
+	bcs SetRegsAErr
+	lda LongLibZp_Akku0
+	sta SubZeroZp_Regs+SubZero_X
+	jsr Spaces
+	bcs SetRegsAErr
+
+	lda #0
+	.LongJsr(L_GetNum_GetHexNDig)
+	bcs SetRegsAErr
+	lda LongLibZp_Akku0
+	sta SubZeroZp_Regs+SubZero_Y
+	jsr Spaces
+	bcs SetRegsAErr
+
+	lda #0
+	.LongJsr(L_GetNum_GetHexNDig)
+	bcs SetRegsAErr
+	lda LongLibZp_Akku0
+	sta SubZeroZp_Regs+SubZero_StackPtr
+	jsr Spaces
+SetRegsAErrPsy:
+	bcs SetRegsAErr
+
+	ldx #7
+SetRegsA0:
+	lsr
+	rol SubZeroZp_Regs+SubZero_Status
+	cmp #$30>>1
+	bne SetRegsAErr
+	.LongJsr(L_NextCmdChar)
+	bcs SetRegsAErr
+	dex
+	bpl SetRegsA0
+
+	lda #0
+	.LongJsr(L_GetNum_GetHexNDig)
+	bcs SetRegsAErr
+	lda LongLibZp_Akku0
+	sta SubZeroZp_Regs+SubZero_01
+	jsr Spaces
+	bcs SetRegsAOk
+	cmp #';'
+	bne SetRegsAErr
+SetRegsAOk:
+
+	lda #0
+	sta ComLibZp_CursorXPos
+	jmp ShowRegsAIn0
+
+SetRegsAErr:
+	ldx #SubZero_len-1
+FromTmp0:
+	lda Regs_TmpRegs,x
+	sta SubZeroZp_Regs,x
+	dex
+	bpl FromTmp0
+
+	sec
+	rts
+
+;--------------------------------------
+
+

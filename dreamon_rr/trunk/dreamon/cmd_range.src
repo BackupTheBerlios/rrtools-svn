@@ -1,0 +1,346 @@
+/***************************************************************************
+ *   Copyright (C) 2000 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+;--------------------------------------
+; Range Commands for DreaMon
+;--------------------------------------
+
+	.(	;** CmdRange **
+
+;--------------------------------------
+
+CmdRangeErr:
+	rts
+
+@0CmdRange:
+	stx RangeZp_Cmd
+	.LongJsr(L_GetNum_GetRange)
+	bcs CmdRangeErr
+	ldx #RangeZp_From
+	.LongJsr(L_LongLib_LoadPtr)
+	ldx #Adress
+	.LongJsr(L_LongLib_StorePtr)
+	lda #RangeFlag_SingleLine | RangeFlag_NonStop
+	bit RangeZp_Flags
+	beq CmdRange0
+	lda #$20
+	bit ComLibZp_RedirOutput	;Beim PrinterOut auch ein CR auf dem Screen ausgeben
+	beq CmdRangeNoDblCR
+	.ShowMsg(Msg_CR)
+CmdRangeNoDblCR:
+	jsr ComLib_PrinterEnable
+@0CmdRangeJumpIn0:
+CmdRange0:
+	jsr Scroll
+	bit RangeZp_Flags
+	jsr CmdRangeShow
+	bcs CmdRangeErr
+	lda #RangeFlag_SingleLine
+	bit RangeZp_Flags
+	bne CmdRangeEnd
+	bvc CmdRangeWait4Key
+	lda RangeZp_Add
+	jsr CmdRangeNextAdrSub
+
+CmdRangeWait4Key:
+	lda #RangeFlag_NonStop
+	bit RangeZp_Flags
+	beq CmdRangeWait4Delay1
+
+	jsr KeyB_CheckStop
+	bne CmdRangeEnd
+	beq CmdRangeWait4KeyEnd
+
+CmdRangeWait4Delay1:
+	jsr CmdRangeInvOn
+CmdRangeWait4Key0:
+	jsr KeyB_GetKey
+	bmi CmdRangeWait4Key9
+	bvc CmdRangeWait4Key0
+
+	jsr CmdRangeInvOff
+	cmp #$1f			;Arrow Left
+	bne CmdRangeWait4Key11
+	jmp CmdRange_StepOut
+CmdRangeWait4Key11:
+	cmp #'-'
+	bne CmdRangeWait4Key1
+	lda #1
+	jsr CmdRangeNextAdrSub
+CmdRangeWait4Key8:
+;	rep #RangeFlag_Up
+	jsr CmdRangeShow
+	bcc CmdRangeWait4Key
+	rts
+CmdRangeWait4Key1:
+	cmp #'+'
+	bne CmdRangeWait4Key2
+	lda #1
+	jsr CmdRangeNextAdrAdd
+	jmp CmdRangeWait4Key8
+CmdRangeWait4Key2:
+	cmp #Key_CR
+	beq CmdRange_StepIn
+	ldx #4
+CmdRWK0:
+	cmp CmdRangeKeys,x
+	beq CmdRWK1
+	dex
+	bpl CmdRWK0
+	bmi CmdRangeWait4Key10
+CmdRWK1:
+;	txa
+;	asl
+	stx RangeZp_Cmd
+	jmp CmdRangeWait4Key8
+CmdRangeWait4Key10:
+	cmp #$20
+	bne CmdRangeWait4Key
+
+CmdRangeWait4KeyEnd:
+	bit RangeZp_Flags
+	bvs CmdRange3
+	lda RangeZp_Add
+	jsr CmdRangeNextAdrAdd
+CmdRange3:
+	bit RangeZp_Flags
+	bpl CmdRange4
+	jsr CmdRangeReachEnd
+	bcs CmdRangeEnd
+CmdRange4:
+	jmp CmdRange0
+
+CmdRangeEnd:
+	clc
+	jsr ComLib_PrinterDisable
+	rts
+
+CmdRangeWait4Key9:
+	jsr CmdRangeInvOff
+	cmp #Key_MSi
+	beq CmdRangeWait4Key8
+	cmp #Key_XSi
+	beq CmdRangeWait4Key8
+	cmp #Key_130
+	bcc CmdRangeWait4Key4
+	cmp #Key_139+1
+	bcc CmdRangeWait4Key8
+CmdRangeWait4Key4:
+	cmp #Key_CDo
+	bne CmdRangeWait4Key6
+	lda RangeZp_Flags
+	and #$ff-RangeFlag_Up
+	sta RangeZp_Flags
+	jmp CmdRangeWait4KeyEnd
+CmdRangeWait4Key6:
+	cmp #Key_CUp
+	bne CmdRangeWait4Key7
+	lda #RangeFlag_Up
+	ora RangeZp_Flags
+	sta RangeZp_Flags
+	bne CmdRangeWait4KeyEnd
+	jmp CmdRange0
+CmdRangeWait4Key7:
+	cmp #Key_Stp
+	beq CmdRangeEnd
+	jmp CmdRangeWait4Key
+
+CmdRange_StepIn:
+	lda RangeZp_Cmd
+	bne CmdRange_StepErr
+	ldx DisAssDivePtr
+	cpx #$ff			;More than 85 Entries?
+	bcc CmdRange_StepIn1
+	ldx #0				;Throw away first Entry
+CmdRange_StepIn0:
+	lda DisAssDiveBuf+3,x
+	sta DisAssDiveBuf,x
+	inx
+	cpx #$fc
+	bcc CmdRange_StepIn0
+CmdRange_StepIn1:
+	lda Adress
+	sta DisAssDiveBuf,x
+	lda Adress+1
+	sta DisAssDiveBuf+1,x
+	lda Adress+2
+	sta DisAssDiveBuf+2,x
+	inx
+	inx
+	inx
+	stx DisAssDivePtr
+	.LongJsr(L_Opcodes_StepIn)
+	bcs CmdRange_StepErr
+	sta RangeZp_Cmd
+	ldx #Adress
+	.LongJsr(L_LongLib_StorePtr)
+	.ShowMsg(Msg_CR)
+	jmp CmdRangeWait4Key8
+CmdRange_StepErr:
+	jmp CmdRangeWait4Key
+
+CmdRange_StepOut:
+	ldx DisAssDivePtr
+	beq CmdRange_StepErr
+	dex
+	dex
+	dex
+	stx DisAssDivePtr
+	lda DisAssDiveBuf,x
+	sta Adress
+	lda DisAssDiveBuf+1,x
+	sta Adress+1
+	lda DisAssDiveBuf+2,x
+	sta Adress+2
+	lda #0
+	sta RangeZp_Cmd
+	jmp CmdRangeWait4Key8
+
+
+CmdRangeInvOn:
+	pha
+	ldx #Adress
+	.LongJsr(L_LongLib_StorePtr)
+	lda #Key_ROn
+	bne CmdRangeInvOff0
+CmdRangeInvOff:
+	pha
+	ldx #Adress
+	.LongJsr(L_LongLib_LoadPtr)
+	lda #Key_ROf
+CmdRangeInvOff0:
+	jsr ComLib_PrintSpiChar
+	lda #0
+	sta ComLibZp_CursorXPos
+	jsr ComLibVect_GetChar
+	and #$7f
+	ldx Palette+Palette_Command
+	jsr ComLib_PrintRawColChar
+	lda #Key_ROf
+	jsr ComLib_PrintSpiChar
+	pla
+	rts
+
+CmdRangeShow:
+	php
+	ldx RangeZp_Cmd
+	lda #0
+	sta ComLibZp_CursorXPos
+	plp
+	lda CmdJumpTable,x
+	jsr LongJumpParam
+	sta RangeZp_Add
+	ldx #Adress
+	.LongJsr(L_LongLib_LoadPtr)
+	rts
+
+@0CmdRangeNextAdrAdd:
+	.LongJsr(L_LongLib_AddBYTE)
+	jmp CmdRangeNextAdr0
+CmdRangeNextAdrSub:
+	.LongJsr(L_LongLib_SubBYTE)
+CmdRangeNextAdr0:
+	ldx #Adress
+	.LongJsr(L_LongLib_StorePtr)
+	rts
+
+Scroll:
+	bit ComLibZp_RedirOutput
+	bvs ScrollDown
+	bit RangeZp_Flags
+	bvs ScrollUp
+ScrollDown:
+	.ShowMsg(Msg_CR)
+	rts
+ScrollUp:
+	jsr ComLib_LineFeedUp
+	rts
+
+CmdRangeReachEnd:
+	bvs Range_ReachEndUp
+	lda Adress
+	cmp RangeZp_To
+	lda Adress+1
+	sbc RangeZp_To+1
+	lda Adress+2
+	sbc RangeZp_To+2
+	rts
+Range_ReachEndUp:
+	lda RangeZp_To
+	cmp Adress
+	lda RangeZp_To+1
+	sbc Adress+1
+	lda RangeZp_To+2
+	sbc Adress+2
+	rts
+
+CmdRangeKeys:		.SCR "dmnij"		;a copy of this tab is in bank 0 for the exec routine
+
+CmdJumpTable:
+	.DB L_Opcodes_DisassRange
+	.DB L_DumpLib_MemAscDumpRange,	L_DumpLib_MemScrDumpRange
+	.DB L_DumpLib_AscDumpRange,	L_DumpLib_ScrDumpRange
+@0CmdJumpTableScrl:
+	.DB L_Opcodes_DisassScrl
+	.DB L_DumpLib_MemAscDumpScrl,	L_DumpLib_MemScrDumpScrl
+	.DB L_DumpLib_AscDumpScrl,	L_DumpLib_ScrDumpScrl
+@0CmdJumpTableScrlEnd:
+
+
+/*
+	lda CmdJumpTableLo,x
+	sta CmdRangeBSS_Jmp
+	lda CmdJumpTableHi,x
+	sta CmdRangeBSS_Jmp+1
+	jmp (CmdRangeBSS_Jmp)
+
+
++CmdJumpTableLo:
+	.DB <Opcodes_DisassRange
+	.DB <DumpLib_MemAscDumpRange,	<DumpLib_MemScrDumpRange
+	.DB <DumpLib_AscDumpRange,	<DumpLib_ScrDumpRange
++CmdJumpTableScrlLo:
+	.DB <Opcodes_DisassScrl
+	.DB <DumpLib_MemAscDumpScrl,	<DumpLib_MemScrDumpScrl
+	.DB <DumpLib_AscDumpScrl,	<DumpLib_ScrDumpScrl
++CmdJumpTableScrlLoEnd:
+
++CmdJumpTableHi:
+	.DB >Opcodes_DisassRange
+	.DB >DumpLib_MemAscDumpRange,	>DumpLib_MemScrDumpRange
+	.DB >DumpLib_AscDumpRange,	>DumpLib_ScrDumpRange
++CmdJumpTableScrlHi:
+	.DB >Opcodes_DisassScrl
+	.DB >DumpLib_MemAscDumpScrl,	>DumpLib_MemScrDumpScrl
+	.DB >DumpLib_AscDumpScrl,	>DumpLib_ScrDumpScrl
+*/
+
+;--------------------------------------
+
+	.)	;** CmdRange **
+
+
+
+
+
+
+
+
+

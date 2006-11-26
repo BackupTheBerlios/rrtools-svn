@@ -1,0 +1,254 @@
+/***************************************************************************
+ *   Copyright (C) 2000 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+
+;--------------------------------------
+;
+;  Long arithmetics Lib V1.0
+;
+;--------------------------------------
+
+
+	.(	/* LongLib */
+
+;--------------------------------------
+
+@0LongLib_SetZero:
+	lda #0
+        sta LongLibZp_Akku0
+        sta LongLibZp_Akku0+1
+        sta LongLibZp_Akku0+2
+        rts
+
+@0LongLib_LoadPtr:
+        lda 2,x
+        sta LongLibZp_Akku0+2
+@0LongLib_LoadWORD:
+        lda 0,x
+        sta LongLibZp_Akku0
+        lda 1,x
+        sta LongLibZp_Akku0+1
+        rts
+
+@0LongLib_LoadAXY:
+        sta LongLibZp_Akku0
+        stx LongLibZp_Akku0+1
+        sty LongLibZp_Akku0+2
+        rts
+
+@0LongLib_StorePtr:
+        lda LongLibZp_Akku0+2
+        sta 2,x
+@0LongLib_StoreWORD:
+        lda LongLibZp_Akku0
+        sta 0,x
+        lda LongLibZp_Akku0+1
+        sta 1,x
+        rts
+
+@0LongLib_AddLONGPtr:
+        lda LongLibZp_Akku0
+        clc
+        adc 0,x
+        sta LongLibZp_Akku0
+        lda LongLibZp_Akku0+1
+        adc 1,x
+        sta LongLibZp_Akku0+1
+        lda LongLibZp_Akku0+2
+        adc 2,x
+        sta LongLibZp_Akku0+2
+        rts
+
+
+@0LongLib_WORDAddWORDPtr:
+        lda LongLibZp_Akku0
+        clc
+        adc 0,x
+        sta LongLibZp_Akku0
+        lda LongLibZp_Akku0+1
+        adc 1,x
+        sta LongLibZp_Akku0+1
+        rts
+
+
+@0LongLib_SubLONGPtrFrom:
+        lda LongLibZp_Akku0
+        sec
+        sbc 0,x
+        sta LongLibZp_Akku0
+        lda LongLibZp_Akku0+1
+        sbc 1,x
+        sta LongLibZp_Akku0+1
+        lda LongLibZp_Akku0+2
+        sbc 2,x
+        sta LongLibZp_Akku0+2
+        rts
+
+@0LongLib_SubFromLONGPtr:
+        lda 0,x
+        sec
+        sbc LongLibZp_Akku0
+        sta LongLibZp_Akku0
+        lda 1,x
+        sbc LongLibZp_Akku0+1
+        sta LongLibZp_Akku0+1
+        lda 2,x
+        sbc LongLibZp_Akku0+2
+        sta LongLibZp_Akku0+2
+        rts
+
+@0LongLib_CmpWithLONGPtr:
+        lda LongLibZp_Akku0
+        cmp 0,x
+        lda LongLibZp_Akku0+1
+        sbc 1,x
+        lda LongLibZp_Akku0+2
+        sbc 2,x
+        rts
+
+@0LongLib_CmpWithWORDPtr:
+	lda LongLibZp_Akku0
+	cmp 0,x
+	lda LongLibZp_Akku0+1
+	sbc 1,x
+	rts
+
+@0LongLib_CmpLONGPtrWith:
+	lda 0,x
+	cmp LongLibZp_Akku0
+	lda 1,x
+	sbc LongLibZp_Akku0+1
+	lda 2,x
+	sbc LongLibZp_Akku0+2
+	rts
+
+@0LongLib_AddBYTE:
+	clc
+	adc LongLibZp_Akku0
+	sta LongLibZp_Akku0
+	lda LongLibZp_Akku0+1
+	adc #0
+	sta LongLibZp_Akku0+1
+	jmp AddWord0
+
+@0LongLib_AddWORD:
+	clc
+	adc LongLibZp_Akku0
+	sta LongLibZp_Akku0
+	txa
+	adc LongLibZp_Akku0+1
+	sta LongLibZp_Akku0+1
+AddWord0:
+	lda LongLibZp_Akku0+2
+	adc #0
+	sta LongLibZp_Akku0+2
+	rts
+
+@0LongLib_AddLONG:
+	clc
+	adc LongLibZp_Akku0
+	sta LongLibZp_Akku0
+	txa
+	adc LongLibZp_Akku0+1
+	sta LongLibZp_Akku0+1
+	tya
+	adc LongLibZp_Akku0+2
+	sta LongLibZp_Akku0+2
+	rts
+
+
+@0LongLib_WORDAddBYTE:
+        clc
+        adc LongLibZp_Akku0
+        sta LongLibZp_Akku0
+        bcc WORDAddBYTE0
+        inc LongLibZp_Akku0+1
+WORDAddBYTE0:
+        rts
+
+
+@0LongLib_WORDSubBYTE:
+        sec
+	eor #$ff
+        adc LongLibZp_Akku0
+        sta LongLibZp_Akku0
+        bcs WORDSubBYTE0
+        dec LongLibZp_Akku0+1
+WORDSubBYTE0:
+        rts
+
+
+@0LongLib_SubBYTE:
+        sec
+	eor #$ff
+        adc LongLibZp_Akku0
+        sta LongLibZp_Akku0
+        bcs SubBYTE1
+	lda LongLibZp_Akku0+1
+        bne SubBYTE0
+	dec LongLibZp_Akku0+2
+SubBYTE0:
+        dec LongLibZp_Akku0+1
+SubBYTE1:
+        rts
+
+@0LongLib_IsZero:
+	lda LongLibZp_Akku0
+	ora LongLibZp_Akku0+1
+	ora LongLibZp_Akku0+2
+	rts
+
+@0LongLib_EqualPtr:
+	lda LongLibZp_Akku0+2
+	cmp 2,x
+	bne Equal0
+@0LongLib_EqualWORD:
+	lda LongLibZp_Akku0+1
+	cmp 1,x
+	bne Equal0
+	lda LongLibZp_Akku0
+	cmp 0,x
+Equal0:
+	rts
+	
+@0LongLib_Akku0Out:
+	lda LongLibZp_Akku0+2
+	.LongJsr(L_ComLib_ByteOut)
+	lda LongLibZp_Akku0+1
+	.LongJsr(L_ComLib_ByteOut)
+	lda LongLibZp_Akku0
+	.LongJsr(L_ComLib_ByteOut)
+	rts
+
+@0LongLib_Inc:
+	inc LongLibZp_Akku0
+	bne Inc0
+	inc LongLibZp_Akku0+1
+	bne Inc0
+	inc LongLibZp_Akku0+2
+Inc0:
+	rts
+
+;--------------------------------------
+
+
+	.)	/* LongLib */
+
+

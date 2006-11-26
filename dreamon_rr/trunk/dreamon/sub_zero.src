@@ -1,0 +1,834 @@
+/***************************************************************************
+ *   Copyright (C) 2000 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+
+;--------------------------------------
+;
+; SubZero for DreaMon
+;
+;--------------------------------------
+
+	.(	;*** SubZero ***
+
+
+/*
+
+; !!! laeuft ab $E000 !!!
+
+GrabDxFlags_Org:
+    PHASE(0)
+	.DB $2f,$35
+
+GrabDx_CIA1:
+	.DB 0
+GrabDx_CIA2:
+	.DB 0
+GrabDx_VicFlag:
+	.DB 0
+GrabDx_VicRaster:
+	.DW 0
+
+GrabDxFlags:
+	lda #%00000010			;RR komplett aus
+	;no need for Bouncer here as IRQ is masked
+	sta $de00
+
+	ldx #ToggleEGDelay
+GrabDxDl1:
+	inx
+	bne GrabDxDl1
+
+	ldx #$fa			;save $fffa-$ffff to ZeroPage
+GrabDx0:
+	lda $ff00,x
+	sta $0,x
+	inx
+	bne GrabDx0
+
+	stx $fffb			;Irq and Nmi
+	stx $ffff			;vectors point to rti
+	lda #GrabDx_Nmi
+	sta $fffa
+	lda #GrabDx_Irq
+	sta $fffe
+	ldx #$19			;start all timer
+	jsr GrabDx_Set
+	cli
+
+GrabDx_Delay:
+	nop				;really?
+	nop
+	nop
+	nop
+	inx				;Wait for all timer to hit
+	bne GrabDx_Delay
+
+	sei
+	jsr GrabDx_Set			;Stop all timer (x is zero after the loop)
+	stx $d019
+	lda #GrabDx_Vic
+	sta $fffe
+	inx
+	stx $d01a
+	cli
+
+GrabDx_Wait:
+	ldx GrabDx_VicFlag
+	beq GrabDx_Wait
+
+	sei
+	lda #%00100011			;Ram at $8000, Ultimax
+	;no need for Bouncer here as IRQ is masked
+	sta $de00
+
+	ldx #ToggleEGDelay
+GrabDxDl2:
+	inx
+	bne GrabDxDl2
+
+	ldx #$fa			;restore $fffa-$ffff to ZeroPage
+GrabDx1:
+	lda $0,x
+	sta $ff00,x
+	inx
+	bne GrabDx1
+
+	lda GrabDx_CIA1
+	sta SubZero_CIA1+$0d
+	lda GrabDx_CIA2
+	sta SubZero_CIA2+$0d
+	lda GrabDx_VicRaster
+	sta SubZero_Raster
+	lda GrabDx_VicRaster+1
+	sta SubZero_Raster+1
+
+	rts
+
+GrabDx_Set:
+	stx $dc0e
+	stx $dc0f
+	stx $dd0e
+	stx $dd0f
+	rts
+
+GrabDx_Nmi:
+	lda $dd0d
+	ora GrabDx_CIA2
+	sta GrabDx_CIA2
+	rti
+
+GrabDx_Irq:
+	lda $dc0d
+	ora GrabDx_CIA1
+	sta GrabDx_CIA1
+	rti
+
+GrabDx_Vic:
+	lda $d019
+	bpl GrabDx_Vic0
+	and #$f
+	sta $d019
+	lsr
+	bcc GrabDx_Vic0
+	rol GrabDx_VicFlag
+	lda $d012
+	sta GrabDx_VicRaster
+	lda $d011
+	sta GrabDx_VicRaster+1
+	lda #0
+	sta $d01a
+GrabDx_Vic0:
+	rti
+    DEPHASE
+GrabDxFlags_Len=*-GrabDxFlags_Org
+*/
+
+;--------------------------------------
+
+@0Freeze_Soft0:
+	lda #%00000011
+	sta $de00
+
+	ldx #ToggleEGDelay
+Freeze_Soft1:
+	inx
+	bne Freeze_Soft1
+
+	jmp Freeze_Soft2
+
+;--------------------------------------
+	.PhaseToHighRom
+;--------------------------------------
+
+Freeze_Soft2:
+	lda #%00100011
+	sta $de00
+
+	pla
+	sta AbsSubZero_A
+	stx AbsSubZero_X
+	sty AbsSubZero_Y
+
+	lda #FreezeSource_Soft
+	sta AbsSubZero_Source
+
+	jmp SoftFreeze_JumpIn
+
+;--------------------------------------
+
+@0Bank0_Freeze_r:
+	lda #1
+	sta $500
+	sta $f00
+Stop_bl:
+	inc $d020
+	jmp Stop_bl
+
+;--------------------------------------
+
+@0Bank0_Freeze_i:
+#ifdef __FASTFREEZE__
+	sei
+
+	pha
+	txa
+	pha
+
+	inc DeBounce_Cnt
+
+	ldx #DeBounceCode_len-1
+DeBounce0:
+	lda DeBounceCode_Org,x
+	sta DeBounce_Code,x
+	dex
+	bpl DeBounce0
+
+	ldx #ToggleEGDelay
+	jmp DeBounce_Code
+
+DeBounceCode_Org:
+	lda Bouncer
+	sta $de00
+DeBounce_Delay:
+	inx
+	bne DeBounce_Delay
+	pla
+	tax
+	pla
+	rti
+DeBounceCode_len = * - DeBounceCode_Org
+#else
+;the irq should only be used if nmi is locked. This might be a chance for
+;a little emu test as vice 1.9 executes irq before nmi ;-)
+;another idea is to lock the nmi on exit
+#endif
+
+;WARNING! Don't place code here, Bank0_Freeze_i falls through for no __FASTFREEZE__
+
+@0Bank0_Freeze_n:
+#ifdef __FASTFREEZE__
+	sei				;is this really necessary? (I think no, but the kernel does it too)
+	cld
+
+	inc $0400
+
+	pha
+	cpx #$11
+	bne Freeze1
+	lda #$01
+	cmp $dd0e
+	bne Freeze0
+	cmp $dd04
+	bne Freeze0
+	lda $dd05
+	bne Freeze0
+
+	tsx
+	lda $0102,x
+	cmp #%00101100
+	bne Freeze0
+	lda $0103,x
+	cmp #<NMILock
+	bne Freeze0
+	lda $0104,x
+	cmp #>NMILock
+	beq LockDone
+Freeze0:
+	ldx #$11
+Freeze1:
+	txa
+	pha
+
+	ldx #0
+	lda $dd0e
+	stx $dd0e
+	pha				;1
+	lda $dd0f
+	stx $dd0f
+	pha				;2
+
+	lda $dd04
+	pha				;3
+	lda $dd05
+	pha				;4
+	lda $dd06
+	pha				;5
+	lda $dd07
+	pha				;6
+
+	lda #$10
+	sta $dd0e
+	sta $dd0f
+
+	lda $dd04
+	pha				;7
+	lda $dd05
+	pha				;8
+	lda $dd06
+	pha				;9
+	lda $dd07
+	pha				;a
+
+	ldx #0
+	stx $dd05
+	stx $dd07
+	inx
+	stx $dd04
+	stx $dd06
+
+;Das hier koennte doch auch NMIs ausloesen! (Wenn die Bits in $dd0d beim Freezen gesetzt waren)
+	lda #$19
+	sta $dd0f
+	lda #0
+	nop
+	ldx $dd0d
+	cpx #$80
+	ldx #$19
+	stx $dd0e
+	rol
+	nop
+	ldx $dd0d
+	cpx #$80
+	rol
+
+	ldx #$7f
+	stx $dd0d
+	sed
+	ldx #$81
+	stx $dd0d
+	ldx #$11			;NMI Lock - never touch $dd0d after this
+	stx $dd0e
+NMILock:
+	bne NMILock
+
+;--- /new ---
+
+LockDone:
+	ldx #%01100011
+	;no need for Bouncer here as IRQ is masked
+	stx $de00
+
+	pla
+	sta SubZero_CIA2+$0d
+	sty AbsSubZero_Y
+
+	pla
+	pla
+	pla
+#else
+	cld
+
+	pha
+	txa
+	pha
+	tya
+	pha
+
+	ldx #$60
+	ldy #0
+BounceDelay:
+	inc $d020
+	iny
+	bne BounceDelay
+	inx
+	bne BounceDelay
+
+	lda #%01100011
+	sta $de00
+
+	pla
+	sta AbsSubZero_Y
+	pla
+	sta AbsSubZero_X
+	pla
+	sta AbsSubZero_A
+
+	lda #FreezeSource_Hard
+	sta AbsSubZero_Source
+
+SoftFreeze_JumpIn:
+	tsx
+	stx AbsSubZero_StackPtr
+#endif
+
+	ldx #0
+CopyPage01:
+	lda 0,x
+	sta SubZero_LoMem,x
+	lda $0100,x
+	sta SubZero_LoMem+$0100,x
+	inx
+	bne CopyPage01
+
+;--------------------------------------
+; VIC get
+;--------------------------------------
+	ldx #$30
+SubZero_VIC0:
+	lda $d000,x
+	sta SubZero_VIC,x
+	dex
+	bpl SubZero_VIC0
+
+	lda $d019
+	sta $d019
+
+	lda #1
+	sta $d01a
+	ldy #6				;Timeout for NTSC machines
+SubZero_VIC1:
+	dex
+	bne SubZero_VIC2
+	dey
+	beq SubZero_VIC3
+SubZero_VIC2:
+	bit $d019
+	bpl SubZero_VIC1
+	beq SubZero_VIC1
+SubZero_VIC3:
+
+	lda $d012
+	sta SubZero_Raster
+	lda $d011
+	sta SubZero_Raster+1
+
+;--------------------------------------
+; SID get
+;--------------------------------------
+; ToDo - Detect the content of $d418 with
+; some clever trick. But how?
+	lda #$0f
+	sta SubZero_SidVolume
+	lda #0
+	sta $d418
+
+;--------------------------------------
+; CIA get
+;--------------------------------------
+
+	ldx #0
+	lda $dc0e
+	stx $dc0e
+	sta SubZero_CIA1+$0e
+	lda $dc0f
+	stx $dc0f
+	sta SubZero_CIA1+$0f
+#ifndef __FASTFREEZE__
+	lda $dd0e
+	stx $dd0e
+	sta SubZero_CIA2+$0e
+	lda $dd0f
+	stx $dd0f
+	sta SubZero_CIA2+$0f
+#endif
+	ldx #3
+SubZeroCIA0:
+	lda $dc04,x
+	sta SubZero_CIA1TimerAPos,x
+#ifndef __FASTFREEZE__
+	sta SubZero_CIA2TimerAPos,x
+#endif
+	dex
+	bpl SubZeroCIA0
+
+	ldx #$c
+SubZeroCIA1:
+	lda $dc00,x
+	sta SubZero_CIA1,x
+	lda $dd00,x
+	sta SubZero_CIA2,x
+	dex
+	bpl SubZeroCIA1
+
+	lda #$10			;Stop Timers and strobe Latches to CounterRegs, now the Latches can be read
+	sta $dc0e
+	sta $dc0f
+#ifndef __FASTFREEZE__
+	sta $dd0e
+	sta $dd0f
+#endif
+	lda $dc04
+	sta SubZero_CIA1+4
+	lda $dc05
+	sta SubZero_CIA1+5
+	lda $dc06
+	sta SubZero_CIA1+6
+	lda $dc07
+	sta SubZero_CIA1+7
+#ifndef __FASTFREEZE__
+	lda $dd04
+	sta SubZero_CIA2+4
+	lda $dd05
+	sta SubZero_CIA2+5
+	lda $dd06
+	sta SubZero_CIA2+6
+	lda $dd07
+	sta SubZero_CIA2+7
+#endif
+
+	inx				;x is now 0
+	stx $dc05
+	stx $dc07
+#ifndef __FASTFREEZE__
+	stx $dd05
+	stx $dd07
+#endif
+	inx				;x is now 1
+	stx $dc04
+	stx $dc06
+#ifndef __FASTFREEZE__
+	stx $dd04
+	stx $dd06
+#endif
+	lda #$19
+	sta $dc0f
+	lda #0
+	nop
+	ldx $dc0d
+	cpx #$80
+	ldx #$19
+	stx $dc0e
+	rol
+	nop
+	ldx $dc0d
+	cpx #$80
+	rol
+	sta SubZero_CIA1+$0d
+
+#ifndef __FASTFREEZE__
+	lda $0318
+	pha
+	lda $0319
+	pha
+
+	lda #<GrabNMI_rti
+	sta $0318
+	lda #>GrabNMI_rti
+	sta $0319
+
+	lda #%00000011
+	sta $de00
+	jmp GrabNMI
+
+;--------------------------------------
+	.REALPC
+;--------------------------------------
+
+GrabNMI_rti:
+	rti
+
+GrabNMI:
+	lda #%00000000
+	sta $de00
+
+	lda #$19
+	sta $dd0f
+	lda #0
+	nop
+	ldx $dd0d
+	cpx #$80
+	ldx #$19
+	stx $dd0e
+	rol
+	nop
+	ldx $dd0d
+	cpx #$80
+	rol
+
+	ldx #%00000011
+	stx $de00
+
+	jmp GrabNMI_done
+
+;--------------------------------------
+	.PhaseToHighRom
+;--------------------------------------
+
+GrabNMI_done:
+	ldx #%00100011
+	stx $de00
+
+	sta SubZero_CIA2+$0d
+
+	pla
+	sta $0319
+	pla
+	sta $0318
+#endif
+
+#ifdef __FASTFREEZE__
+	ldx #3
+SubZeroCIA2:
+	pla
+	sta SubZero_CIA2+$04,x
+	dex
+	bpl SubZeroCIA2
+
+	ldx #3
+SubZeroCIA3:
+	pla
+	sta SubZero_CIA2TimerAPos,x
+	dex
+	bpl SubZeroCIA3
+
+	pla
+	sta SubZero_CIA2+$0f
+	pla
+	sta SubZero_CIA2+$0e
+
+	pla
+	sta AbsSubZero_X
+	pla
+	sta AbsSubZero_A
+
+	tsx
+	stx AbsSubZero_StackPtr
+#endif
+;-----------------------
+
+@0CopyPagesAdr0 = (__BSSSaveMeEnd & $ff00) - 1
+@0CopyPagesAdr1 = ((SubZero_LoMem+__BSSSaveMeEnd) & $ff00) - 1
+
+CopyPagesAdr2 = SubZero_BSSPages + ((__BSSConstEnd-__BSSConstStart) & $ff00) - 1
+CopyPagesAdr3 = __BSSConstStart + ((__BSSConstEnd-__BSSConstStart) & $ff00) - 1
+
+; copy $0200 - __BSSSaveMeEnd to SubZero_LoMem+$0200 in CRT Ram
+	ldy #0
+	sty Adress
+	sty Adress+2
+	lda #2
+	sta Adress+1
+	lda #>(SubZero_LoMem+$0200)
+	sta Adress+3
+	ldx #>(__BSSSaveMeEnd-$0200)
+CopyPages2:
+	lda (Adress),y
+	sta (Adress+2),y
+	iny
+	bne CopyPages2
+	inc Adress+1
+	inc Adress+3
+	dex
+	bne CopyPages2
+	ldy #<(__BSSSaveMeEnd)
+CopyPages3:
+	lda CopyPagesAdr0,y
+	sta CopyPagesAdr1,y
+	dey
+	bne CopyPages3
+
+#ifdef __MACH_PIEP__
+	lda #5
+	sta $0405
+#endif
+
+CopyCol:
+	lda $d800,x
+	sta SubZero_Col,x
+	lda $d900,x
+	sta SubZero_Col+$0100,x
+	lda $da00,x
+	sta SubZero_Col+$0200,x
+	lda $db00,x
+	sta SubZero_Col+$0300,x
+	inx
+	bne CopyCol
+
+;--------------------------------------
+
+/*
+	;x is 0 from the CopyCol loop
+	stx $d01a			;Raster Irq off
+	lda #$08
+	sta $dc04
+	stx $dc05
+	lda #$28
+	sta $dc06
+	stx $dc07
+	lda #$48
+	sta $dd04
+	stx $dd05
+	lda #$68
+	sta $dd06
+	stx $dd07
+
+	ldx #GrabDxFlags_Len
+CopyGrabDxCode:
+	lda GrabDxFlags_Org-1,x
+	sta $ff,x
+	dex
+	bne CopyGrabDxCode
+
+#ifdef __MACH_PIEP__
+	lda #3
+	sta $0403
+#endif
+	jsr GrabDxFlags
+
+#ifdef __MACH_PIEP__
+	lda #4
+	sta $0404
+#endif
+*/
+	;Clear BSSZeroInit with 0
+	ldy #0
+	lda #<__BSSStart
+	sta Adress
+	lda #>__BSSStart
+	sta Adress+1
+	ldx #>(BSSZeroInit_End-__BSSStart+$ff)
+	tya
+SubZero_FillZero:
+	sta (Adress),y
+	iny
+	bne SubZero_FillZero
+	inc Adress+1
+	dex
+	bne SubZero_FillZero
+
+	;copy __BSSConst to C64 ram
+	lda #<__BSSConstStart
+	sta Adress
+	lda #>__BSSConstStart
+	sta Adress+1
+	lda #<SubZero_BSSPages
+	sta Adress+2
+	lda #>SubZero_BSSPages
+	sta Adress+3
+	ldx #>(__BSSConstEnd-__BSSConstStart)
+CopyPages4:
+	lda (Adress+2),y
+	sta (Adress),y
+	iny
+	bne CopyPages4
+	inc Adress+1
+	inc Adress+3
+	dex
+	bne CopyPages4
+	ldy #<(__BSSConstEnd-__BSSConstStart)
+CopyPages5:
+	lda CopyPagesAdr2,y
+	sta CopyPagesAdr3,y
+	dey
+	bne CopyPages5
+
+	ldx #__BSSSaveMeEnd-__BSSSaveMeStart
+CopyPages7:
+	lda SubZero_BSSSaved-1,x
+	sta __BSSSaveMeStart-1,x
+	dex
+	bne CopyPages7
+
+#ifdef __MACH_PIEP__
+	lda #7
+	sta $0407
+#endif
+
+	;Clear Zeropage with 0
+	ldx #2
+	lda #0
+SubZero_FillZp:
+	sta 0,x
+	sta $200,x
+	sta $300,x
+	inx
+	bne SubZero_FillZp
+
+	lda AbsSubZero_A
+	sta SubZeroZp_Regs+SubZero_A
+	lda AbsSubZero_X
+	sta SubZeroZp_Regs+SubZero_X
+	lda AbsSubZero_Y
+	sta SubZeroZp_Regs+SubZero_Y
+	lda AbsSubZero_Source
+	sta SubZeroZp_Source
+
+	lda SubZero_LoMem+1
+	sta SubZeroZp_Regs+SubZero_01
+	ldy AbsSubZero_StackPtr
+
+	iny
+	lda SubZero_LoMem+$0100,y
+	sta SubZeroZp_Regs+SubZero_Status
+	iny
+	lda SubZero_LoMem+$0100,y
+	clc
+	adc SubZeroZp_Source
+	sta SubZeroZp_Regs+SubZero_PC
+	iny
+	lda SubZero_LoMem+$0100,y
+	adc #0
+	sta SubZeroZp_Regs+SubZero_PC+1
+
+	sty SubZeroZp_Regs+SubZero_StackPtr
+
+#ifdef __MACH_PIEP__
+	lda #8
+	sta $0408
+#endif
+
+;--------------------------------------
+
+	ldx #StringBufAbs_len-1			;Start, FKeysEnd, LabelsEnd, TempEnd, End
+CopyStringBufToZp:
+	lda StringBufAbs,x
+	sta StringBufZp_Start,x
+	dex
+	bpl CopyStringBufToZp
+
+;--------------------------------------
+; Kein Code mehr hier hinter, da es
+; direkt weiter geht!
+;--------------------------------------
+
+;--------------------------------------
+	.REALPC
+;--------------------------------------
+
+	.)	;*** SubZero ***
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,823 @@
+/***************************************************************************
+ *   Copyright (C) 2000 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+
+;--------------------------------------
+;
+; Make new Entry in List and DELETE all conflicting
+;
+; A=Typ, Y=Par, X= *Adr
+;
+;--------------------------------------
+
+
+	.(	;*** FPoint ***
+
++FPoint_Manage:
+	jsr NextSpaces
+	bcs Show
+	ldx #2
+Manage0:
+	jsr ComLib_ScrCode2Lower
+	cmp FPointBSS_ManageTab0,x
+	bne Manage1
+	dex
+	bmi Manage2
+	iny
+	cpy CmdLineLen
+	lda CmdLine,y
+	bcc Manage0
+Manage1:
+	dec CmdLinePos
+	jsr GetAdress
+	bcs ManageErr
+	jsr Spaces
+	bcc Manage3
+	ShowMsg(Msg_CR)
+	ldx #Adress
+	jsr LongLib_LoadPtr
+	jmp FPoint_Clear
+Manage2:
+	sty CmdLinePos
+	jsr NextSpaces
+	bcc ManageErr
+	ShowMsg(Msg_CR)
+	lda #0
+	sta FPointZp_Cnt	;Clear All!
+	clc
+	rts
+Manage3:
+	jsr FPoint_Parse
+	bcs ManageErr
+	ShowMsg(Msg_CR)
+	rts
+ManageErr:
+	sec
+	rts
+
+Show:
+	ShowMsg(Msg_CR)
+	lda FPointZp_Cnt
+	beq Show2
+	ldy #0
+Show0:
+	cpy FPointZp_Cnt
+	bcs Show1
+	lda #"z"
+	ldx Palette+Palette_Command
+	jsr ComLib_PrintRawColChar
+	lda #"$"
+	ldx Palette+Palette_Adress
+	jsr ComLib_PrintRawColChar
+	jsr FPoint_GetEntry
+	ldx #FPointZp_Temp+FPE_Adr
+	jsr LongLib_LoadPtr
+	jsr LongLib_Akku0Out
+	jsr ComLib_SpaceOut
+	lda Palette+Palette_DisAssMne
+	jsr ComLib_SetCol
+	ldx FPointZp_Temp+FPE_Typ
+	lda FPointBSS_ParseTab0,x
+	jsr ComLib_PrintRawChar
+	ldx FPointZp_Temp+FPE_Mode
+	lda FPointBSS_ParseTab1,x
+	jsr ComLib_PrintRawChar
+	ShowMsg(Msg_CR)
+	iny
+	bpl Show0
+Show1:
+	clc
+	rts
+Show2:
+	lda Palette+Palette_Default
+	jsr ComLib_SetCol
+	ShowMsg(Msg_FPoint_EmptyList)
+	clc
+	rts
+
+;--------------------------------------
+
++FPoint_Parse:
+	jsr ComLib_ScrCode2Lower
+	ldx #1
+Parse0:
+	cmp FPointBSS_ParseTab0,x
+	beq Parse1
+	dex
+	bpl Parse0
+ParseNo:
+	sec
+	rts
+Parse1:
+	stx FPointZp_Act+FPE_Typ
+	jsr NextCmdChar
+	bcs ParseNo
+	jsr ComLib_ScrCode2Lower
+	ldx #3
+Parse2:
+	cmp FPointBSS_ParseTab1,x
+	beq Parse3
+	dex
+	bpl Parse2
+	bmi ParseNo
+Parse3:
+	stx FPointZp_Act+FPE_Mode
+	jsr NextSpaces
+	txy
+	beq Parse4
+	bcs ParseNo
+	lda #1
+	jsr GetNum_GetHexNDig
+	bcs ParseNo
+	jsr Spaces
+	ldx GetNumZp_Val1
+Parse4:
+	stx FPointZp_Act+FPE_Par
+	bcs Parse5
+	cmp #";"
+	bne ParseNo
+Parse5:
+	jsr FPoint_MakeRamRom
+	bmi ParseNo
+	sta FPointZp_Act+FPE_RamRom
+	stz FPointZp_Act+FPE_Flags
+
+	ldx #Adress
+	jmp FPoint_CreateNew
+ParseNo2:
+	sec
+	rts
+
+;--------------------------------------
+; Parameter
+;  X   *Adress
+;--------------------------------------
+
++FPoint_CreateNew:
+	ldy FPointZp_Cnt		;All full?
+	bmi CreateNewErr0
+	jsr LongLib_LoadPtr
+	ldx #FPointZp_Act+FPE_Adr
+	jsr LongLib_StorePtr		;Save Adr
+	lda FPointZp_Act+FPE_Typ
+	and #3
+	tax
+	lda FPoint_LenTab,x
+	sta FPointZp_Act+FPE_Len	;Calc Len for Typ
+;Clear all conflicting FPs
+	ldy FPointZp_Cnt
+	beq CreateNew2			;Empty List
+	dey
+CreateNew0:
+	jsr FPoint_GetEntry
+	bit FPointZp_Temp+FPE_Flags
+	bmi CreateNew3
+	phy
+	ldx #FPointZp_Temp+FPE_Adr
+	jsr LongLib_LoadPtr
+	lda FPointZp_Temp+FPE_Len
+	ldy #FPointZp_Act+FPE_Adr
+	ldx FPointZp_Act+FPE_Len
+	jsr FPoint_DemonHead
+	ply
+	bcc CreateNew3
+	phy
+	jsr FPoint_ClearIn0		;Conflict -> Clear
+	ply
+CreateNew3:
+	dey
+	bpl CreateNew0
+CreateNew2:
+	jmp FPoint_MakeEntry
+
+CreateNewErr0:
+	sec
+	rts
+
+;--------------------------------------
+
+FPoint_MakeEntry:
+	ldx #FPointZp_Act+FPE_Adr
+	jsr LongLib_LoadPtr
+	ldx #FPointZp_Temp+FPE_Adr
+	ldy FPointZp_Cnt
+	bmi MakeEntryErr
+	beq MakeEntry1
+MakeEntry0:
+	dey
+	jsr FPoint_GetEntry
+	iny
+	jsr LongLib_CmpWithLONGPtr
+	bcs MakeEntry1
+	jsr FPoint_PutEntry
+	dey
+	bne MakeEntry0
+MakeEntry1:
+	jsr LongLib_StorePtr
+	ldx #FPE_len-1
+MakeEntry2:
+	lda FPointZp_Act,x
+	sta FPointZp_Temp,x
+	dex
+	bpl MakeEntry2
+	sty FPointZp_Zp0
+	jsr FPoint_PutEntry
+	ldy FPointZp_Cnt		;Passe Par der Temp-FPs an
+	inc FPointZp_Cnt		;Ja, auch der neue ist mit dabei ;-)
+MakeEntry3:
+	jsr FPoint_GetEntry
+	bit FPointZp_Temp+FPE_Flags
+	bvc MakeEntry4
+	lda FPointZp_Temp+FPE_Par
+	cmp FPointZp_Zp0
+	adc #0
+	sta FPointZp_Temp+FPE_Par
+	jsr FPoint_PutEntry
+MakeEntry4:
+	dey
+	bpl MakeEntry3
+	clc
+	rts
+
+MakeEntryErr:
+	sec
+	rts
+
+
+FPoint_RestoreData:
+	ldy FPointZp_Cnt
+	beq RestoreData4
+	dey
+RestoreData0:
+	jsr FPoint_GetEntry
+	phy
+	jsr GetRamRomAdr
+	ldy FPointZp_Temp+FPE_Typ
+	ldx FPoint_FC0Tab,y
+	ldy FPointZp_Temp+FPE_Len
+RestoreData1:
+	jsr Mapping_LdByteY
+	cmp FPoint_FC1Tab,x
+	bne RestoreData3
+	dex
+	dey
+	bpl RestoreData1
+	ldy FPointZp_Temp+FPE_Len
+RestoreData2:
+	lda FPointZp_Temp+FPE_Restore,y
+	jsr Mapping_StByteY
+	dey
+	bpl RestoreData2
+RestoreData3:
+	ply
+	dey
+	bpl RestoreData0
+RestoreData4:
+	rts
+
+
++FPoint_RestoreFreeze:
+	ldy FPointZp_Cnt
+	beq RestoreFreeze2
+	dey
+RestoreFreeze0:
+	jsr FPoint_GetEntry
+	bit FPointZp_Temp+FPE_Flags
+	bmi RestoreFreeze4		;Disable
+	lda FPointZp_Temp+FPE_Mode	;Typ = Remote?
+	cmp #3
+	bne RestoreFreeze3
+	lda FPointZp_Temp+FPE_Par	;Yes -> already active?
+	bit FPointZp_RemoteFlags
+	beq RestoreFreeze4
+RestoreFreeze3:
+	phy
+	ldx #FPointZp_Temp+FPE_Adr
+	jsr LongLib_LoadPtr
+	ldy #3
+RestoreFreeze5:
+	jsr Mapping_LdByteY
+	sta FPointZp_Temp+FPE_Restore,y
+	dey
+	bpl RestoreFreeze5
+	ldy FPointZp_Temp+FPE_Typ
+	ldx FPoint_FC0Tab,y
+	ldy FPointZp_Temp+FPE_Len
+RestoreFreeze1:
+	lda FPoint_FC1Tab,x
+	jsr Mapping_StByteY
+	dex
+	dey
+	bpl RestoreFreeze1
+	ply
+	jsr FPoint_PutEntry		;wegen FPE_Restore
+RestoreFreeze4:
+	dey
+	bpl RestoreFreeze0
+RestoreFreeze2:
+	rts
+
+
+FPoint_Clear:
+	jsr FPoint_FindEntry
+	bcs Clear3
+FPoint_ClearIn0:
+	sty FPointZp_Zp0
+	ldy FPointZp_Cnt		;Passe Zeiger von Temp-FPs an
+	dey
+Clear0:
+	jsr FPoint_GetEntry
+	bit FPointZp_Temp+FPE_Flags
+	bvc Clear4
+	lda FPointZp_Temp+FPE_Par
+	cmp FPointZp_Zp0
+	bcc Clear4
+	dec FPointZp_Temp+FPE_Par
+	jsr FPoint_PutEntry
+Clear4:
+	dey
+	bpl Clear0
+	ldy FPointZp_Zp0
+Clear1:
+	iny
+	cpy FPointZp_Cnt
+	bcs Clear2
+	jsr FPoint_GetEntry
+	dey
+	jsr FPoint_PutEntry
+	iny
+	bpl Clear1
+Clear2:
+	dec FPointZp_Cnt
+Clear3:
+	rts
+
+
++FPoint_FindEntry:
+	ldy FPointZp_Cnt
+	beq FindEntry2
+	dey
+FindEntry0:
+	jsr FPoint_GetEntry
+	ldx #FPointZp_Temp+FPE_Adr
+	jsr LongLib_EqualPtr
+	beq FindEntry3
+FindEntry1:
+	dey
+	bpl FindEntry0
+FindEntry2:
+	sec
+	rts
+FindEntry3:
+	clc
+	rts
+
+
+/*--------------------------------------
+
+ TypTab OLD
+
+  07 | 06 | 05 | 04 | 03 | 02 | 01 | 00 |
+ ----+----+----+----+----+----+----+----+
+ Dis-|Temp| Ram/Rom |  Mode   |   Typ   |
+ able|    |  Flags  | (NCAR)  |  (BCJL) |
+
+
+ TypTab NEW
+
+  07 | 06 | 05 | 04 | 03 | 02 | 01 | 00 |
+ ----+----+----+----+----+----+----+----+
+ Dis-|Temp|                   |   Mode  |
+ able|    |                   |  (NCAR) |
+
+--------------------------------------*/
+
++FPoint_GetEntry:
+	txa
+	pha
+	tya
+	tax
+	lda FPointALoTab,x
+	sta FPointZp_Temp+FPE_Adr
+	lda FPointAMiTab,x
+	sta FPointZp_Temp+FPE_Adr+1
+	lda FPointAHiTab,x
+	sta FPointZp_Temp+FPE_Adr+2
+	lda FPointParTab,x
+	sta FPointZp_Temp+FPE_Par
+	lda FPointTypTab,x
+	sta FPointZp_Temp+FPE_Flags
+	lsr
+	lsr
+	tax
+	and #3
+	sta FPointZp_Temp+FPE_Mode
+	txa
+	lsr
+	lsr
+	and #3
+	sta FPointZp_Temp+FPE_RamRom
+	jsr MakeResAdr
+	tya
+	pha
+	ldy #3
+GetEntry0:
+	lda (FPointZp_DAdr0),y
+	sta FPointZp_Temp+FPE_Restore,y
+	dey
+	bpl GetEntry0
+	lda FPointZp_Temp+FPE_Flags
+	and #3
+	sta FPointZp_Temp+FPE_Typ
+	tay
+	lda FPoint_LenTab,y
+	sta FPointZp_Temp+FPE_Len
+	lda FPointZp_Temp+FPE_Flags
+	and #$c0
+	sta FPointZp_Temp+FPE_Flags
+	pla
+	tay
+	pla
+	tax
+	rts
+
+
+FPoint_PutEntry:
+	phx
+	tyx
+	lda FPointZp_Temp+FPE_Adr
+	sta @FPointALoTab,x
+	lda FPointZp_Temp+FPE_Adr+1
+	sta @FPointAMiTab,x
+	lda FPointZp_Temp+FPE_Adr+2
+	sta @FPointAHiTab,x
+	lda FPointZp_Temp+FPE_Par
+	sta @FPointParTab,x
+	lda FPointZp_Temp+FPE_RamRom
+	asl
+	asl
+	ora FPointZp_Temp+FPE_Mode
+	asl
+	asl
+	ora FPointZp_Temp+FPE_Typ
+	ora FPointZp_Temp+FPE_Flags
+	sta @FPointTypTab,x
+	jsr MakeResAdr
+	phy
+	ldy #3
+PutEntry0:
+	lda FPointZp_Temp+FPE_Restore,y
+	sta [FPointZp_DAdr0],y
+	dey
+	bpl PutEntry0
+	ply
+	plx
+	rts
+
+
+
+MakeResAdr:
+	rep #%00100000
+    MSize_16
+	tya
+	asl
+	asl
+	adc #FPointResTab
+	sta FPointZp_DAdr0
+	sep #%00100000
+    MSize_8
+	lda #^FPointResTab
+	sta FPointZp_DAdr0+2
+	rts
+
+
+GetRamRomAdr:
+	ldx #FPointZp_Temp+FPE_Adr
+	jsr LongLib_LoadPtr
+	lda FPointZp_Temp+FPE_RamRom
+	beq GetRamRomAdr1
+	dec
+	bne GetRamRomAdr0
+	jsr MakeMappingIO
+	ldx #MappingZp_Adress
+	jmp LongLib_LoadPtr
+GetRamRomAdr0:
+	inc LongLibZp_Akku0+2
+GetRamRomAdr1:
+	rts
+
+
+;--------------------------------------
+; Clash at DemonHead, Conflict between 2 FPoints?
+;
+; Akku0 - Adr 1
+;     A - Len 1
+;  Y -> - Adr 2
+;     X - Len 2
+;--------------------------------------
+
+FPoint_DemonHead:
+	sta FPointZp_DZp0
+	stx FPointZp_DZp1
+	tyx
+	jsr LongLib_SubFromLONGPtr
+	bcc DemonHeadAdr2BelowAdr1
+	jsr LongLib_IsZero
+	beq DemonHeadConflict
+	lda FPointZp_DZp0
+	jsr LongLib_SubBYTE
+	bcc DemonHeadConflict
+	jsr LongLib_IsZero
+	bne DemonHeadNoConflict
+DemonHeadConflict:
+	sec
+	rts
+DemonHeadNoConflict:
+	clc
+	rts
+DemonHeadAdr2BelowAdr1:
+	lda FPointZp_DZp1
+	jmp LongLib_AddBYTE
+
+;--------------------------------------
+
++FPoint_Tamago:
+	jsr FPoint_RestoreData
+
+	ldx #SubZeroZp_Regs+SubZero_PC
+	jsr LongLib_LoadPtr
+	lda SubZeroZp_Source
+	and #3
+	cmp #2
+	bcc TamagoMon				;Type 0/1 -> Frozen by sys
+	tax
+	lda FPoint_LenTab-2,x
+	inc
+	jsr LongLib_SubBYTE
+	ldx #FPointZp_Temp+FPE_Adr
+TamagoLoop:
+	ldy FPointZp_Cnt
+	bne Tamago1
+	rts
+Tamago0:
+	jsr FPoint_GetEntry
+	jsr LongLib_EqualPtr
+	beq Tamago2
+Tamago1:
+	dey
+	bpl Tamago0
+	lda #InitErr_UnknownFP			;Freezepoint not found in List
+	rts
+TamagoMon:
+	lda #0
+	rts
+
+Tamago2:
+	ldx #FPE_len-1
+Tamago3:
+	lda FPointZp_Temp,x
+	sta FPointZp_Act,x
+	dex
+	bpl Tamago3
+	ldx #SubZeroZp_Regs+SubZero_PC
+	jsr LongLib_StorePtr
+	bit FPointZp_Act+FPE_Flags
+	bmi Tamago1				;Disable -> Nicht bearbeiten..
+	bvs TamagoJumpToTemp
+	lda FPointZp_Act+FPE_Mode
+	bne Tamago7
+Tamago15:
+	jsr FPoint_ClearIn0
+	lda #0					;Freezepoint found in List
+	rts
+
+TamagoJumpToTemp:
+	jmp TamagoTemp
+
+Tamago7:
+	dec
+	beq TamagoCnt
+Tamago14:
+	dec
+	bne Tamago15
+	lda FPointZp_Temp+FPE_Par
+	tsb FPointZp_RemoteFlags
+	jsr FPoint_ClearIn0
+TamagoRestoreSys:
+	jmp RestoreSys
+
+;--------------------------------------
+; Counter Typ
+;--------------------------------------
+
+TamagoCnt:
+	tyx
+	lda FPointZp_Temp+FPE_Par
+	beq Tamago15			;Schon runtergezaehlt?
+TamagoCnt16:
+	lda FPointZp_Cnt
+	bmi TamagoCntErr0		;Kein FP-Slot mehr fuer Temp frei
+	sty FPointZp_Act+FPE_Par	;Fuer neuen FP
+	dec FPointZp_Temp+FPE_Par
+	lda #FPointDisable
+	tsb FPointZp_Temp+FPE_Flags	;Disable Counter-FP
+	jsr FPoint_PutEntry		;Write back new values
+	jsr Opcodes_Trace		;Make Opcode_Adr and _Len for below
+	jsr FPoint_MakeRamRom
+	bmi TamagoCntErr1
+	sta FPointZp_Zp0
+
+;Disable all conflicting FPs with Traced
+	ldy FPointZp_Cnt		;Sicher nicht 0, Counter is ja drin!
+	dey
+TamagoCnt10:
+	jsr FPoint_GetEntry
+	phy
+	ldx #FPointZp_Temp+FPE_Adr
+	jsr LongLib_LoadPtr
+	lda FPointZp_Temp+FPE_Len
+	ldy #OpcodeZp_Adr		;Adress of Traced
+	ldx OpcodeZp_Len		;Len of Opc at Traced
+	dex
+	jsr FPoint_DemonHead
+	ply
+	bcc TamagoCnt13
+	lda #FPointDisable
+	tsb FPointZp_Temp+FPE_Flags
+	jsr FPoint_PutEntry
+TamagoCnt13:
+	dey
+	bpl TamagoCnt10
+
+;Make Temp-Entry
+	lda #FPointTempTyp
+	sta FPointZp_Act+FPE_Typ	;FPoint Typ
+	lda #FPointTempFlag
+	sta FPointZp_Act+FPE_Flags
+	lda #FPointMode_Normal
+	sta FPointZp_Act+FPE_Mode
+	ldx #OpcodeZp_Adr		;FPoint Adr (Traced)
+	jsr LongLib_LoadPtr
+	ldx #FPointZp_Act+FPE_Adr
+	jsr LongLib_StorePtr
+	lda FPointZp_Zp0
+	sta FPointZp_Act+FPE_RamRom
+	jsr FPoint_MakeEntry		;Make Entry, FPoint Par schon oben gesetzt
+	bra TamagoRestoreSys
+
+
+TamagoCntErr0:
+	;Too Many FPoints!
+TamagoCntErr1:
+	;Trace in CharRom Error!
+	inc $d020
+	jmp TamagoCntErr0
+
+
+;--------------------------------------
+;
+; Temp Typ
+;
+;--------------------------------------
+
+TamagoTemp:
+	sty FPointZp_Zp1
+
+;New PC still conflicting with CounterFP?
+	ldx #SubZeroZp_Regs+SubZero_PC
+	jsr Opcodes_DisassIn0		;Make OpcodeZp_Len
+	ldy FPointZp_Act+FPE_Par	;No of original FP
+	jsr FPoint_GetEntry		;Get Adr of original Counter-FP
+	ldx #FPointZp_Temp+FPE_Adr
+	jsr LongLib_LoadPtr
+	lda FPointZp_Temp+FPE_Len	;Len of original Counter-FP
+	ldy #SubZeroZp_Regs+SubZero_PC
+	ldx OpcodeZp_Len		;Len of Opc at PC
+	dex
+	jsr FPoint_DemonHead
+	bcc TamagoTemp4
+	jsr Opcodes_Trace		;Still Conflict -> Trace on
+	ldy FPointZp_Zp1		;No of Temp-FP
+	jsr FPoint_ClearIn0
+	ldx #OpcodeZp_Adr
+	jsr LongLib_LoadPtr
+	ldx #FPointZp_Act+FPE_Adr	;Update FP-Adr to Traced
+	jsr LongLib_StorePtr
+	jsr FPoint_MakeRamRom
+	bmi TamagoTempErr0
+	sta FPointZp_Act+FPE_RamRom
+	lda #FPointTempTyp
+	sta FPointZp_Act+FPE_Typ
+	lda #2
+	sta FPointZp_Act+FPE_Len
+	lda #FPointTempFlag
+	sta FPointZp_Act+FPE_Flags
+	stz FPointZp_Act+FPE_Mode
+	ldx #FPointZp_Act+FPE_Adr	;Update FP-Adr to Traced
+	jsr FPoint_CreateNew
+	bra TamagoTempRestoreSysPsy0
+
+
+TamagoTempErr0:
+	;Trace in CharRom Error!
+	inc $d020
+	jmp TamagoTempErr0
+
+;Re-Enable all Conflicting FPs with actual FP
+TamagoTemp4:
+	ldy FPointZp_Cnt
+	dey					;Sure not Zero
+TamagoTemp3:
+	jsr FPoint_GetEntry
+	phy
+	ldx #FPointZp_Temp+FPE_Adr
+	jsr LongLib_LoadPtr
+	lda FPointZp_Temp+FPE_Len
+	ldy #FPointZp_Act+FPE_Adr
+	ldx FPointZp_Act+FPE_Len
+	jsr FPoint_DemonHead
+	ply
+	bcc TamagoTemp6
+	lda #FPointDisable
+	trb FPointZp_Temp+FPE_Flags
+	jsr FPoint_PutEntry
+TamagoTemp6:
+	dey
+	bpl TamagoTemp3
+
+;Re-Enable CounterFP and delete Temp FP
+	ldx FPointZp_Zp1			;No of Temp-FP
+	txy
+	lda @FPointParTab,x			;No of original Counter-FP
+	tax
+	lda @FPointTypTab,x
+	and #$ff-FPointDisable			;Enable org Cnt-FP
+	sta @FPointTypTab,x
+	jsr FPoint_ClearIn0			;Del Temp
+	ldx #OpcodeZp_Adr			;Traced on other FP?
+	jsr LongLib_LoadPtr
+	jsr FPoint_FindEntry
+	bcs TamagoTempRestoreSysPsy0
+	jmp TamagoLoop				;Yes -> Back to Loop
+TamagoTempRestoreSysPsy0:
+	jmp TamagoRestoreSys
+
+
+FPoint_MakeRamRom:
+	lda LongLibZp_Akku0+2
+	bne MakeRamRom0
+	lda SubZeroZp_Regs+SubZero_01
+	ldx LongLibZp_Akku0+1
+	cpx #$a0
+	bcc MakeRamRom0
+	cpx #$c0
+	bcs MakeRamRom1
+	and #3
+	cmp #3
+	beq MakeRamRom4
+MakeRamRom0:
+	lda #FPRamRom_Ram
+	rts
+MakeRamRom1:
+	cpx #$d0
+	bcc MakeRamRom0
+	cpx #$e0
+	bcs MakeRamRom3
+	bit #3
+	beq MakeRamRom0
+	cmp #5
+	bcc MakeRamRom2
+	lda #FPRamRom_IO
+	rts
+MakeRamRom2:
+	lda #FPRamRom_Err
+	rts
+MakeRamRom3:
+	bit #2
+	beq MakeRamRom0
+MakeRamRom4:
+	lda #FPRamRom_Rom
+	rts
+
+;--------------------------------------
+
+	.)	;*** FPoint ***
+
+

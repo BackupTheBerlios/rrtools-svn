@@ -1,0 +1,1725 @@
+<!DOCTYPE Book PUBLIC "-//OASIS//DTD DocBook V4.1//EN" [
+
+	<!ENTITY % local.para.class "| Div">
+	<!ENTITY % local.base.char.class "| LineBreak">
+
+
+	<!ENTITY % div.module "INCLUDE">
+	<![ %div.module; [
+	<!ENTITY % local.div.attrib "">
+	<!ENTITY % div.role.attrib "" >
+	<!ENTITY % div.element "INCLUDE">
+	<![ %div.element; [
+	<!ELEMENT Div - O ANY>
+	<!--end of div.element-->]]>
+	<!ENTITY % div.attlist "INCLUDE">
+	<![ %div.attlist; [
+	<!--end of div.attlist-->]]>
+	<!--end of div.module-->]]>
+
+
+	<!ENTITY % linebreak.module "INCLUDE">
+	<![ %linebreak.module; [
+	<!ENTITY % local.linebreak.attrib "">
+	<!ENTITY % linebreak.role.attrib "">
+	<!ENTITY % linebreak.element "INCLUDE">
+	<![ %linebreak.element; [
+	<!ELEMENT LineBreak - O EMPTY>
+	<!--end of linebreak.element-->]]>
+	<!ENTITY % linebreak.attlist "INCLUDE">
+	<![ %linebreak.attlist; [
+	<!--end of linebreak.attlist-->]]>
+	<!--end of linebreak.module-->]]>
+
+
+	<!ENTITY AppendixHistory SYSTEM "history.sgml">
+	<!ENTITY DreamsLogo SYSTEM "dreamslogo.sgml">
+]>
+
+
+<book>
+
+<title>DreaMon Manual</title>
+<titleabbrev>DreaMon</titleabbrev>
+<bookinfo>
+	<author><firstname>Doc</><surname>Bacardi</></author>
+	<pubdate>2002</pubdate>
+</bookinfo>
+
+<chapter><title>Preface</title>
+
+<para>
+DreaMon is an assembly language monitor for the RetroReplay.<linebreak>
+Some features:
+<itemizedlist spacing="compact">
+<listitem><div><link linkend=Freezepoints>Freezepoints</link> interrupt a running programm</div></listitem>
+<listitem><div>the <link linkend=Scrollmode>Scrollmode</link> enables fast and confortable debugging</div></listitem>
+<listitem><div>all over the programm numbers can be described by any combination of binary, octal, decimal and hexadecimal as well as <link linkend=Label>Label</link> and terms. Read more about it in the chapter <link linkend=terms>Terms</link>.</div></listitem>
+<listitem><div>the <link linkend=FKeys>FKeys</link> can contain free defineable macros.</div></listitem>
+<listitem><div>on a C128 the 80 colums screen can be used with up to 39 lines (my monitor does not like more, DreaMon can handle up to 50 lines)</div></listitem>
+</itemizedlist>
+</para>
+
+<para>
+This text describes version 0.4.1 . You can find my plans for the future in the <link linkend=ToDo>ToDo</link> chapter.
+</para>
+<para>
+The chapter <link linkend=start>Start</link> describes the installation of DreaMon to your module.<linebreak>
+A summary of all commands can be found at the <link linkend=cmd.idx>Command Reference</link>.<linebreak>
+All chapters are listed in the <link linkend=idx>Index</link>.
+</para>
+<para>
+If you have ideas, criticism or bug reports please contact me by mail: <email>DocBacardi@freenet.de</email>
+</para>
+
+<para>
+These are the tools I used to develop this programm:
+<itemizedlist spacing="compact">
+<listitem><div>the crossassembler <ulink url="http://www.jolz64.cjb.net">XA</ulink> by Andre Fachat and Jolse Maginnis,</div></listitem>
+<listitem><div>the development environment <ulink url="http://www.kdevelop.org">KDevelop</ulink>,</div></listitem>
+<listitem><div>Ninja's online help <ulink url="http://www.the-dreams.de">AAY 64</ulink>.</div></listitem>
+</itemizedlist>
+</para>
+
+<!--
+<para>
+
+<blockquote><para>
+Ninja/DRM<linebreak>
+Count Zero/SCS+TRC<linebreak>
+Jolse Maginnis<linebreak>
+Stephan Andres<linebreak>
+Krill und Brix/+H<linebreak>
+Mac Gyver/DMAgic<linebreak>
+</para></blockquote>
+
+Special thanks to the <ulink url="http://www.go64.c64.org">Go64!</ulink> who lended me a SCPU until I could afford my own one.<linebreak>
+Furthermore the following people supported me with ideas, motivation and beta-testing:
+<blockquote><para>
+Ninja/DRM<linebreak>
+Count Zero/SCS+TRC<linebreak>
+Jolse Maginnis<linebreak>
+Stephan Andres<linebreak>
+Krill und Brix/+H<linebreak>
+Mac Gyver/DMAgic<linebreak>
+</para></blockquote>
+
+</para>
+-->
+
+<para>
+Doc Bacardi/The Dreams
+
+&DreamsLogo;
+</para>
+
+</chapter>
+
+
+<chapter><title>Installation</title>
+
+<section id=where2get xreflabel="How to get DreaMon"><title>How to get DreaMon</title>
+<para>
+The latest DreaMon version and this docbook can be downloaded from C0's RetroReplay page: <ulink url="http://ar.c64.org/dreamon">http:&sol;&sol;ar.c64.org&sol;dreamon</ulink>.
+</para>
+</section>
+
+<section id=start xreflabel="Flashing"><title>Flashing DreaMon</title>
+<para>
+DreaMon is distributed as a 'bin' file. Flash it to your RetroReplay with the 'FlashUtil'.<linebreak>
+</para></section>
+
+</chapter>
+
+
+<chapter><title>Command Reference</title>
+<section id=cmd.idx xreflabel="Command Index"><title>Command Index</title>
+<informaltable><tgroup cols=2>
+<thead><row><entry>Syntax</entry><entry>Kommando</entry></row></thead>
+<tbody>
+
+<row>
+<entry>
+<cmdsynopsis><command>a</command>
+<arg choice=plain><replaceable>Adress</replaceable></arg>
+<arg choice=opt><replaceable>Opcode</replaceable></arg>
+</cmdsynopsis>
+</entry>
+<entry><link linkend=cmd.a>assemble</link></entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>c</command>
+<arg choice=plain><replaceable><link linkend=area>Area</link></replaceable></arg>
+<arg choice=plain><replaceable>Ziel</replaceable></arg>
+</cmdsynopsis>
+</entry>
+<entry><link linkend=cmd.c>compare</link></entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>d</command>
+<arg choice=plain><replaceable><link linkend=Range>Range</link></replaceable></arg>
+</cmdsynopsis>
+</entry>
+<entry><link linkend=cmd.d>disassembe</link></entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>f</command>
+<arg choice=plain><replaceable><link linkend=area>Area</link></replaceable></arg>
+<arg choice=plain><replaceable><link linkend=pattern>Pattern</link></replaceable></arg>
+</cmdsynopsis>
+</entry>
+<entry><link linkend=cmd.f>fill</link></entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>g</command>
+<arg choice=plain><replaceable>Adress</replaceable></arg>
+</cmdsynopsis>
+</entry>
+<entry><link linkend=cmd.g>go</link></entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>h</command>
+<arg choice=plain><replaceable><link linkend=area>Area</link></replaceable></arg>
+<arg choice=plain><replaceable><link linkend=wildpattern>Wildpattern</link></replaceable></arg>
+</cmdsynopsis>
+</entry>
+<entry><link linkend=cmd.h>hunt</link></entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>i</command>
+<arg choice=plain><replaceable><link linkend=Range>Range</link></replaceable></arg>
+</cmdsynopsis>
+</entry>
+<entry><link linkend=cmd.i>ascii dump</link></entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>j</command>
+<arg choice=plain><replaceable><link linkend=Range>Range</link></replaceable></arg>
+</cmdsynopsis>
+</entry>
+<entry><link linkend=cmd.j>screencode dump</link></entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>l</command>
+<arg choice=plain>"<replaceable>Filename</replaceable>"</arg>
+<arg choice=opt>,<replaceable>Device</replaceable>
+<arg choice=opt>,<replaceable>Loadadress</replaceable></arg></arg>
+</cmdsynopsis>
+</entry>
+<entry><link linkend=cmd.l>load</link></entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>lf</command>
+<arg choice=plain>"<replaceable>Filename</replaceable>"</arg>
+<arg choice=opt>,<replaceable>Device</replaceable></arg>
+</cmdsynopsis>
+</entry>
+<entry><link linkend=cmd.lf>load fkeys</link></entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>ll</command>
+<arg choice=plain>"<replaceable>Filename</replaceable>"</arg>
+<arg choice=opt>,<replaceable>Device</replaceable></arg>
+</cmdsynopsis>
+</entry>
+<entry><link linkend=cmd.ll>load labels</link></entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>m</command>
+<arg choice=plain><replaceable><link linkend=Range>Range</link></replaceable></arg>
+</cmdsynopsis>
+</entry>
+<entry><link linkend=cmd.m>memory ascii dump</link></entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>n</command>
+<arg choice=plain><replaceable><link linkend=Range>Range</link></replaceable></arg>
+</cmdsynopsis>
+</entry>
+<entry><link linkend=cmd.n>memory screencode dump</link></entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>o</command>
+<arg choice=plain><replaceable><link linkend=area>Area</link></replaceable></arg>
+<arg choice=plain><replaceable><link linkend=wildpattern>Wildpattern</link></replaceable></arg>
+</cmdsynopsis>
+</entry>
+<entry><link linkend=cmd.o>opcode hunt</link></entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>p</command>
+<arg choice=plain rep=repeat><replaceable>settings</replaceable></arg>
+</cmdsynopsis>
+</entry>
+<entry><link linkend=cmd.p>preferences</link></entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>r</command>
+</cmdsynopsis>
+</entry>
+<entry><link linkend=cmd.r>show registers</link></entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>s</command>
+<arg choice=plain>"<replaceable>Filename</replaceable>"</arg>
+<arg choice=plain>,<replaceable>Device</replaceable></arg>
+<arg choice=plain>,<replaceable><link linkend=Range>Range</link></replaceable></arg>
+<arg choice=opt>,<replaceable>Loadadress</replaceable></arg>
+</cmdsynopsis>
+</entry>
+<entry><link linkend=cmd.s>save</link></entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>sf</command>
+<arg choice=plain>"<replaceable>Filename</replaceable>"</arg>
+<arg choice=opt>,<replaceable>Device</replaceable></arg>
+</cmdsynopsis>
+</entry>
+<entry><link linkend=cmd.sf>save fKeys</link></entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>sl</command>
+<arg choice=plain>"<replaceable>Filename</replaceable>"</arg>
+<arg choice=opt>,<replaceable>Device</replaceable></arg>
+</cmdsynopsis>
+</entry>
+<entry><link linkend=cmd.sl>save labels</link></entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>t</command>
+<arg choice=plain><replaceable><link linkend=area>Area</link></replaceable></arg>
+<arg choice=plain><replaceable>Ziel</replaceable></arg>
+</cmdsynopsis>
+</entry>
+<entry><link linkend=cmd.t>copy memory</link></entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>v</command>
+<arg choice=plain>"<replaceable>Filename</replaceable>"</arg>
+<arg choice=opt>,<replaceable>Device</replaceable>
+<arg choice=opt>,<replaceable>Loadadress</replaceable></arg></arg>
+</cmdsynopsis>
+</entry>
+<entry><link linkend=cmd.v>verify</link></entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>w</command>
+<arg choice=plain><replaceable><link linkend=area>Area</link></replaceable></arg>
+<arg choice=plain><replaceable>Ziel</replaceable></arg>
+</cmdsynopsis>
+</entry>
+<entry><link linkend=cmd.w>swap memory</link></entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>x</command>
+<arg choice=opt>t</arg>
+</cmdsynopsis>
+</entry>
+<entry><link linkend=cmd.x>exit/trace</link></entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>z</command>
+<group>
+<arg choice=opt>all</arg>
+<arg choice=plain><replaceable>Adress</replaceable>
+<group>
+<arg choice=plain><replaceable>JumpType</replaceable>
+<arg choice=plain><replaceable>Action</replaceable>
+<arg choice=opt><replaceable>Parameter</replaceable></arg></arg></arg>
+</group></arg>
+</group>
+</cmdsynopsis>
+</entry>
+<entry><link linkend=cmd.z>manage freezepoints</link></entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>&pound;<replaceable>LabelName</replaceable></command>
+<arg choice=opt>=
+<arg choice=opt><replaceable><link linkend=terms>Term</link></replaceable></arg></arg>
+</cmdsynopsis>
+</entry>
+<entry><link linkend=label>define/use/delete label</link></entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>&quest;</command>
+<arg choice=plain><replaceable><link linkend=terms>Term</link></replaceable></arg>
+</cmdsynopsis>
+</entry>
+<entry>show result of a term</entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>&commat;</command>
+<arg choice=opt>#<replaceable>Device</replaceable></arg>
+<arg choice=opt><replaceable>Command</replaceable></arg>
+</cmdsynopsis>
+</entry>
+<entry><link linkend=cmd.at>send DOS command / show status</link></entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>&gt;</command>
+<arg choice=plain><replaceable>Disass Output</replaceable></arg>
+</cmdsynopsis>
+</entry>
+<entry>edit disassembler output</entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>.</command>
+<arg choice=plain><replaceable>Ascii Dump Output</replaceable></arg>
+</cmdsynopsis>
+</entry>
+<entry>edit ascii dump output</entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>,</command>
+<arg choice=plain><replaceable>Screencode Dump Output</replaceable></arg>
+</cmdsynopsis>
+</entry>
+<entry>edit screencode dump output</entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>:</command>
+<arg choice=plain><replaceable>Memory Ascii Dump Output</replaceable></arg>
+</cmdsynopsis>
+</entry>
+<entry>edit memory ascii dump output</entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>;</command>
+<arg choice=plain><replaceable>Memory Screencode Dump Output</replaceable></arg>
+</cmdsynopsis>
+</entry>
+<entry>edit memory screencode dump output</entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>[</command>
+<arg choice=opt><replaceable>Register</replaceable></arg>
+</cmdsynopsis>
+</entry>
+<entry>show/edit first part of registers</entry>
+</row>
+
+<row>
+<entry>
+<cmdsynopsis><command>]</command>
+<arg choice=opt><replaceable>Register</replaceable></arg>
+</cmdsynopsis>
+</entry>
+<entry>show/edit second part of registers</entry>
+</row>
+
+</tbody></tgroup></informaltable>
+</section>
+
+
+<section id=cmd.a xreflabel="Assemble"><title>Assemble</title>
+<para>
+Enter assembler code. The syntax is:
+</para>
+<para>
+<cmdsynopsis><command>a</command>
+<arg choice=plain><replaceable>Adress</replaceable></arg>
+<arg choice=opt><replaceable>Opcode</replaceable></arg>
+</cmdsynopsis>
+</para>
+<para>
+The first form shows the adress again in the next line where you can enter the opcode.<linebreak>
+After a line was entered the next adress is shown one line below. There you can continue with your code:
+</para>
+<para><userinput>
+a c000<linebreak>
+a00C000 a9 00 lda #$00<linebreak>
+a00C002
+</userinput></para>
+<para>
+The <link linkend=defnumsys>default numeric system</link> for all numbers is Hex.
+</para></section>
+
+
+<section id=cmd.c xreflabel="Compare"><title>Compare</title>
+<para>
+Compare two memory areas and print the differences.
+If the 'verbose mode' is active not only the adresses are shown but also the different contents.<linebreak>
+The syntax is:
+</para>
+<para>
+<cmdsynopsis><command>c</command>
+<arg choice=plain><replaceable><link linkend=area>Area</link></replaceable></arg>
+<arg choice=plain><replaceable>Destination</replaceable></arg>
+</cmdsynopsis>
+</para>
+<para>
+<replaceable>Destination</replaceable> is the start of the memory block which should be compared to <replaceable><link linkend=area>Area</link></replaceable>.
+</para>
+<para>
+The <link linkend=defnumsys>default numeric system</link> for all parameters is hex.
+</para></section>
+
+
+<section id=cmd.d xreflabel="Disassemble"><title>Disassemble</title>
+<para>
+Disassembles a memory area. The syntax is:
+</para>
+<para><cmdsynopsis>
+<command>d</command>
+<arg choice=plain><replaceable><link linkend=range>Range</link></replaceable></arg>
+</cmdsynopsis></para>
+<tip><para>
+The output of the '<userinput>d</userinput>' command can be edited.
+</para></tip>
+<tip><para>
+Illegal opcodes are printed in a special color, which can be defined by the <link linkend=cmd.p>'pp'</link> command.<linebreak>
+</para></tip>
+</section>
+
+
+<section id=cmd.f xreflabel="Fill"><title>Fill</title>
+<para>
+Fill a memory area with bytes. The syntax is:
+</para>
+<para>
+<cmdsynopsis><command>f</command>
+<arg choice=plain><replaceable><link linkend=area>Area</link></replaceable></arg>
+<arg choice=plain><replaceable><link linkend=pattern>Pattern</link></replaceable></arg>
+</cmdsynopsis>
+</para>
+<para id=pattern>
+<replaceable>Pattern</replaceable> is a list of parameters seperated by commata.
+It describes the byte pattern <replaceable><link linkend=area>Area</link></replaceable> should be filled with.
+It amy contain numbers of any length (byte, word, long) and strings, which must be identified by quotation marks.
+</para>
+<para>
+Example:<linebreak>
+The memory area from $1000 to $3000 should be filled with the text "hallo!", which is terminated by a zero byte.
+</para>
+<para><userinput>f 1000 3000 "hallo!",0</userinput></para>
+<para>
+The <link linkend=defnumsys>default numeric system</link> for all parameters is hex.
+</para>
+<tip><para>
+Strings can contain not only petascii-chars. Press a letter on the keyboard together with the <keycap>Ctrl</keycap> key. It appears inverted on the screen.
+Now DreaMon recognizes it as screencode.
+</para></tip>
+</section>
+
+<section id=cmd.g xreflabel="Go"><title>Go</title>
+<para>
+Exit the DreaMon and jump to the specified adress. The syntax is:
+</para>
+<para><cmdsynopsis>
+<command>g</command>
+<arg choice=plain><replaceable>Adress</replaceable></arg>
+</cmdsynopsis></para>
+<para>
+The <link linkend=defnumsys>default numeric system</link> of <replaceable>Adress</replaceable> is Hex.
+</para></section>
+
+<section id=cmd.h xreflabel="Hunt"><title>Hunt</title>
+<para>
+Searches a number of bytes in a memory area. A hit is reported by the adress. The syntax is:
+</para>
+<para>
+<cmdsynopsis><command>h</command>
+<arg choice=plain><replaceable><link linkend=area>Area</link></replaceable></arg>
+<arg choice=plain><replaceable><link linkend=wildpattern>Wildpattern</link></replaceable></arg>
+</cmdsynopsis>
+</para>
+<para id=wildpattern>
+<replaceable>Wildpattern</replaceable> is similar to the fill command's <replaceable><link linkend=pattern>pattern</link></replaceable>. It is a list of numbers, strings and '<userinput>?</userinput>' seperated by commata.
+The numbers can be up to 3 bytes long (byte, word and long). '<userinput>?</userinput>' has the meaning of any number.
+Hex, bin and oct numbers can also contain '?'.
+</para>
+<para>
+Example:
+</para>
+<para><userinput>h 1000 1100 f?</userinput>
+...searches for all bytes which upper nibble is $f.
+</para>
+<para>
+This is not possible with dez as the seperate digits do not define clearly the used bits.
+</para>
+<para>
+Example:
+</para>
+<para><userinput>h e000 10000 "basic"</userinput><linebreak>
+...searches for the string 'basic' (like in the c64 startup screen)
+</para>
+<para><userinput>h 8000 9fa0 "ab",?,"d"</userinput><linebreak>
+...searches for a byte sequence with the char 'a' as the first byte, 'b' as second and 'd' as fourth one. The third byte may have any value.
+</para>
+<para><userinput>h 2300 2600 fff?</userinput><linebreak>
+...searches for $fff0 bis $ffff.
+</para>
+<para><userinput>h a000 c000 d,"ok",d,0</userinput><linebreak>
+...searches for the string return, 'ok', return, which is terminated by a zero. (This is a message from the basic rom)
+</para>
+<tip><para>
+Strings can contain not only petascii-chars. Press a letter on the keyboard together with the <keycap>Ctrl</keycap> key. It appears inverted on the screen.
+Now DreaMon recognizes it as screencode.
+</para></tip>
+</section>
+
+
+<section><title>Ascii and Screencode dump</title>
+<anchor id=cmd.i xreflabel="Ascii dump">
+<anchor id=cmd.j xreflabel="Screencode dump">
+<para>
+Shows the contents of a memory area with ascii or screencodes.<linebreak>
+The syntax is:
+</para>
+<para><cmdsynopsis>
+<command>i</command>
+<arg choice=plain><replaceable><link linkend=range>Range</link></replaceable></arg>
+</cmdsynopsis>
+for ascii dump
+</para>
+<para><cmdsynopsis>
+<command>j</command>
+<arg choice=plain><replaceable><link linkend=range>Range</link></replaceable></arg>
+</cmdsynopsis>
+for screen dump
+</para>
+<tip><para>
+The number of printed bytes per line can be defined with the '<userinput><link linkend=cmd.pt>pt</link></userinput>' command.
+</para><para>
+The output of both commands can be edited.
+</para></tip>
+</section>
+
+
+<section id=cmd.l xreflabel="Load"><title>Load</title>
+<para>
+Loads a program into the memory. Load works across bank borders and has no problems with files larger than 64K.
+During the process the current adress is shown up to which the file is already loaded.<linebreak>
+The syntax is:
+</para>
+<para>
+<cmdsynopsis><command>l</command>
+<arg choice=plain>"<replaceable>Filename</replaceable>"</arg>
+<arg choice=opt>,<replaceable>Device</replaceable>
+<arg choice=opt>,<replaceable>Loadadress</replaceable></arg></arg>
+</cmdsynopsis>
+</para>
+<para>
+If the file's startadress should be ignored the desired one can be defined with <replaceable>Startadress</replaceable>.<linebreak>
+Load can be interrupted with the stop key.
+</para>
+<para>
+The <link linkend=defnumsys>default numeric system</link> for <replaceable>Device</replaceable> is Dec! For <replaceable>Startadresse</replaceable> it is Hex.
+</para>
+</section>
+
+
+<section id=cmd.lf xreflabel="Load FKeys"><title>Load FKeys</title>
+<para>
+Loads a definition for the FKeys. During the process the current adress is shown up to which the file is already loaded into the textbuffer.<linebreak>
+The Syntax is:
+</para>
+<para>
+<cmdsynopsis><command>lf</command>
+<arg choice=plain>"<replaceable>Filename</replaceable>"</arg>
+<arg choice=opt>,<replaceable>Device</replaceable></arg>
+</cmdsynopsis>
+</para>
+<para>
+'Load FKeys' can be interrupted with the stop key.
+</para>
+<para>
+The <link linkend=defnumsys>default numeric system</link> for <replaceable>Device</replaceable> is Dec!
+</para></section>
+
+
+<section id=cmd.ll xreflabel="Load Labels"><title>Load Labels</title>
+<para>
+Loads labels. During the process the current adress is shown up to which the file is already loaded into the textbuffer.
+<caution><title>Caution</title><para>Before the new labels are loaded, all old ones are deleted!</para></caution>
+</para>
+<para>
+The Syntax is:
+</para>
+<para>
+<cmdsynopsis><command>ll</command>
+<arg choice=plain>"<replaceable>Filename</replaceable>"</arg>
+<arg choice=opt>,<replaceable>Device</replaceable></arg>
+</cmdsynopsis>
+</para>
+<para>
+'Load Labels' can be interrupted with the stop key.
+</para>
+<para>
+The <link linkend=defnumsys>default numeric system</link> for <replaceable>Device</replaceable> is Dec!
+</para></section>
+
+
+<section><title>Ascii and Screencode memory dump</title>
+<anchor id=cmd.m xreflabel="Ascii memory dump">
+<anchor id=cmd.n xreflabel="Screencode memory dump">
+<para>
+Shows the contents of a memory area with ascii or screencodes and the corresponding hex values. The syntax is:
+</para>
+<para><cmdsynopsis>
+<command>m</command>
+<arg choice=plain><replaceable><link linkend=range>Range</link></replaceable></arg>
+</cmdsynopsis>
+for ascii memory dump
+</para>
+<para><cmdsynopsis>
+<command>n</command>
+<arg choice=plain><replaceable><link linkend=range>Range</link></replaceable></arg>
+</cmdsynopsis>
+for screen memory dump
+</para>
+<tip><para>
+The number of printed Bytes per line can be defined with the '<userinput><link linkend=cmd.pt>pt</link></userinput>' command.
+</para><para>
+The output of both commands can be edited.
+</para></tip>
+</section>
+
+
+<section id=cmd.o xreflabel="Opcode hunt"><title>Opcode hunt</title>
+<para>
+Opcode hunt combines disassemble and hunt. It disassembles every single adress and searches through the output. A hit is reported by the Adress.
+If the 'verbose hunt' mode is active the disassembled line is also shown.<linebreak>
+The Syntax is:
+</para>
+<para>
+<cmdsynopsis><command>o</command>
+<arg choice=plain><replaceable><link linkend=area>Area</link></replaceable></arg>
+<arg choice=plain><replaceable><link linkend=wildpattern>Wildpattern</link></replaceable></arg>
+</cmdsynopsis>
+</para>
+<para>
+The parameter <replaceable><link linkend=wildpattern>Wildpattern</link></replaceable> is also used by the <link linkend=cmd.h>Hunt</link> command.
+</para></section>
+
+
+<section id=cmd.p xreflabel="Preferences"><title>Preferences</title>
+<para>
+Sets some preferences.
+</para>
+<section id=cmd.pt xreflabel="Dump and memdump output"><title>Dump and memdump output</title>
+<para>
+<cmdsynopsis>
+<command>pt</command>
+<arg choice=opt>
+<arg choice=plain><replaceable>DumpLength</replaceable></arg>
+<arg choice=plain><replaceable>MemDumpLength</replaceable></arg>
+</arg>
+</cmdsynopsis></para>
+<para>
+<replaceable>DumpLength</replaceable> is the number of bytes per line which will be printed by the ascii and screendump commands
+'<userinput><link linkend=cmd.i>i</link></userinput>' and '<userinput><link linkend=cmd.j>j</link></userinput>'.
+<replaceable>MemDumpLength</replaceable> is the same for the memory dump commands '<userinput><link linkend=cmd.m>m</link></userinput>' and '<userinput><link linkend=cmd.n>n</link></userinput>'.
+Only values which still fit on the screen are accepted.
+</para>
+<para>
+Without parameters the current values for <replaceable>DumpLength</replaceable> and <replaceable>MemDumpLength</replaceable> are shown.
+</para>
+<para>
+The <link linkend=defnumsys>default numeric system</link> for both parameter is Hex.
+</para></section>
+
+<section id=cmd.pio xreflabel="I/O Device"><title>I/O Device</title>
+<para>
+Defines the device used for memory access. 0 is the C64 and 8 to 31 are the serial bus devices.<linebreak>
+'<userinput>pi</userinput>' defines the read and '<userinput>po</userinput>' the write access. '<userinput>pio</userinput>' combines both commands.
+</para>
+<para>
+<cmdsynopsis>
+<command>pi</command>
+<arg choice=plain><replaceable>ReadDevice</replaceable></arg>
+</cmdsynopsis>
+<cmdsynopsis>
+<command>po</command>
+<arg choice=plain><replaceable>WriteDevice</replaceable></arg>
+</cmdsynopsis>
+<cmdsynopsis>
+<command>pio</command>
+<arg choice=plain><replaceable>ReadDevice</replaceable></arg>
+<arg choice=opt><replaceable>WriteDevice</replaceable></arg>
+</cmdsynopsis>
+</para>
+<para>
+Examples:
+</para>
+<para>
+<userinput>
+pi 8<linebreak>
+m 300
+</userinput></para>
+<para>
+...shows the memory of floppy #8 at $300.
+</para>
+<para><userinput>
+pio 8<linebreak>
+t 300 380 600<linebreak>
+a 400 sei
+</userinput></para>
+<para>
+...copies the memory of floppy #8 from $300 to $380 to $600. Afterwards the first line of an assembler programm is entered in the floppy memory.<linebreak>
+If '<userinput>pio</userinput>' has only one parameter (like in this example) the read and write device are set to the same value.
+</para>
+<para><userinput>
+pio 0,8<linebreak>
+t c00 e4c 300<linebreak>
+pio 0
+</userinput></para>
+<para>
+...copies the C64's memory from $c00 to $e4c into floppy #8 to $300. The following '<userinput>pio 0</userinput>' sets read and write access back to the C64's memory.
+</para>
+<para>
+The <link linkend=defnumsys>default numeric system</link> for all parameter is Dec!
+</para></section>
+
+<!--
+<section id=cmd.pm xreflabel="Select Mapping Mode"><title>Select Mapping Mode</title>
+<para>
+Selects the mapping mode for adresses in commands.<linebreak>
+The Syntax is:
+</para>
+<para>
+<cmdsynopsis>
+<command>pm</command>
+<group choice=opt>
+<arg choice=plain>d</arg>
+<arg choice=plain>n</arg>
+<arg choice=plain>p</arg>
+<arg choice=opt><replaceable>Bank</replaceable>
+<arg choice=opt>,<replaceable>ZeroPage</replaceable></arg></arg>
+</group>
+</cmdsynopsis>
+</para>
+<para>
+By default DreaMon parses adresses without any change.
+<userinput>m 0</userinput> shows the memory contents at $000000, no matter what the 'Direct-Page' register contains.<linebreak>
+This might be useful in some situations but gets annoying if the Program- or Data-Bank is not zero. In this case you have to enter every adress with 3 bytes to reach the desired bank.<linebreak>
+Here the 'Mapping Modes' come in handy. They map 1 or 2 byte long adresses on the fly. There are 4 modes:
+<itemizedlist>
+<listitem><div>Data Bank and Zeropage</div>
+<listitem><div>Programm Bank</div>
+<listitem><div>custom values</div>
+<listitem><div>no Mapping</div>
+</itemizedlist>
+</para>
+
+<formalpara><title>Data Bank and Zeropage mapping</title>
+<para>
+The 'Data Bank' register's actual value is added to 2 byte long adresses. The 'Direct Page' register's actual value is added to 1 byte long adresses.<linebreak>
+This mode is activated by the command <userinput>pmd</userinput> or the hotkey <keycombo action=simul><keycap>Ctrl</keycap><keycap>Shift</keycap><keycap>d</keycap></keycombo>.<linebreak>
+The 'Data Bank' register is displayed by the '<userinput>r</userinput>' command marked with 'DB'. The 'Direct Page' register is marked 'DP'.
+<screen>
+
+r
+&nbsp;&nbsp;&nbsp;PC&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;&nbsp;&nbsp;&nbsp;X&nbsp;&nbsp;&nbsp;&nbsp;Y&nbsp;&nbsp;&nbsp;SPTR&nbsp;NVMXDIZCE
+[00C4A7&nbsp;FF01&nbsp;0031&nbsp;0009&nbsp;01F2&nbsp;001100010
+
+&nbsp;DB&nbsp;&nbsp;DP&nbsp;&nbsp;01
+]<userinput>08</userinput>&nbsp;<userinput>E240</userinput>&nbsp;37
+</screen>
+In this example the 'Data Bank' register contains $08 and the 'Direct Page' register $E240. For the Data Bank Mapping mode this leads to:
+</para></formalpara>
+<para><userinput>
+m f0<linebreak>
+:00E330 <replaceable>many bytes</replaceable>
+</userinput></para>
+<para><userinput>
+m 10C0<linebreak>
+:0810C0 <replaceable>many bytes</replaceable>
+</userinput></para>
+<para>
+3 byte long adresses are not changed by the mapping:<linebreak>
+<userinput>
+m 0010C0<linebreak>
+:0010C0 <replaceable>many bytes</replaceable>
+</userinput></para>
+
+<formalpara><title>Programm Bank mapping</title>
+<para>
+The 'Program Bank' register's actual value is added to 1 and 2 byte long adresses.<linebreak>
+This mode is activated by the command <userinput>pmp</userinput> or the hotkey <keycombo action=simul><keycap>Ctrl</keycap><keycap>Shift</keycap><keycap>p</keycap></keycombo>.<linebreak>
+The 'Program Bank' register is displayed by the '<userinput>r</userinput>' command as the program counter's bankbyte (PC):
+<screen>
+
+r
+&nbsp;&nbsp;&nbsp;PC&nbsp;&nbsp;&nbsp;&nbsp;A&nbsp;&nbsp;&nbsp;&nbsp;X&nbsp;&nbsp;&nbsp;&nbsp;Y&nbsp;&nbsp;&nbsp;SPTR&nbsp;NVMXDIZCE
+[<userinput>15</userinput>C002&nbsp;8D91&nbsp;0000&nbsp;000C&nbsp;01F8&nbsp;001100110
+
+&nbsp;DB&nbsp;&nbsp;DP&nbsp;&nbsp;01
+]00&nbsp;E200&nbsp;37
+</screen>
+In this example it contains $15. For the Programm Bank Mapping mode this leads to:
+</para></formalpara>
+<para><userinput>
+m f0<linebreak>
+:1500f0 <replaceable>many bytes</replaceable>
+</userinput></para>
+<para><userinput>
+m 10C0<linebreak>
+:1510C0 <replaceable>many bytes</replaceable>
+</userinput></para>
+<para>
+3 byte long adresses are not changed by the mapping:<linebreak>
+<userinput>
+m 0010C0<linebreak>
+:0010C0 <replaceable>many bytes</replaceable>
+</userinput></para>
+
+<formalpara><title>Mapping with custom values</title>
+<para>
+In this mode the expansion for 1 and 2 byte long adresses can be set to any value.<linebreak>
+</para></formalpara>
+<para>
+<cmdsynopsis>
+<command>pm</command>
+<arg choice=plain><replaceable>Bank</replaceable></arg>
+</cmdsynopsis>
+...expand 2 byte long adresses with <replaceable>Bank</replaceable>. 1 byte long adresses are not changed.<linebreak>
+Example:
+</para>
+<para><userinput>
+pm 82<linebreak>
+m f0<linebreak>
+:0000f0 <replaceable>many bytes</replaceable><linebreak>
+m 10C0<linebreak>
+:8210C0 <replaceable>many bytes</replaceable>
+</userinput></para>
+<para>
+<cmdsynopsis>
+<command>pm</command>
+<arg choice=plain><replaceable>Bank</replaceable></arg>
+<arg choice=plain>,<replaceable>ZeroPage</replaceable></arg>
+</cmdsynopsis>
+...expand 2 byte long adresses with <replaceable>Bank</replaceable>. 1 byte long adresses are expanded with <replaceable>ZeroPage</replaceable>.<linebreak>
+Example:
+</para>
+<para><userinput>
+pm 82,1d80<linebreak>
+m f0<linebreak>
+:001E70 <replaceable>many bytes</replaceable><linebreak>
+m 10C0<linebreak>
+:8210C0 <replaceable>many bytes</replaceable>
+</userinput></para>
+
+<formalpara><title>No Mapping</title>
+<para>
+In this mode no adresses are expanded.<linebreak>
+This mode is activated by the command <userinput>pmn</userinput> or the hotkey <keycombo action=simul><keycap>Ctrl</keycap><keycap>Shift</keycap><keycap>n</keycap></keycombo>.
+</para></formalpara>
+<para>
+The <link linkend=defnumsys>default numeric system</link> for <replaceable>Bank</replaceable> and <replaceable>ZeroPage</replaceable> is Hex!
+</para>
+</section>
+-->
+
+<section id=cmd.pp xreflabel="Palette"><title>Palette</title>
+<para>
+Defines the colors used for different outputs (aka palette).
+</para>
+<para><cmdsynopsis>
+<command>pp</command>
+<arg choice=opt><replaceable>Default</replaceable>
+<arg choice=opt><replaceable>Error</replaceable>
+<arg choice=opt><replaceable>Command</replaceable>
+<arg choice=opt><replaceable>Cursor</replaceable>
+<arg choice=opt><replaceable>SysTxt</replaceable>
+<arg choice=opt><replaceable>Adress</replaceable>
+<arg choice=opt><replaceable>DisAssBytes</replaceable>
+<arg choice=opt><replaceable>DisAssMne</replaceable>
+<arg choice=opt><replaceable>DisAssFPoint</replaceable>
+<arg choice=opt><replaceable>DumpBytes</replaceable>
+<arg choice=opt><replaceable>DumpSeperator</replaceable>
+<arg choice=opt><replaceable>DumpChars</replaceable>
+</arg></arg></arg></arg></arg></arg></arg></arg></arg></arg></arg></arg>
+</cmdsynopsis></para>
+</section>
+
+<section id=cmd.ps xreflabel="Speeder"><title>Speeder</title>
+<para>
+Use the speeder?
+</para>
+<para><cmdsynopsis>
+<command>ps</command>
+<group>
+<arg choice=opt>0</arg>
+<arg choice=plain>1</arg>
+</group>
+</cmdsynopsis></para>
+</section>
+
+
+</section>
+
+<section id=cmd.r xreflabel="Registers"><title>Registers</title>
+<para>
+Shows the registers: Akku, X, Y, processor flags, stack pointer, emulation flag, program counter, direct page, data bank, program bank and the content of $01.<linebreak>
+The syntax is:
+</para>
+<para><cmdsynopsis>
+<command>r</command>
+</cmdsynopsis></para>
+</section>
+
+
+<section id=cmd.s xreflabel="Save"><title>Save</title>
+<para>
+Saves a memory area. Save works across bank borders and has no problems with files larger than 64K.
+During the process the current adress is shown up to which the file is already saved.<linebreak>
+The syntax is:
+</para>
+<para>
+<cmdsynopsis><command>s</command>
+<arg choice=plain>"<replaceable>Filename</replaceable>"</arg>
+<arg choice=plain>,<replaceable>Device</replaceable></arg>
+<arg choice=plain>,<replaceable><link linkend=Range>Range</link></replaceable></arg>
+<arg choice=opt>,<replaceable>Loadadress</replaceable></arg>
+</cmdsynopsis>
+</para>
+<para>
+The file's standard load adress is the start of the memory area. If the file should later be loaded to a different location it can be defined with <replaceable>LoadAdresse</replaceable>.<linebreak>
+Save can be interrupted with the stop key.
+</para>
+<para>
+The <link linkend=defnumsys>default numeric system</link> for <replaceable>Device</replaceable> is Dec! For all other parameter it is Hex.
+</para></section>
+
+
+<section id=cmd.sf xreflabel="Save FKeys"><title>Save FKeys</title>
+<para>
+Saves the defined FKeys. During the process the current adress is shown up to which the file is already saved.<linebreak>
+The Syntax is:
+</para>
+<para>
+<cmdsynopsis><command>sf</command>
+<arg choice=plain>"<replaceable>Filename</replaceable>"</arg>
+<arg choice=opt>,<replaceable>Device</replaceable></arg>
+</cmdsynopsis>
+</para>
+<para>
+'Save FKeys' can be interrupted with the stop key.
+</para>
+<para>
+The <link linkend=defnumsys>default numeric system</link> for <replaceable>Device</replaceable> is Dec!
+</para></section>
+
+
+<section id=cmd.sl xreflabel="Save Labels"><title>Save Labels</title>
+<para>
+Saves the defined labels. During the process the current adress is shown up to which the file is already saved.<linebreak>
+The Syntax is:
+</para>
+<para>
+<cmdsynopsis><command>sl</command>
+<arg choice=plain>"<replaceable>Filename</replaceable>"</arg>
+<arg choice=opt>,<replaceable>Device</replaceable></arg>
+</cmdsynopsis>
+</para>
+<para>
+'Save Labels' can be interrupted with the stop key.
+</para>
+<para>
+The <link linkend=defnumsys>default numeric system</link> for <replaceable>Device</replaceable> is Dec!
+</para></section>
+
+
+<section id=cmd.t xreflabel="Transfer"><title>Transfer</title>
+<para>
+Copies a memory area. The Syntax is:
+</para>
+<para>
+<cmdsynopsis><command>t</command>
+<arg choice=plain><replaceable><link linkend=area>Area</link></replaceable></arg>
+<arg choice=plain><replaceable>Destination</replaceable></arg>
+</cmdsynopsis>
+</para>
+<para>
+<replaceable>Destination</replaceable> is the start of the memory block <replaceable><link linkend=area>Area</link></replaceable> should be copied to.
+</para>
+<para>
+Transfer works also without problems if <replaceable>Destination</replaceable> is inside of <replaceable><link linkend=area>Area</link></replaceable>.
+</para>
+<para>
+The <link linkend=defnumsys>default numeric system</link> for all parameter is Hex.
+</para></section>
+
+
+<section id=cmd.v xreflabel="Verify"><title>Verify</title>
+<para>
+Compares a memory block with the contents of a file. Verify works across bank borders and has no problems with files larger than 64K.
+During the process the adress is shown up to which the file is already compared.<linebreak>
+The syntax is:
+</para>
+<para>
+<cmdsynopsis><command>v</command>
+<arg choice=plain>"<replaceable>Filename</replaceable>"</arg>
+<arg choice=opt>,<replaceable>Device</replaceable>
+<arg choice=opt>,<replaceable>Loadadress</replaceable></arg></arg>
+</cmdsynopsis>
+</para>
+<para>
+The file is compared from its startadress on by default. Another position can be defined with <replaceable>LoadAdress</replaceable>.<linebreak>
+Verify can be interrupted with the stop key.
+</para>
+<para>
+The <link linkend=defnumsys>default numeric system</link> for <replaceable>Device</replaceable> is Dec! For <replaceable>LoadAdress</replaceable> it is Hex.
+</para></section>
+
+
+<section id=cmd.w xreflabel="Swap"><title>Swap</title>
+<para>
+Exchanges two memory blocks.<linebreak>
+The syntax is:
+</para>
+<para>
+<cmdsynopsis><command>w</command>
+<arg choice=plain><replaceable><link linkend=area>Area</link></replaceable></arg>
+<arg choice=plain><replaceable>Destination</replaceable></arg>
+</cmdsynopsis>
+</para>
+<para>
+<replaceable>Destination</replaceable> is the start adress of the memory block which should be exchanged with <replaceable><link linkend=area>Area</link></replaceable>.<linebreak>
+Swap works also without problems if <replaceable>Destination</replaceable> is inside of <replaceable><link linkend=area>Area</link></replaceable>.
+</para>
+<para>
+The <link linkend=defnumsys>default numeric system</link> for all parameter is Hex.
+</para></section>
+
+
+<section id=cmd.x xreflabel="Exit"><title>Exit</title>
+<para>
+Exits the DreaMon and continues at the current program counter.<linebreak>
+The syntax is:
+</para>
+<para><cmdsynopsis>
+<command>x</command>
+</cmdsynopsis></para>
+<para>
+The command can be expanded by a '<userinput>t</userinput>' which causes DreaMon to set a Freezepoint right after the actual program counter.
+This will trace one single opcode forward.
+</para>
+<para><cmdsynopsis>
+<command>xt</command>
+</cmdsynopsis></para>
+<para>
+DreaMon recognizes jump and branch commands on its own and decides for the branches if the appropriate condition is fulfilled.
+</para></section>
+
+
+<section id=cmd.z xreflabel="Manage Freezepoints"><title>Manage Freezepoints</title>
+<para>
+The command '<userinput>z</userinput>' shows, sets or clears <link linkend=freezepoints>Freezepoints</link>.<linebreak>
+'<userinput>z</userinput>' without any parameters shows all <link linkend=freezepoints>Freezepoints</link>.
+</para>
+<para>
+A <link linkend=freezepoints>Freezepoint</link> is set by
+</para>
+<para><cmdsynopsis>
+<command>z</command>
+<arg choice=plain><replaceable>Adress</replaceable></arg>
+<arg choice=plain><replaceable>JumpTyp</replaceable></arg>
+<arg choice=plain><replaceable>Aktion</replaceable></arg>
+<arg choice=opt><replaceable>Parameter</replaceable></arg>
+</cmdsynopsis></para>
+<para>
+Please take a look at the <link linkend=freezepoints>Freezepoint</link> chapter where you can find a closer description of all parameters.
+</para>
+<para>
+<link linkend=freezepoints>Freezepoints</link> can also be set during assembly. You can find more about this also in the chapter <link linkend=freezepoints>Freezepoint</link>.
+</para>
+<para>
+One single <link linkend=freezepoints>Freezepoint</link> can be deleted with
+</para>
+<para><cmdsynopsis>
+<command>z</command>
+<arg choice=plain><replaceable>Adress</replaceable></arg>
+</cmdsynopsis></para>
+<para>
+All <link linkend=freezepoints>Freezepoints</link> can be deleted with
+</para>
+<para><cmdsynopsis>
+<command>z</command>
+<arg choice=plain>all</arg>
+</cmdsynopsis></para>
+<para>
+The <link linkend=defnumsys>default numeric system</link> for all parameter is Hex.
+</para></section>
+
+<section id=cmd.at xreflabel="Dos commands"><title>Dos commands</title>
+<para>
+The '<userinput>&commat;</userinput>' sends a command to the serial bus or reads the status. If another device than the actual one should be used, it can be specified by
+'<userinput>#<replaceable>Device</replaceable></userinput>' right behind the '<userinput>&commat;</userinput>'. The <link linkend=defnumsys>default numeric system</link> for <replaceable>Device</replaceable> is Dez.<linebreak>
+The command to be send can be enclosed in apostropes, but even spaces do not require this.<linebreak>
+Besides the normal dos commands which are understood by the floppies DreaMon knows the following special commands:
+</para>
+<para>
+<informaltable><tgroup cols=2>
+<thead>
+<row><entry>Command</entry><entry>Action</entry></row>
+</thead>
+<tbody>
+<row><entry>
+<cmdsynopsis>
+<command>&commat;</command>
+<arg choice=plain>$</arg>
+</cmdsynopsis>
+</entry><entry>shows the directory</entry></row>
+<row><entry>
+<cmdsynopsis>
+<command>&commat;</command>
+<arg choice=plain>me</arg>
+<arg choice=plain><replaceable>Adress</replaceable></arg>
+</cmdsynopsis>
+</entry><entry>executes code in the floppy memory</entry></row>
+<row><entry>
+<cmdsynopsis>
+<command>&commat;</command>
+<arg choice=plain>br</arg>
+<arg choice=plain><replaceable>Track</replaceable></arg>
+<arg choice=plain><replaceable>Sector</replaceable></arg>
+<arg choice=plain><replaceable>Adress</replaceable></arg>
+</cmdsynopsis>
+</entry><entry>reads a sector from disk</entry></row>
+<row><entry>
+<cmdsynopsis>
+<command>&commat;</command>
+<arg choice=plain>bw</arg>
+<arg choice=plain><replaceable>Track</replaceable></arg>
+<arg choice=plain><replaceable>Sector</replaceable></arg>
+<arg choice=plain><replaceable>Adress</replaceable></arg>
+</cmdsynopsis>
+</entry><entry>writes a sector to disk</entry></row>
+</tbody></tgroup></informaltable>
+</para>
+<para>
+Except '<userinput>$</userinput>' the special commands are only executed without quotation marks. With quotation marks the text is just send to the floppy and no special command is executed.
+</para>
+<caution><title>Action-Replay owner</title>
+<para>
+The parameter <replaceable>Adress</replaceable> for reading and writing sectors is a complete adress and not just a high-byte like known from the action replay.
+The <link linkend=defnumsys>default numeric system</link> for <replaceable>Adress</replaceable> ist Hex.
+</para>
+<para>
+This command reads track 18, sektor 1 to $c000:
+</para>
+<para>
+<userinput>@br 12 1 c000</userinput>
+</para></caution>
+<para>
+Before a scratch or new command is executed, you have to confirm the operation.
+</para>
+<para>
+Examples:
+<informaltable><tgroup cols=2><tbody>
+<row><entry><userinput>@i</userinput></entry><entry>initialise the actual device</entry></row>
+<row><entry><userinput>@$</userinput></entry><entry>show the actual drives directory</entry></row>
+<row><entry><userinput>@#10i</userinput></entry><entry>set the actual device to 10 and initialise it</entry></row>
+<row><entry><userinput>@ #10 i</userinput></entry><entry>...the same for space lovers</entry></row>
+<row><entry><userinput>@#9</userinput></entry><entry>set the actual drive to 9 and show its status</entry></row>
+<row><entry><userinput>@#10$</userinput></entry><entry>set the actual device to 10 and show the directory</entry></row>
+</tbody></tgroup></informaltable>
+</para></section>
+
+
+
+</chapter>
+
+<chapter><title>General Usage</title>
+
+<section id=defnumsys xreflabel="Default numeric systemse"><title>Default numeric systems</title>
+<para>
+It always bugged me that most monitors insist on a '<userinput>$</userinput>' before a hex number though no other numeric system is supported. DreMon not only
+supports hex, dez, bin and oct but also has "default numeric systems". This is the system which is most common in a situation, e.g. hex while
+assembling. This system can be used without its prefix. Instead of
+</para>
+<para><userinput>a00C000 ldx #$c0</userinput></para>
+<para>
+it's enough to enter
+</para>
+<para><userinput>a00C000 ldx #c0</userinput></para>
+<para>
+DreaMon adds the missing '<userinput>$</userinput>' automatically. Hex is almost ever the default system. Exceptions are the devicenumber,
+where dez is default. Of course you can select everywhere another system by using the corresponding prefix:
+</para>
+<para>
+<informaltable><tgroup cols=2><tbody>
+<row><entry><userinput>!<replaceable>decimal number</replaceable></userinput></entry><entry>Dez</entry></row>
+<row><entry><userinput>$<replaceable>sedecimal number</replaceable></userinput></entry><entry>Hex</entry></row>
+<row><entry><userinput>&amp;<replaceable>octal number</replaceable></userinput></entry><entry>Oct</entry></row>
+<row><entry><userinput>&percnt;<replaceable>binary number</replaceable></userinput></entry><entry>Bin</entry></row>
+<row><entry><userinput>&apos;<replaceable>text</replaceable>&apos;</userinput></entry><entry>Screencode</entry></row>
+</tbody></tgroup></informaltable>
+</para>
+<para>
+Apostrophed text is interpreted as the number you get by lining up the screencode values in hex char by char.<linebreak>
+Examples:
+</para>
+<para>
+<userinput>&apos;a&apos;</userinput> evaluates to $01 as the char 'a' has the screencode $01.<linebreak>
+<userinput>&apos;bc&apos;</userinput> evaluates to $0203 as 'b' has the screencode $02 and 'c' has $03.<linebreak>
+<userinput>&apos;r4V&apos;</userinput> evaluates to $123456.
+</para>
+<para>
+Additionally all over the programm numbers can be described by any combination of binary, octal, decimal, hexadecimal and screencode as well as <link linkend=label>Label</link> and terms.
+Read more about it in the chapter <link linkend=terms>Terme</link>.
+</para></section>
+
+
+<section id=range xreflabel="Range"><title>Range</title>
+<para>
+Some commands have <replaceable>Range</replaceable> as a parameter, like '<link linkend=cmd.d>d</link>' or '<link linkend=cmd.i>i</link>'. This is a substitute for a bunch of adress-modes:
+</para>
+<para>
+<informaltable><tgroup cols=2><tbody>
+<row><entry><userinput>d</userinput></entry><entry>from actual adress in <link linkend=scrollmode>Scrollmode</link> down</entry></row>
+<row><entry><userinput>d a000</userinput></entry><entry>a single adress</entry></row>
+<row><entry><userinput>d a000 b000</userinput></entry><entry>forward from $a000 to $b000</entry></row>
+<row><entry><userinput>d b000 a000</userinput></entry><entry>backwards from $b000 to $a000 (screen scrolls up)</entry></row>
+<row><entry><userinput>d =a000</userinput></entry><entry>from $a000 on backwards in <link linkend=scrollmode>Scrollmode</link></entry></row>
+<row><entry><userinput>d a000=</userinput></entry><entry>from $a000 on forward in <link linkend=scrollmode>Scrollmode</link></entry></row>
+<row><entry><userinput>d a000 = b000</userinput></entry><entry>forward from $a000 to $b000 in <link linkend=scrollmode>Scrollmode</link></entry></row>
+<row><entry><userinput>d b000 = a000</userinput></entry><entry>backwards from $b000 to $a000 in <link linkend=scrollmode>Scrollmode</link></entry></row>
+</tbody></tgroup></informaltable>
+</para>
+<para>
+The <link linkend=defnumsys>default numeric system</link> for all adresses is Hex.
+</para></section>
+
+
+<section id=area xreflabel="Area"><title>Area</title>
+<para>
+An Area describes a block of memory by 2 values: the start- and the end adress. Both are seperated by one or more space.
+The end adress must be greater than the start adress.
+</para>
+<para>
+The <link linkend=defnumsys>default numeric system</link> for all adresses is Hex.
+</para></section>
+
+
+<section id=scrollmode xreflabel="Scrollmode"><title>Scrollmode</title>
+<para>
+The scrollmode enables you to browse easy and fast through the memory. After each line DreaMon waits for a key which can be one of these:
+</para>
+<para>
+<informaltable><tgroup cols=2><tbody>
+<row><entry><keycap>Cursor Up</keycap>/<keycap>Down</keycap></entry><entry>one step up/down</entry></row>
+<row><entry><keycap>Space</keycap></entry><entry>one step in actual direction</entry></row>
+<row><entry><keycap>Return</keycap></entry><entry>only in disass-mode: follow operand</entry></row>
+<row><entry><keycap>LeftArrow</keycap></entry><entry>return to adress before 'follow operand'</entry></row>
+<row><entry><keycap>+</keycap>/<keycap>-</keycap></entry><entry>next/previous byte</entry></row>
+<row><entry><keycap>d</keycap></entry><entry>switch to <link linkend=cmd.d>Disass</link> mode</entry></row>
+<row><entry><keycap>i</keycap></entry><entry>switch to <link linkend=cmd.i>Acsii-Dump</link> mode</entry></row>
+<row><entry><keycap>j</keycap></entry><entry>switch to <link linkend=cmd.i>Screen-Dump</link> mode</entry></row>
+<row><entry><keycap>m</keycap></entry><entry>switch to <link linkend=cmd.m>Mem-Ascii-Dump</link> mode</entry></row>
+<row><entry><keycap>n</keycap></entry><entry>switch to <link linkend=cmd.m>Mem-Screen-Dump</link> mode</entry></row>
+<row><entry><keycap>Stop</keycap></entry><entry>leave Scrollmode</entry></row>
+</tbody></tgroup></informaltable>
+</para>
+<para>
+The <link linkend=ctrl>Ctrl-Shift Keys</link> are also active.<linebreak>
+'follow operand' can be used 85 tiimes before a return adress gets lost. From the 86th time on the first return adress in each case gets lost.
+</para></section>
+
+<section id=ctrl xreflabel="Ctrl-Shift keys"><title>Ctrl-Shift keys</title>
+<para>
+Next to the already known keys from the C64 - like <keycombo action=simul><keycap>Ctrl</keycap><keycap>Shift</keycap></keycombo> - some new (and I hope handy) keys are are introduced:
+</para>
+<para>
+<informaltable><tgroup cols=2><tbody>
+<row><entry><keycombo action=simul><keycap>Ctrl</keycap><keycap>Shift</keycap><keycap>m</keycap></keycombo></entry><entry>switch Akku 8/16 Bit (M flag is not touched)</entry></row>
+<row><entry><keycombo action=simul><keycap>Ctrl</keycap><keycap>Shift</keycap><keycap>LeftArrow</keycap></keycombo></entry><entry>Memory Mapping On/Off (aka Debug Mode. So hands off if you don't know what you are up to ;)</entry></row>
+<row><entry><keycombo action=simul><keycap>Ctrl</keycap><keycap>Shift</keycap><keycap>0</keycap></keycombo> - <keycap>9</keycap></entry><entry>Set $01 to #$3x (e.g.: <keycombo action=simul><keycap>Ctrl</keycap><keycap>Shift</keycap><keycap>5</keycap></keycombo> is like lda #$35:sta 1)</entry></row>
+<row><entry><keycombo action=simul><keycap>Ctrl</keycap><keycap>Shift</keycap><keycap>x</keycap></keycombo></entry><entry>switch X/Y 8/16 Bit (X flag is not touched)</entry></row>
+<row><entry><keycombo action=simul><keycap>Ctrl</keycap><keycap>Shift</keycap><keycap>f</keycap></keycombo></entry><entry>follow Rep/Sep On/Off</entry></row>
+<row><entry><keycombo action=simul><keycap>Ctrl</keycap><keycap>Shift</keycap><keycap>h</keycap></keycombo></entry><entry>'verbose hunt/opcodehunt' Modus An/Aus, zeige ein paar mehr infos als nur die Adresse</entry></row>
+<row><entry><keycombo action=simul><keycap>Ctrl</keycap><keycap>Shift</keycap><keycap>v</keycap></keycombo></entry><entry>switch VideoMode: (Vic, VDC 2531, VDC Super6 and ParDis (Experimental))</entry></row>
+<row><entry><keycombo action=simul><keycap>Ctrl</keycap><keycap>Shift</keycap><keycap>+</keycap></keycombo></entry><entry>more lines (only VDC2531 and Super6)</entry></row>
+<row><entry><keycombo action=simul><keycap>Ctrl</keycap><keycap>Shift</keycap><keycap>-</keycap></keycombo></entry><entry>less lines (nur VDC2531 and Super6)</entry></row>
+<row><entry><keycombo action=simul><keycap>Ctrl</keycap><keycap>Shift</keycap><keycap>Cursors</keycap></keycombo></entry><entry>Move cursor to the screen borders (<keycombo action=simul><keycap>Ctrl</keycap><keycap>Shift</keycap><keycap>Down</keycap></keycombo> = move to last line)</entry></row>
+<row><entry><keycombo action=simul><keycap>Ctrl</keycap><keycap>Shift</keycap><keycap>p</keycap></keycombo></entry><entry>set mapping mode to 'program bank'</entry></row>
+<row><entry><keycombo action=simul><keycap>Ctrl</keycap><keycap>Shift</keycap><keycap>d</keycap></keycombo></entry><entry>set mapping mode to 'data bank and zeropage'</entry></row>
+<row><entry><keycombo action=simul><keycap>Ctrl</keycap><keycap>Shift</keycap><keycap>n</keycap></keycombo></entry><entry>set mapping mode to 'none'</entry></row>
+</tbody></tgroup></informaltable>
+</para>
+<para>
+<keycombo action=simul><keycap>Ctrl</keycap><keycap>Shift</keycap><keycap>m</keycap></keycombo> and <keycap>x</keycap> only change internal flags for akku and register sizes. The M and X flag of the processor status is not altered.
+</para>
+<para>
+The videomode 'VDC2531' uses the 80 colums screen of a C128. Change the number of lines from 25 up to 31 with <keycombo action=simul><keycap>Ctrl</keycap><keycap>Shift</keycap><keycap>+</keycap></keycombo> and <keycombo action=simul><keycap>Ctrl</keycap><keycap>Shift</keycap><keycap>-</keycap></keycombo>.<linebreak>
+The 'super6' mode is similar to 'VDC2531' but uses another charset which is just 6 pixels high. This way more lines fit onto the screen. The total amount depends on your (hardware-) monitor. The number of lines is changes the same way as in the 'VDC2531' mode.
+As both modes use the VDC chip they are only available on a C128.
+</para></section>
+
+
+<section id=label xreflabel="Label"><title>Label</title>
+<para>
+All label have to start with a '<userinput>&pound;</userinput>'. A label is defined by
+</para>
+<para><userinput>&pound;<replaceable>LabelName</replaceable> = <replaceable><link linkend=terms>Term</link></replaceable></userinput></para>
+<para>
+The labelname may contain any char except one of the following:<linebreak>
+<keycap>+</keycap> <keycap>*</keycap> <keycap>-</keycap> <keycap>/</keycap> <keycap>(</keycap> <keycap>)</keycap> <keycap>&lt;</keycap> <keycap>&gt;</keycap> <keycap>&amp;</keycap> <keycap>UpArrow</keycap> and <keycap>Space</keycap><linebreak>
+The <link linkend=defnumsys>default numeric system</link> for <replaceable><link linkend=terms>Term</link></replaceable> is Hex.
+</para>
+<para>
+To delete a label just skip <replaceable><link linkend=terms>Term</link></replaceable>.
+</para>
+<para>
+Example:<linebreak>
+Define the label "border" with the value $d020<linebreak>
+<userinput>&pound;border = $d020</userinput>
+</para>
+<para>
+Define the label "Background" with the value $d021
+<linebreak>
+<userinput>&pound;Background = &pound;border +1</userinput>
+</para>
+<para>
+Delete the label "border"<linebreak>
+<userinput>&pound;border =</userinput>
+</para>
+<para>
+The annoying spaces in these examples are of course unnecessary.
+</para></section>
+
+
+<section id=enlarge xreflabel="Enlarging numbers"><title>Enlarging numbers</title>
+<para>
+While assembling DreaMon normally selects the shortest possible adress-mode. But sometimes this is not desired (e.g. absolut should be
+used instead of zeropage). To specify a longer adress mode than a number normally has, this number has to be prefixed by enough zeros.<linebreak>
+Example: sta $fb should be absolut
+</para>
+<para><userinput>a00C000 sta 0fb</userinput></para>
+<para>
+A 3 digit hex number is already 2 bytes long and so absolut adressing is used. Of course this will also work:
+</para>
+<para><userinput>a00C000 sta 00fb</userinput></para>
+<para>
+But why wasting energy on senseless things? ;-)
+</para>
+<para><userinput>a00C000 sta 000fb</userinput></para>
+<para>
+is no more absolut adressing but long, as 5 hex nibble need 3 bytes.<linebreak>
+Of course this method of enlarging number works only for numeric systems where the number of digits clearly defines the length in bytes. That is
+the case with bin, hex and oct, but not with dez. If an argument consists of several numbers, the biggest enlarging is taken for the result.
+</para>
+<para>
+Note that <link linkend=label>Labels</link> can be enlarged too.
+</para></section>
+
+
+<section id=fkeys xreflabel="F-Keys"><title>F-Keys</title>
+<para>
+DreaMon knows more than the usual 8 FKeys. 8 more are accessed with the <keycap>C=</keycap> and the <keycap>Ctrl</keycap> key:
+</para>
+<para>
+<informaltable><tgroup cols=2><tbody>
+<row><entry><keycombo action=simul><keycap>C=</keycap><keycap>F1</keycap></keycombo> : <keycap>F9</keycap></entry><entry><keycombo action=simul><keycap>Ctrl</keycap><keycap>F1</keycap></keycombo> : <keycap>F10</keycap></entry></row>
+<row><entry><keycombo action=simul><keycap>C=</keycap><keycap>F3</keycap></keycombo> : <keycap>F11</keycap></entry><entry><keycombo action=simul><keycap>Ctrl</keycap><keycap>F3</keycap></keycombo> : <keycap>F12</keycap></entry></row>
+<row><entry><keycombo action=simul><keycap>C=</keycap><keycap>F5</keycap></keycombo> : <keycap>F13</keycap></entry><entry><keycombo action=simul><keycap>Ctrl</keycap><keycap>F5</keycap></keycombo> : <keycap>F14</keycap></entry></row>
+<row><entry><keycombo action=simul><keycap>C=</keycap><keycap>F7</keycap></keycombo> : <keycap>F15</keycap></entry><entry><keycombo action=simul><keycap>Ctrl</keycap><keycap>F7</keycap></keycombo> : <keycap>F16</keycap></entry></row>
+</tbody></tgroup></informaltable>
+</para>
+<para>
+All FKeys except <keycap>F16</keycap> can contain macros. To record a macro press <keycap>F16</keycap>. After that the cursor blinks faster than normal. Now press the FKey
+for the macro and start to type. Another hit on this FKey ends recording. A macro can contain other macros.<linebreak>
+Example:
+</para>
+<para>
+<keycap>F1</keycap> should contain the text 'm 478' and Return.
+</para>
+<para><keycombo action=seq><keycap>F16</keycap> <keycap>F1</keycap></keycombo> <userinput>m 478</userinput> <keycap>Return</keycap> <keycap>F1</keycap></para>
+<para>
+Macros keep running over a system melt.
+</para></section>
+
+
+<section id=freezepoints xreflabel="Freezepoints"><title>Freezepoints</title>
+<para>
+A Freezepoint interrupts the running program and jumps to the DreaMon.<linebreak>
+All registers of the I/O chips are saved so you can return to the program as nothing happened.
+</para>
+<para>
+There are 2 types of Freezepoints which are distinguished by their way how to jump to DreaMon:
+</para>
+<para>
+<informaltable><tgroup cols=4>
+<thead>
+<row><entry>Typ</entry><entry>Needs</entry><entry>Length</entry><entry>Condition</entry></row>
+</thead><tbody>
+<row><entry>J (JSR)</entry><entry>the vectors at $d3xx</entry><entry>3</entry><entry>I/O must be active and the Freezepoint must reside in bank 0</entry></row>
+<row><entry>L (JSL)</entry><entry>nothing</entry><entry>4</entry><entry>none</entry></row>
+</tbody></tgroup></informaltable>
+</para>
+<para>
+The memory at the position of the freezepoint is saved and replaced by the jump command. So be sure not to get hit by self modification! (See
+below what to do in this case)<linebreak>
+After the freezepoint is executed the original memory is restored. While you are in the DreaMon you see the original memory. The disassemble command
+shows a little hint behind a line where a freezepoint resides.
+</para>
+<para>
+If a freezepoint is reached, 4 things can happen:
+</para>
+<para>
+<informaltable><tgroup cols=3><thead>
+<row><entry>Typ</entry><entry>Parameter</entry><entry>Action</entry></row>
+</thead><tbody>
+<row><entry>N (Normal)</entry><entry>none</entry><entry>Springt einfach zum DreaMon</entry></row>
+<row><entry>C (Count)</entry><entry><replaceable>n</replaceable> (a number from 0 to $ff)</entry><entry>Freezes at the (<replaceable>n</replaceable>+1)-th time (so <replaceable>n</replaceable>=0 is like 'normal')</entry></row>
+<row><entry>A (Activate)</entry><entry><replaceable>n</replaceable> (a number from 0 to $ff)</entry><entry>activates the bits specified in <replaceable>n</replaceable>, nothing more happens</entry></row>
+<row><entry>R (Remote)</entry><entry><replaceable>n</replaceable> (a number from 0 to $ff)</entry><entry>freezes if at least one bit from <replaceable>n</replaceable> is activated</entry></row>
+</tbody></tgroup></informaltable>
+</para>
+<para>
+The <link linkend=defnumsys>default numeric system</link> for all parameter is Hex.
+</para>
+<para>
+Activate and remote freezepoints only work together. They are used in cases of timing critical routines or self modification where the other
+types do not work.<linebreak>
+Remote freezepoints are not written to the memory if you set them. They are just kept in mind by DreaMon until the program hits an activate
+freezepoint. Now the remote freezepoint is written to the memory and can be executed! The parameter for both types is a bit mask to define which freezepoint
+is activated. If an activate point with parameter $15 is hit, all remote freezepoints are written to memory which have at least bit 0, 2 or 4 set
+in their parameter, e.g one with $32.
+</para>
+<para>
+There are two ways to set a freezepoint:
+<itemizedlist>
+<listitem><div>
+While <link linkend=cmd.a>assembling</link> or editing <link linkend=cmd.d>disassembled</link> output
+<blockquote>
+<para>
+The opcode at the position where you want to freeze has to be replaced by '<userinput>z<replaceable>JumpTyp</replaceable> <replaceable>Aktion</replaceable></userinput>' and a parameter for count, activate and remote.
+</para>
+<para>
+Example:<linebreak>
+This is the point where you want to freeze...
+</para>
+<para><userinput>>00c018 ad 20 d0 lda $d020</userinput></para>
+<para>
+Now you type...
+</para>
+<para><userinput>>00c018 ad 20 d0 zjn;$d020</userinput><linebreak>
+...to set a 'normal' 'JSR' type (the semicolon after 'zjn' marks the end of the line. DreaMon ignores the rest behind it)
+</para>
+<para><userinput>>00c018 ad 20 d0 zlc12;$d020</userinput><linebreak>
+...to set a 'count' 'JSL' type, which freezes untill the 18. (=$12) time.
+</para>
+</blockquote>
+</div></listitem>
+<listitem><div>
+With the '<userinput>z</userinput>' command.
+<blockquote><div>
+Please take a look in the chapter <link linkend=cmd.z>manage freezepoints</link>.
+</div></blockquote>
+</div></listitem>
+</itemizedlist>
+</para></section>
+
+
+<section id=terms xreflabel="Terms"><title>Terms</title>
+<para>
+Whenever a command expects a number it can be specified by a term. The following arithmetics may be used:
+</para>
+<para>
+<informaltable><tgroup cols=2><tbody>
+<row><entry><userinput><keycap>UpArrow</keycap>, &lt;, &gt;</userinput></entry><entry>bank-, hi-, lo-byte</entry></row>
+<row><entry><userinput>mod</userinput></entry><entry>modulo</entry></row>
+<row><entry><userinput>*, /</userinput></entry><entry>multiply/divide</entry></row>
+<row><entry><userinput>+, -</userinput></entry><entry>add/subtract</entry></row>
+<row><entry><userinput>+, -</userinput></entry><entry>positive/negative sign</entry></row>
+<row><entry><userinput>&gt;&gt;, &lt;&lt;</userinput></entry><entry>right/left shift</entry></row>
+<row><entry><userinput>&commat;a</userinput></entry><entry>and</entry></row>
+<row><entry><userinput>&commat;n</userinput></entry><entry>not</entry></row>
+<row><entry><userinput>&commat;e</userinput></entry><entry>eor</entry></row>
+<row><entry><userinput>&commat;o</userinput></entry><entry>or</entry></row>
+</tbody></tgroup></informaltable>
+</para>
+<para>
+The operations are listed by their priority. Brackets can override this.
+</para>
+<para>
+Example:<linebreak>
+All commands do the same
+</para>
+<para><userinput>m c002</userinput><linebreak>
+<userinput>m !49152+8>>2</userinput><linebreak>
+<userinput>m (8+4)*1000 + 2</userinput><linebreak>
+</para></section>
+
+
+</chapter>
+
+
+<appendix><title>Past, present and future</title>
+<section id=history xreflabel="History"><title>History</title>
+&AppendixHistory;
+</section>
+<section id=todo xreflabel="ToDo"><title>ToDo</title>
+<para>
+These are my plans for future versions of DreaMon:
+<itemizedlist>
+<listitem><div>implement all functions from the SCPU version</div></listitem>
+<listitem><div>edit function for the frozen text screen</div></listitem>
+<listitem><div>use a terminal program connected to the silver surfer as a DreaMon screen</div></listitem>
+</itemizedlist>
+...and your ideas! :)
+</para></section>
+
+</appendix>
+
+<appendix id=idx><title>Index</title>
+<blockquote><para>
+<link linkend=index.a>A</link>
+<link linkend=index.c>C</link>
+<link linkend=index.d>D</link>
+<link linkend=index.e>E</link>
+<link linkend=index.f>F</link>
+<link linkend=index.g>G</link>
+<link linkend=index.h>H</link>
+<link linkend=index.l>L</link>
+<link linkend=index.m>M</link>
+<link linkend=index.o>O</link>
+<link linkend=index.p>P</link>
+<link linkend=index.r>R</link>
+<link linkend=index.s>S</link>
+<link linkend=index.t>T</link>
+<link linkend=index.v>V</link>
+</para></blockquote>
+<formalpara><title><anchor id=index.a>A</title><para>
+<xref linkend="area"><linebreak>
+<xref linkend="cmd.i"><linebreak>
+<xref linkend="cmd.m"><linebreak>
+<xref linkend="cmd.a">
+</para></formalpara><formalpara><title><anchor id=index.c>C</title><para>
+<xref linkend="cmd.idx"><linebreak>
+<xref linkend="cmd.c"><linebreak>
+<xref linkend="ctrl">
+</para></formalpara><formalpara><title><anchor id=index.d>D</title><para>
+<xref linkend="defnumsys"><linebreak>
+<xref linkend="cmd.d"><linebreak>
+<xref linkend="cmd.at">
+</para></formalpara><formalpara><title><anchor id=index.e>E</title><para>
+<xref linkend="enlarge"><linebreak>
+<xref linkend="cmd.x">
+</para></formalpara><formalpara><title><anchor id=index.f>F</title><para>
+<xref linkend="cmd.f"><linebreak>
+<xref linkend="fkeys"><linebreak>
+<xref linkend="freezepoints"><linebreak>
+</para></formalpara><formalpara><title><anchor id=index.g>G</title><para>
+<xref linkend="cmd.g">
+</para></formalpara><formalpara><title><anchor id=index.h>H</title><para>
+<xref linkend="history"><linebreak>
+<xref linkend="cmd.h">
+</para></formalpara><formalpara><title><anchor id=index.l>L</title><para>
+<xref linkend="label"><linebreak>
+<xref linkend="cmd.l"><linebreak>
+<xref linkend="cmd.lf"><linebreak>
+<xref linkend="cmd.ll">
+</para></formalpara><formalpara><title><anchor id=index.m>M</title><para>
+<xref linkend="cmd.z">
+</para></formalpara><formalpara><title><anchor id=index.o>O</title><para>
+<xref linkend="cmd.o">
+</para></formalpara><formalpara><title><anchor id=index.p>P</title><para>
+<xref linkend="cmd.p">
+</para></formalpara><formalpara><title><anchor id=index.r>R</title><para>
+<xref linkend="range"><linebreak>
+<xref linkend="cmd.r">
+</para></formalpara><formalpara><title><anchor id=index.s>S</title><para>
+<xref linkend="cmd.s"><linebreak>
+<xref linkend="cmd.sf"><linebreak>
+<xref linkend="cmd.sl"><linebreak>
+<xref linkend="cmd.j"><linebreak>
+<xref linkend="cmd.n"><linebreak>
+<xref linkend="scrollmode"><linebreak>
+<xref linkend="start"><linebreak>
+<xref linkend="cmd.w">
+</para></formalpara><formalpara><title><anchor id=index.t>T</title><para>
+<xref linkend="terms"><linebreak>
+<xref linkend="todo"><linebreak>
+<xref linkend="cmd.t">
+</para></formalpara><formalpara><title><anchor id=index.v>V</title><para>
+<xref linkend="cmd.v">
+</para></formalpara>
+<blockquote><para>
+<link linkend=index.a>A</link>
+<link linkend=index.c>C</link>
+<link linkend=index.d>D</link>
+<link linkend=index.e>E</link>
+<link linkend=index.f>F</link>
+<link linkend=index.g>G</link>
+<link linkend=index.h>H</link>
+<link linkend=index.l>L</link>
+<link linkend=index.m>M</link>
+<link linkend=index.o>O</link>
+<link linkend=index.p>P</link>
+<link linkend=index.r>R</link>
+<link linkend=index.s>S</link>
+<link linkend=index.t>T</link>
+<link linkend=index.v>V</link>
+</para></blockquote></appendix>
+
+
+</book>
+

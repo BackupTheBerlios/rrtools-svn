@@ -1,0 +1,80 @@
+/***************************************************************************
+ *   Copyright (C) 2000 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+
+	.(	; *** FKey Texte ***
+
+;--------------------------------------
+
+FKey0:
+	.DW FKey1 -FKey0
+	.SCR Spi_Idn,"m c000",Key_CR
+FKey1:
+	.DW FKey2 -FKey1
+	.SCR Spi_Idn,"d 1234"
+FKey2:
+	.DW FKey3 -FKey2
+	.SCR Spi_Idn,"@$",Key_CR
+FKey3:
+	.DW FKey4 -FKey3
+	.SCR Spi_Idn,"? ",Spi_Idn,Key_SRi,Key_BSp,Key_BSp,Spi_Idn," ",Key_CR
+FKey4:
+	.DW FKey5 -FKey4
+	.SCR Key_CUp, Key_CUp, Key_CUp, Key_CUp, Key_CUp, Key_CUp, Key_CUp, Key_CUp
+	.SCR Key_CUp, Key_CUp, Key_CUp, Key_CUp, Key_CUp, Key_CUp, Key_CUp, Key_CUp
+	.SCR Key_CUp, Key_CUp, Key_CUp, Key_CUp
+FKey5:
+	.DW FKey6 -FKey5
+	.SCR Spi_Idn,"r",Key_CR
+FKey6:
+	.DW FKey7 -FKey6
+	.SCR Key_CDo, Key_CDo, Key_CDo, Key_CDo, Key_CDo, Key_CDo, Key_CDo, Key_CDo
+	.SCR Key_CDo, Key_CDo, Key_CDo, Key_CDo, Key_CDo, Key_CDo, Key_CDo, Key_CDo
+	.SCR Key_CDo, Key_CDo, Key_CDo, Key_CDo
+FKey7:
+	.DW FKey8 -FKey7
+	.SCR Spi_Idn,"fkey 8"
+FKey8:
+	.DW FKey9 -FKey8
+	.SCR Spi_Idn,"fkey 9"
+FKey9:
+	.DW FKey10-FKey9
+	.SCR Spi_Idn,"lda #0"
+FKey10:
+	.DW FKey11-FKey10
+	.SCR Spi_Idn,"fkey 11"
+FKey11:
+	.DW FKey12-FKey11
+	.SCR Spi_Idn,"ldx #0"
+FKey12:
+	.DW FKey13-FKey12
+	.SCR Spi_Idn,"fkey 13"
+FKey13:
+	.DW FKey14-FKey13
+	.SCR Spi_Idn,"ldy #0"
+FKey14:
+	.DW FKey15-FKey14
+	.SCR Spi_Idn,"fkey 15"
+FKey15:
+
+;--------------------------------------
+
+	.)	; *** FKey Texte ***
+

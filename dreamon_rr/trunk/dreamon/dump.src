@@ -1,0 +1,327 @@
+/***************************************************************************
+ *   Copyright (C) 2000 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+
+;--------------------------------------
+
+@0DumpLib_ReAscDump:
+	lda #'.'+$80
+	bmi ReDump
+@0DumpLib_ReScrDump:
+        lda #','
+ReDump:
+	sta ConvertFlag
+	.LongJsr(L_GetAdress)
+	bcs ReDumpErr
+	lda Dump_AscLen
+	jsr InputBuf_Init
+	bcs ReDumpExit
+	ldx #Adress
+	jsr OutputBuf_Init
+	jsr Spaces
+	cmp #':'
+	bne ReDumpErr
+	ldy #0
+	ldx CmdLinePos
+	jmp ReDump1
+ReDump0:
+	lda CmdLine,x
+	jsr ConvertA
+	jsr OutputBuf_Byte
+	iny
+	cpy Dump_AscLen
+	bcs ReDump2
+ReDump1:
+	inx
+	cpx CmdLineLen
+	bcc ReDump0
+ReDump2:
+	jsr OutputBuf_Flush
+	bcs ReDumpExit
+	lda #0
+	sta ComLibZp_CursorXPos
+	lda ConvertFlag
+	jsr Dump
+	.ShowMsg(Msg_CR)
+	clc
+	rts
+ReDumpErr:
+	sec
+ReDumpExit:
+	rts
+
+
+@0DumpLib_ReMemAscDump:
+        lda #':'+$80
+	bmi ReMemDump
+@0DumpLib_ReMemScrDump:
+        lda #';'
+ReMemDump:
+	sta ConvertFlag
+	.LongJsr(L_GetAdress)
+	bcs ReMemDumpErr
+	lda Dump_MemLen
+	jsr InputBuf_Init
+	bcs ReMemDumpExit
+	ldx #Adress
+	jsr OutputBuf_Init
+ReMemDump0:
+	jsr Spaces
+	bcs ReMemDump3
+        cmp #':'
+	beq ReMemDump1
+	lda #2
+	jsr GetNum_GetHexNDig
+	bcs ReMemDumpErr
+	lda LongLibZp_Akku0
+	jsr OutputBuf_Byte
+	jmp ReMemDump0
+ReMemDump1:
+	lda CmdLinePos
+	cmp CmdCursorXPos
+	bcs ReMemDump3
+	jsr OutputBuf_Clear
+	ldx #Adress
+	jsr LongLib_LoadPtr
+	ldy #0
+ReMemDump2:
+	jsr NextCmdChar
+	bcs ReMemDump3
+	jsr ConvertA
+	jsr OutputBuf_Byte
+	iny
+	jmp ReMemDump2
+ReMemDump3:
+	jsr OutputBuf_Flush
+	bcs ReMemDumpExit
+	ldx #Adress
+	jsr LongLib_LoadPtr
+	lda #0
+	sta ComLibZp_CursorXPos
+	lda ConvertFlag
+	jsr MemDump
+	.ShowMsg(Msg_CR)
+	clc
+ReMemDumpExit:
+	rts
+ReMemDumpErr:
+	sec
+ConvertA1:
+	rts
+
+ConvertA:
+	bit ConvertFlag
+	bpl ConvertA1
+	cmp #$a0
+	bne ConvertA0
+	lda InputBuffer,y
+	rts
+ConvertA0:
+	jmp ComLib_Screen2Ascii
+
+;--------------------------------------
+
+MemDumpScrlGetLen:
+	lda #0
+	sta ReMemDumpPos
+MemDumpScrlGetLen0:
+	jsr Spaces
+	bcs MemDumpScrlGetLen1
+        cmp #':'
+	beq MemDumpScrlGetLen1
+	lda #2
+	jsr GetNum_GetHexNDig
+	bcs MemDumpScrlGetLenErr
+	inc ReMemDumpPos
+	bne MemDumpScrlGetLen0
+MemDumpScrlGetLen1:
+	ldx #Adress
+	jsr LongLib_LoadPtr
+	lda ReMemDumpPos
+	bne MemDumpScrlGetLen2
+	lda Dump_MemLen
+MemDumpScrlGetLen2:
+	jsr LongLib_AddBYTE
+	ldx #Adress
+	jmp LongLib_StorePtr
+MemDumpScrlGetLenErr:
+	sec
+	rts
+
+
+@0DumpLib_MemAscDumpScrl:
+	bvs MemAscDumpUp
+	jsr MemDumpScrlGetLen
+	jmp MemAscDump
+
+@0DumpLib_MemScrDumpScrl:
+	bvs MemScrDumpUp
+	jsr MemDumpScrlGetLen
+	jmp MemScrDump
+
+
+@0DumpLib_MemScrDumpRange:
+	bvc MemScrDump
+MemScrDumpUp:
+	lda Dump_MemLen
+	jsr LongLib_SubBYTE
+MemScrDump:
+        lda #';'
+	bne MemDump
+
+@0DumpLib_MemAscDumpRange:
+	bvc MemAscDump
+MemAscDumpUp:
+	lda Dump_MemLen
+	jsr LongLib_SubBYTE
+MemAscDump:
+        lda #':'+$80
+MemDump:
+	sta ConvertFlag
+	and #$7f
+	ldx Palette+Palette_Command
+	.LongJsr(L_ComLib_PrintColChar)
+	lda Palette+Palette_Adress
+	.LongJsr(L_ComLib_SetCol)
+	jsr LongLib_Akku0Out
+	lda Dump_MemLen
+	ldx #LongLibZp_Akku0
+	jsr InputBuf_Init
+	bcs MemDumpExit
+	lda Palette+Palette_DumpBytes
+	.LongJsr(L_ComLib_SetCol)
+	ldy #0
+MemDump0:
+	.LongJsr(L_ComLib_SpaceOut)
+	lda InputBuffer,y
+	.LongJsr(L_ComLib_ByteOut)
+	iny
+	cpy Dump_MemLen
+	bcc MemDump0
+        lda #':'
+	ldx Palette+Palette_DumpSeperator
+	.LongJsr(L_ComLib_PrintColChar)
+	lda Palette+Palette_DumpChars
+	.LongJsr(L_ComLib_SetCol)
+	ldy #0
+MemDump1:
+	lda InputBuffer,y
+	jsr ConvertB
+	.LongJsr(L_ComLib_PrintRawChar)
+	iny
+	cpy Dump_MemLen
+	bcc MemDump1
+	lda ComLibZp_CursorXPos
+	beq MemDump2
+	.LongJsr(L_ComLib_FillRestline)
+MemDump2:
+	lda Dump_MemLen
+	clc
+MemDumpExit:
+	rts
+
+
+;--------------------------------------
+
+@0DumpLib_ScrDumpScrl:
+	bvs ScrDumpUp
+	jsr DumpGetLen
+	jmp ScrDump
+
+@0DumpLib_AscDumpScrl:
+	bvs AscDumpUp
+	jsr DumpGetLen
+	jmp AscDump
+
+@0DumpLib_ScrDumpRange:
+	bvc ScrDump
+ScrDumpUp:
+	lda Dump_AscLen
+	jsr LongLib_SubBYTE
+ScrDump:
+	lda #','
+	jmp Dump
+
+@0DumpLib_AscDumpRange:
+	bvc AscDump
+AscDumpUp:
+	lda Dump_AscLen
+	jsr LongLib_SubBYTE
+AscDump:
+        lda #'.'+$80
+Dump:
+	sta ConvertFlag
+	and #$7f
+	ldx Palette+Palette_Command
+	.LongJsr(L_ComLib_PrintColChar)
+	lda Palette+Palette_Adress
+	.LongJsr(L_ComLib_SetCol)
+	jsr LongLib_Akku0Out
+	lda #':'
+	.LongJsr(L_ComLib_PrintRawChar)
+	lda Palette+Palette_DumpChars
+	.LongJsr(L_ComLib_SetCol)
+	ldx #LongLibZp_Akku0
+	lda Dump_AscLen
+	jsr InputBuf_Init
+	bcs DumpExit
+	ldy #0
+Dump0:
+	lda InputBuffer,y
+	jsr ConvertB
+	.LongJsr(L_ComLib_PrintRawChar)
+	iny
+	cpy Dump_AscLen
+	bcc Dump0
+	lda ComLibZp_CursorXPos
+	beq Dump1
+	.LongJsr(L_ComLib_FillRestline)
+Dump1:
+	lda Dump_AscLen
+	clc
+DumpExit:
+	rts
+
+
+DumpGetLen:
+	ldx #Adress
+	jsr LongLib_LoadPtr
+	jsr NextCmdChar
+	lda ComLibZp_CursorMaxXPos
+	bcc DumpGetLen0
+	sbc #8
+	jmp DumpGetLen1
+DumpGetLen0:
+	sec
+	sbc CmdLinePos
+DumpGetLen1:
+	jsr LongLib_AddBYTE
+	jmp LongLib_StorePtr
+
+
+ConvertB:
+	bit ConvertFlag
+	bpl ConvertB0
+	.LongJsr(L_ComLib_Ascii2Screen)
+ConvertB0:
+	rts
+
+;--------------------------------------
+

@@ -1,0 +1,1009 @@
+/***************************************************************************
+ *   Copyright (C) 2000 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+;--------------------------------------
+;
+;  Screen and Keys for SuperAR
+;
+;--------------------------------------
+
+
+	.(	;*** ComLib ***
+
+;--------------------------------------
+
+@0ComLib_SetCrsrPos:
+	lda ComLibZp_CrsrFlag
+	beq SetCrsrPos0
+	txa
+	pha
+	tya
+	pha
+	jsr ComLibVect_CursorOff
+	pla
+	tya
+	pla
+	txa
+	stx ComLibZp_CursorXPos
+	sty ComLibZp_CursorYPos
+	jmp ComLibVect_CursorOn
+SetCrsrPos0:
+	stx ComLibZp_CursorXPos
+	sty ComLibZp_CursorYPos
+	rts
+
+@0ComLib_SetCol:
+	sta ComLibZp_Color
+	rts
+
+@0ComLib_SpaceOut:
+	lda #' '
+	jmp ComLib_PrintRawChar
+
+@0ComLib_SpacesOut:
+	jsr ComLib_SpaceOut
+	dey
+	bne ComLib_SpacesOut
+	rts
+
+@0ComLib_DollarOut:
+	pha
+	lda #'$'
+	jsr ComLib_PrintRawChar
+	pla
+	rts
+
+@0ComLib_DollarByteOut:
+	jsr ComLib_DollarOut
+	jmp ComLib_ByteOut
+
+@0ComLib_DollarWordOut:
+	jsr ComLib_DollarOut
+	jmp ComLib_WordOut
+
+@0ComLib_DollarLongOut:
+	jsr ComLib_DollarOut
+@0ComLib_LongOut:
+	jsr ComLib_ByteOut
+	tya
+@0ComLib_WordOut:
+	jsr ComLib_ByteOut
+	txa
+	jmp ComLib_ByteOut
+
+@0ComLib_ByteOut:
+	pha
+	lsr
+	lsr
+	lsr
+	lsr
+	jsr HexByteOut0
+	pla
+@0ComLib_HexNibbleOut:
+	and #$0f
+HexByteOut0:
+	ora #$30
+	cmp #$3a
+	bcc HexByteOut1
+	sbc #$39
+HexByteOut1:
+	jmp ComLib_PrintRawChar
+
+
+ComLib_DezByteOutTab0Lo:
+	.DB <00010,<00100,<01000,<10000
+ComLib_DezByteOutTab0Hi:
+	.DB >00010,>00100,>01000,>10000
+
+
+@0ComLib_DezWordOut:
+	ldy #3
+	lda #0
+	sta ComLibZp_StringPtr
+DezWordOut0:
+	ldx #'0'
+	lda LongLibZp_Akku0
+DezWordOut1:
+	sec
+	sbc ComLib_DezByteOutTab0Lo,y
+	pha
+	lda LongLibZp_Akku0+1
+	sbc ComLib_DezByteOutTab0Hi,y
+	bcc DezWordOut2
+	sta LongLibZp_Akku0+1
+	pla
+	sta LongLibZp_Akku0
+	inx
+	bne DezWordOut1
+DezWordOut2:
+	pla
+	lda ComLibZp_StringPtr
+	bne DezWordOut3
+	cpx #'0'
+	beq DezWordOut4
+DezWordOut3:
+	txa
+	jsr ComLib_PrintRawChar
+	sta ComLibZp_StringPtr
+DezWordOut4:
+	dey
+	bpl DezWordOut0
+	lda LongLibZp_Akku0
+	ora #$30
+	jmp ComLib_PrintRawChar
+
+@0ComLib_PrintString:
+	sta ComLibZp_StringPtr
+	sty ComLibZp_StringPtr+1
+	ldy #0
+	tya
+PrintString0:
+	sta ComLibZp_StringFlag
+PrintString1:
+	lda (ComLibZp_StringPtr),y
+	beq PrintString5
+	cmp #Spi_Idn
+	bne PrintString2
+	lda ComLibZp_StringFlag
+	eor #$80
+	iny
+	bne PrintString0
+	rts
+PrintString2:
+	bit ComLibZp_StringFlag
+	bmi PrintString3
+	jsr ComLib_PrintChar
+	jmp PrintString4
+PrintString3:
+	jsr ComLib_PrintSpiChar
+PrintString4:
+	iny
+	bne PrintString1
+PrintString5:
+	rts
+
+;--------------------------------------
+
+@0ComLib_GrabScrLine:
+	ldy ComLibZp_CursorYPos
+	jsr ComLibVect_GetLine
+	jsr ComLib_GetLineLen
+GrabScrLine0:
+	lda ComLibBSS_LineBuf,y
+	cmp #' '
+	bne GrabScrLine1
+	dey
+	bpl GrabScrLine0
+	rts
+GrabScrLine1:
+	iny
+	sty CmdLineLen
+GrabScrLine2:
+	lda ComLibBSS_LineBuf,y
+	sta CmdLine,y
+	dey
+	bpl GrabScrLine2
+	lda #0
+	sta CmdLinePos
+	clc
+	rts
+
+;--------------------------------------
+
+@0ComLib_ScrollScreenUp:
+	lda #KeyBFlag_NoScroll
+	bit KeyBZp_Flag
+	bne ComLib_ScrollScreenUp
+	ldx #1
+	ldy #0
+ScrollScreenUp0:
+	jsr ComLibVect_CopyLine
+	inx
+	iny
+	cpy ComLibZp_CursorYPos
+	bcc ScrollScreenUp0
+
+	ldx #0
+ScrollScreenUp1:
+	lda ComLib_LineConnect+1,x
+	sta ComLib_LineConnect,x
+	inx
+	cpx ComLibZp_CursorYPos
+	bcc ScrollScreenUp1
+	lda #0
+	sta ComLib_LineConnect,x
+	jmp ComLibVect_ClearLine
+
+@0ComLib_ScrollScreenDown:
+	lda #KeyBFlag_NoScroll
+	bit KeyBZp_Flag
+	bne ComLib_ScrollScreenDown
+	ldx ComLibZp_CursorMaxYPos
+	dex
+	cpx ComLibZp_CursorYPos		;Vorletzte Zeile?
+	beq ScrollScreenDown2		;Dann nur letzte loeschen
+	txa
+	tay
+ScrollScreenDown0:
+	dex
+	jsr ComLibVect_CopyLine
+	dey
+	cpy ComLibZp_CursorYPos
+	bne ScrollScreenDown0
+
+	ldx ComLibZp_CursorMaxYPos
+	dex
+ScrollScreenDown1:
+	lda ComLib_LineConnect-1,x
+	sta ComLib_LineConnect,x
+	dex
+	cpx ComLibZp_CursorYPos
+	bne ScrollScreenDown1
+ScrollScreenDown2:
+	lda #0
+	sta ComLib_LineConnect,x
+	jmp ComLibVect_ClearLine
+
+
+;--------------------------------------
+
+CursorUp:
+	ldy ComLibZp_CursorYPos
+	beq CursorUp0
+	dey
+	sty ComLibZp_CursorYPos
+	clc
+	rts
+CursorUp0:
+	jsr ComLib_ScrollScreenDown
+	sec
+	rts
+
+CursorDown:
+	ldy ComLibZp_CursorYPos
+	iny
+	cpy ComLibZp_CursorMaxYPos
+	bcs CursorDown0
+	sty ComLibZp_CursorYPos
+	rts
+CursorDown0:
+	jsr ComLib_ScrollScreenUp
+	sec
+	rts
+
+CursorLeft:
+	ldy ComLibZp_CursorXPos
+	clc
+	bne CursorLeft0
+	sec
+	ldy ComLibZp_CursorMaxXPos
+CursorLeft0:
+	dey
+	sty ComLibZp_CursorXPos
+	rts
+
+CursorRight:
+	ldy ComLibZp_CursorXPos
+	iny
+	cpy ComLibZp_CursorMaxXPos
+	bcc CursorRight0
+	ldy #0
+CursorRight0:
+	sty ComLibZp_CursorXPos
+	rts
+
+ClearScreen:
+	ldx #0
+ClearScreen0:
+	jsr ComLibVect_ClearLine
+	lda #0
+	sta ComLib_LineConnect,x
+	inx
+	cpx ComLibZp_CursorMaxYPos
+	bcc ClearScreen0
+@0ComLib_CursorHome:
+	lda #0
+	sta ComLibZp_CursorXPos
+	sta ComLibZp_CursorYPos
+	rts
+
+
+@0ComLib_FillRestline:
+	bit ComLibZp_RedirOutput	;Nervt beim PrinterOutput
+	bvs FillRestline1
+	ldx ComLibZp_CursorXPos
+	lda #' '
+FillRestline0:
+	cpx ComLibZp_CursorMaxXPos
+	bcs FillRestline1
+	jsr ComLib_PrintRawChar
+	inx
+	bne FillRestline0
+FillRestline1:
+	rts
+
+
+@0ComLib_GetLineXPos:
+	jsr FlagInConnectedLine
+	lda ComLibZp_CursorXPos
+	bcc GetLineXPos1
+	clc
+	adc ComLibZp_CursorMaxXPos
+GetLineXPos1:
+	rts
+
+FlagInXtendedLine:
+	pha
+	tya
+	pha
+	ldy ComLibZp_CursorYPos
+	lda ComLib_LineConnect,y
+	cpy #0
+	beq FlagInXtendedLine0
+	ora ComLib_LineConnect-1,y
+FlagInXtendedLine0:
+	cmp #1
+	pla
+	tay
+	pla
+	rts
+
+FlagInConnectedLine:
+	pha
+	tya
+	pha
+	ldy ComLibZp_CursorYPos
+	cpy #1
+	bcc FlagInConnectedLine0
+	lda ComLib_LineConnect-1,y
+	cmp #1
+FlagInConnectedLine0:
+	pla
+	tay
+	pla
+	rts
+
+@0ComLib_GetLineLen:
+	lda ComLibZp_CursorMaxXPos
+	jsr FlagInXtendedLine
+	bcc GetLineLen0
+	asl
+GetLineLen0:
+	tay
+	dey
+	rts
+
+
+;--------------------------------------
+
+
+@0ComLib_PrintColChar:
+	stx ComLibZp_Color
+@0ComLib_PrintChar:
+	sta ComLibBSS_A
+	stx ComLibBSS_X
+	sty ComLibBSS_Y
+	jsr Key
+	lda ComLibBSS_A
+	ldx ComLibBSS_X
+	ldy ComLibBSS_Y
+	rts
+
+@0ComLib_PrintRawColChar:
+	stx ComLibZp_Color
+@0ComLib_PrintRawChar:
+	sta ComLibBSS_A
+	stx ComLibBSS_X
+	sty ComLibBSS_Y
+	jsr RawKeyOut
+	lda ComLibBSS_A
+	ldx ComLibBSS_X
+	ldy ComLibBSS_Y
+	rts
+
+
+@0ComLib_LineFeedUp:
+	lda #Key_URe
+@0ComLib_PrintSpiChar:
+	sta ComLibBSS_A
+	stx ComLibBSS_X
+	sty ComLibBSS_Y
+	jsr KeySpi
+	lda ComLibBSS_A
+	ldx ComLibBSS_X
+	ldy ComLibBSS_Y
+	rts
+
+KeySpi:
+	ldx #KeySpiBSS_KeyTabEnd-KeySpiBSS_KeyTab-1
+KeySpi_Loop:
+	cmp KeySpiBSS_KeyTab,x
+	beq KeySpi_Found
+	dex
+	bpl KeySpi_Loop
+	cmp #Key_C15+1
+	bcs KeySpi_NoCol
+	cmp #Key_C0
+	bcc KeySpi_NoCol
+	sbc #Key_C0
+	jsr ComLib_SetCol
+KeySpi_NoCol:
+	rts
+KeySpi_Found:
+	lda KeySpiBSS_JmpTabLo,x
+	sta ComLibBSS_KeySpiJmp
+	lda KeySpiBSS_JmpTabHi,x
+	sta ComLibBSS_KeySpiJmp+1
+	jmp (ComLibBSS_KeySpiJmp)
+
+
+KeySpiBSS_KeyTab:
+	.DB Key_URe
+	.DB Key_CUp,		Key_CDo,		Key_CLe,		Key_CRi
+	.DB Key_SUp,		Key_SDo,		Key_SLe,		Key_SRi
+	.DB Key_BSp,		Key_Ins
+	.DB Key_Hme,		Key_Clr,		Key_SRe
+	.DB Key_ROn,		Key_ROf
+	.DB Key_Vid,		Key_VSU,		Key_VSD
+	.DB Key_ILi,		Key_KLi,		Key_ELi
+KeySpiBSS_KeyTabEnd:
+
+KeySpiBSS_JmpTabLo:
+	.DB <ShiftCRUp
+	.DB <CursorUp,		<CursorDown,		<KeyCursorLeft,		<KeyCursorRight
+	.DB <KeyScreenTop,	<KeyScreenBottom,	<KeyLineStart,		<KeyLineEnd
+	.DB <KeyBackSpace,	<KeyInsert
+	.DB <ComLib_CursorHome,	<ClearScreen,		<ShiftCRDown
+	.DB <ComLibVect_RevOn,	<ComLibVect_RevOff
+	.DB <KeyNextVideoMode,	<KeyVideoSubModeUp,	<KeyVideoSubModeDown
+	.DB <KeyInsertLine,	<KeyKillLine,		<KeyEraseLine
+
+KeySpiBSS_JmpTabHi:
+	.DB >ShiftCRUp
+	.DB >CursorUp,		>CursorDown,		>KeyCursorLeft,		>KeyCursorRight
+	.DB >KeyScreenTop,	>KeyScreenBottom,	>KeyLineStart,		>KeyLineEnd
+	.DB >KeyBackSpace,	>KeyInsert
+	.DB >ComLib_CursorHome,	>ClearScreen,		>ShiftCRDown
+	.DB >ComLibVect_RevOn,	>ComLibVect_RevOff
+	.DB >KeyNextVideoMode,	>KeyVideoSubModeUp,	>KeyVideoSubModeDown
+	.DB >KeyInsertLine,	>KeyKillLine,		>KeyEraseLine
+
+;--------------------------------------
+
+
+Key:
+	cmp #Key_CR
+	beq ShiftCRDown
+	jsr RawKeyOut
+	bcc KeyOutRts
+	jsr FlagInXtendedLine
+	bcs KeyOut0
+	lda #1
+	ldy ComLibZp_CursorYPos
+	sta ComLib_LineConnect,y
+	iny
+	cpy ComLibZp_CursorMaxYPos
+	bcs KeyOut0
+	jsr CursorDown
+	jmp ComLib_ScrollScreenDown
+KeyOutRts:
+	rts
+KeyOut0:
+	jmp CursorDown
+
+
+RawKeyOut:
+	bit ComLibZp_RedirOutput
+	bmi RawKeyOut1
+	bvs ComLib_PrinterScreenCode
+	jsr ComLibVect_CharOut
+RawKeyOut0:
+	jmp CursorRight
+RawKeyOut1:
+	ldy ComLibZp_CursorXPos
+	sta OutputBuffer,y
+	lda ComLibZp_Color
+	sta OutputBuffer+80,y
+	jmp RawKeyOut0
+
+	.(	;** Printer_ScreenCode**
+
+@0ComLib_PrinterScreenCode:
+	tay
+	and #$80
+	cmp ComLibZp_PrinterRevMode
+	beq ScrCode0
+	sta ComLibZp_PrinterRevMode
+	eor #$80+ 18			;18 -> Reverse On
+	jsr ComLib_PrinterRaw
+ScrCode0:
+	tya
+	and #$7f
+	jsr ComLib_Screen2Ascii
+
+	.)	;** Printer_ScreenCode**
+	.(	;** Printer_Raw **
+
+@0ComLib_PrinterRaw:
+;	sta @$20000
+;	lda @ComLib_PrinterRaw+1
+;	inc
+;	sta @ComLib_PrinterRaw+1
+;	bne Raw0
+;	lda @ComLib_PrinterRaw+2
+;	inc
+;	sta @ComLib_PrinterRaw+2
+;Raw0:
+	clc
+	rts
+	.)	;** Printer_Raw **
+
+
+@0ComLib_PrinterEnable:
+	lda #$20
+	bit ComLibZp_RedirOutput
+	beq Enable0
+	lda #$40
+	ora ComLibZp_RedirOutput
+	sta ComLibZp_RedirOutput
+Enable0:
+	rts
+
+@0ComLib_PrinterDisable:
+	lda ComLibZp_RedirOutput
+	and #$ff-$40
+	sta ComLibZp_RedirOutput
+	rts
+
+@0ComLib_PrinterFlush:
+	/*
+	Nur zum Testen: Reverses 'f' in Spool ausgeben
+	Soll spaeter den kompletten Spool-Inhalt an den Printer senden
+	*/
+	lda #6		;reverses 'f'
+	jmp ComLib_PrinterRaw
+
+
+ShiftCRDown:
+	bit ComLibZp_RedirOutput
+	bvs ShiftCRDownSpool
+	lda #0
+	sta ComLibZp_CursorXPos
+	ldy ComLibZp_CursorYPos
+	lda ComLib_LineConnect,y
+	beq ShiftCRDown0
+	jsr CursorDown
+ShiftCRDown0:
+	jmp CursorDown
+ShiftCRDownSpool:
+	lda #$0d
+	jmp ComLib_PrinterRaw
+
+@0ComLib_RedirOutputOn:
+	lda ComLibZp_RedirOutput
+	ora #%10000000
+	sta ComLibZp_RedirOutput
+	lda ComLibZp_CursorXPos
+	sta ComLibZp_RedirCPos
+	lda #0
+	sta ComLibZp_CursorXPos
+	rts
+
+@0ComLib_RedirOutputOff:
+	lda ComLibZp_RedirOutput
+	and #%01111111
+	sta ComLibZp_RedirOutput
+	lda ComLibZp_RedirCPos
+	sta ComLibZp_CursorXPos
+	rts
+
+;--------------------------------------
+
+ShiftCRUp:
+	lda #0
+	sta ComLibZp_CursorXPos
+	ldy ComLibZp_CursorYPos
+	beq ShiftCRUp0
+	lda ComLib_LineConnect-1,y
+	beq ShiftCRUp0
+	jsr CursorUp
+ShiftCRUp0:
+	jmp CursorUp
+
+KeyCursorLeft:
+	jsr CursorLeft
+	bcc KeyCursorLeft0
+	jmp CursorUp
+KeyCursorLeft0:
+	rts
+
+KeyCursorRight:
+	jsr CursorRight
+	bcc KeyCursorRight0
+	jmp CursorDown
+KeyCursorRight0:
+	rts
+
+
+KeyScreenTop:
+	lda #0
+	sta ComLibZp_CursorYPos
+	rts
+
+KeyScreenBottom:
+	ldy ComLibZp_CursorMaxYPos
+	dey
+	sty ComLibZp_CursorYPos
+	rts
+
+KeyLineStart:
+	lda #0
+	sta ComLibZp_CursorXPos
+	jsr FlagInConnectedLine
+	bcc KeyLineStart0
+	jmp CursorUp
+KeyLineStart0:
+	rts
+
+KeyLineEnd:
+	ldy ComLibZp_CursorYPos
+	jsr ComLibVect_GetLine
+	jsr ComLib_GetLineLen
+KeyLineEnd0:
+	lda ComLibBSS_LineBuf,y
+	cmp #$20
+	bne KeyLineEnd1
+	dey
+	bne KeyLineEnd0
+KeyLineEnd1:
+	cpy ComLibZp_CursorMaxXPos
+	bcc KeyLineEnd2
+	tya
+	sbc ComLibZp_CursorMaxXPos
+	sta ComLibZp_CursorXPos
+	jsr FlagInConnectedLine
+	bcs KeyLineEnd3
+	jmp CursorDown
+KeyLineEnd2:
+	sty ComLibZp_CursorXPos
+	jsr FlagInConnectedLine
+	bcc KeyLineEnd3
+	jsr CursorUp
+KeyLineEnd3:
+	rts
+
+
+KeyBackSpace:
+	jsr ComLib_GetLineXPos
+	beq KeyBSp1
+	jsr CursorLeft
+	bcc KeyBSp2
+	jsr CursorUp
+KeyBSp2:
+	jsr ComLib_GetLineXPos
+	sta ComLibZp_KeyZp
+	ldy ComLibZp_CursorYPos
+	jsr ComLibVect_GetLine
+	jsr ComLib_GetLineLen
+	lda ComLibZp_KeyZp
+	iny
+	sty ComLibZp_KeyZp
+	tay
+KeyBSp0:
+	lda ComLibBSS_LineBuf+1,y
+	sta ComLibBSS_LineBuf,y
+	lda ComLibBSS_ColBuf+1,y
+	sta ComLibBSS_ColBuf,y
+	iny
+	cpy ComLibZp_KeyZp
+	bcc KeyBSp0
+	lda #' '
+	dey
+	sta ComLibBSS_LineBuf,y
+	ldy ComLibZp_CursorYPos
+	jsr ComLibVect_PutLine
+KeyBSp1:
+	rts
+
+
+KeyInsert:
+	jsr ComLib_GetLineXPos
+	sta ComLibZp_KeyZp
+	ldy ComLibZp_CursorYPos
+	jsr ComLibVect_GetLine
+	jsr ComLib_GetLineLen
+	cpy ComLibZp_KeyZp
+	beq KeyInsRts
+	lda ComLibBSS_LineBuf,y
+	cmp #' '
+	bne KeyInsRts
+KeyIns0:
+	lda ComLibBSS_LineBuf-1,y
+	sta ComLibBSS_LineBuf,y
+	lda ComLibBSS_ColBuf-1,y
+	sta ComLibBSS_ColBuf,y
+	dey
+	cpy ComLibZp_KeyZp
+	bne KeyIns0
+	lda #' '
+	sta ComLibBSS_LineBuf,y
+	ldy ComLibZp_CursorYPos
+	jmp ComLibVect_PutLine
+KeyInsRts:
+	rts
+
+
+KeyNextVideoMode:
+	jsr ClearScreen
+KeyNextVideoMode0:
+	ldy Option_VideoMode
+	iny
+
+	cpy #3
+
+	bcc KeyNextVideoMode1
+	ldy #0
+KeyNextVideoMode1:
+	jsr ComLib_SetVideoMode
+	bcs KeyNextVideoMode0
+	jmp ClearScreen
+
+@0ComLib_SetVideoMode:
+#ifdef __MACH_PIEP__
+	lda #0
+	sta $0450
+#endif
+
+	sty Option_VideoMode
+	dey
+	bpl SetVMode_NoVic
+	jmp ComLibVIC_InitDisplay
+SetVMode_NoVic:
+	dey
+	bpl SetVMode_NoVDC25
+	jmp ComLibVDC25_InitDisplay
+SetVMode_NoVDC25:
+	jmp ComLibVDCS6_InitDisplay
+
+KeyVideoSubModeUp:
+	ldy ComLibZp_CursorMaxYPos
+	cpy ComLibZp_CursorMaxLines
+	bcs VSubModeUp0
+	iny
+	sty ComLibZp_CursorMaxYPos
+	jsr ComLibVect_VideoSubMode
+	ldx ComLibZp_CursorMaxYPos
+	dex
+	jmp ComLibVect_ClearLine
+VSubModeUp0:
+	rts
+
+KeyVideoSubModeDown:
+	ldy ComLibZp_CursorMaxYPos
+	cpy ComLibZp_CursorMinLines
+	beq VSubModeDown1
+	dey
+	cpy ComLibZp_CursorYPos
+	bne VSubModeDown0
+	tya
+	pha
+	jsr ComLib_ScrollScreenUp
+	jsr CursorUp
+	pla
+	tay
+VSubModeDown0:
+	sta ComLibZp_CursorMaxYPos
+	jmp ComLibVect_VideoSubMode
+VSubModeDown1:
+	rts
+
+
+KeyInsertLine:
+	jmp ComLib_ScrollScreenDown
+
+KeyKillLine:
+	ldy ComLibZp_CursorYPos
+	tya
+	tax
+	inx
+	cpx ComLibZp_CursorMaxYPos
+	bcs KillLine2
+KillLine0:
+	jsr ComLibVect_CopyLine
+	inx
+	iny
+	cpx ComLibZp_CursorMaxYPos
+	bcc KillLine0
+
+	ldx ComLibZp_CursorYPos
+KillLine1:
+	lda ComLib_LineConnect+1,x
+	sta ComLib_LineConnect,x
+	inx
+	cpx ComLibZp_CursorMaxYPos
+	bcc KillLine1
+	lda #0
+	sta ComLib_LineConnect-1,x
+KillLine2:
+	dex
+	jmp ComLibVect_ClearLine
+
+KeyEraseLine:
+	ldx ComLibZp_CursorYPos
+	jmp ComLibVect_ClearLine
+	
+;--------------------------------------
+
+	.(	;** ScrCode2Lower **
+
+@0ComLib_ScrCode2Lower:
+	cmp #$41			;"A"
+	bcc ScrCode2Lower0
+	cmp #$5b			;"Z"+1
+	bcs ScrCode2Lower0
+	sbc #$3f			;"A"-("a"+1) = $41 - (1 + 1)
+ScrCode2Lower0:
+	rts
+
+	.)	;** ScrCode2Lower **
+
+
+
+	.(	;** Screen2Ascii **
+
+@0ComLib_Screen2Ascii:
+	stx ComLibZp_XSave
+	cmp #$5e
+	bne Screen2Ascii0
+	lda #$ff
+Screen2Ascii0:
+	pha
+	lsr
+	lsr
+	lsr
+	lsr
+	lsr
+	tax
+	pla
+	eor Screen2AsciiTab,x
+	ldx ComLibZp_XSave
+	rts
+
+Screen2AsciiTab:
+	.DB $40,$00,$80,$c0,$80,  0,$40,  0
+
+;  00-1f -> 40-5f
+;  20-3f -> 20-3f
+;  40-5f -> c0-df
+;  60-7f -> a0-bf
+;  80-9f -> 00-1f
+;  c0-df -> 80-9f
+;  5e	 -> ff
+
+	.)	;** Screen2Ascii **
+
+
+	.(	;** Ascii2Screen **
+
+@0ComLib_Ascii2Screen:
+	stx ComLibZp_XSave
+	cmp #$de
+	beq Ascii2Screen1
+	cmp #$ff
+	bne Ascii2Screen0
+	lda #$de
+Ascii2Screen0:
+	pha
+	lsr
+	lsr
+	lsr
+	lsr
+	lsr
+	tax
+	pla
+	eor Ascii2ScreenTab,x
+	cmp #$e0
+	bcc Ascii2Screen2
+Ascii2Screen1:
+	lda #$a0
+Ascii2Screen2:
+	ldx ComLibZp_XSave
+	rts
+
+Ascii2ScreenTab:
+	.DB $80,$00,$40,$80,$40,$c0,$80,$00
+
+;  00-1f -> 80-9f
+;  20-3f -> 20-3f
+;  40-5f -> 00-1f
+;  60-7f -> .
+;  80-9f -> c0-df
+;  a0-bf -> 60-7f
+;  dd	 -> .
+;  c0-df -> 40-5f
+;  e0-fe -> .
+;  ff	 -> 5e
+
+	.)	;** Ascii2Screen **
+
+
+;--------------------------------------
+
+@0ComLib_MakeScrPosTab:
+	lda #0
+	tax
+	tay
+@0ComLib_MakeScrPosTabJMPIn0:
+MakeScrPosTab0:
+	sta ComLib_ScrPosLo,y
+	pha
+	txa
+	sta ComLib_ScrPosMi,y
+	pla
+	clc
+	adc ComLibZp_CursorMaxXPos
+	bcc MakeScrPosTab1
+	inx
+MakeScrPosTab1:
+	iny
+	cpy ComLibZp_CursorMaxYPos
+	bcc MakeScrPosTab0
+	lda ComLibZp_CursorMaxXPos
+	sec
+	sbc #8
+	sta Dump_AscLen
+	sta Dump_AscMaxLen
+	lsr
+	lsr
+	sta Dump_MemLen
+	sta Dump_MemMaxLen
+	rts
+
+@0ComLib_InstallVects:
+	ldy #(((VectsEnd-VectsStart)/3)*2)-1
+	ldx #VectsEnd-VectsStart
+InstallVects0:
+	tya
+	lsr
+	bcc InstallVects1
+	dex
+InstallVects1:
+	lda (LongLibZp_Akku0),y
+	sta VectsStart,x
+	dex
+	dey
+	bpl InstallVects0
+	rts
+
+
+@0ComLib_SetPalette:
+	ldy #Palette_len-1
+SetPalette0:
+	lda (LongLibZp_Akku0),y
+	sta Palette,y
+	dey
+	bpl SetPalette0
+	rts
+
+;--------------------------------------
+
+	.)	/* ComLib */
+
+

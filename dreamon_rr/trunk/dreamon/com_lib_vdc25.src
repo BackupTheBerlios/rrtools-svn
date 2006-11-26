@@ -1,0 +1,599 @@
+/***************************************************************************
+ *   Copyright (C) 2000 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+
+	.(	;*** ComLib_VDC ***
+
+;--------------------------------------
+
+VDCVects:
+	.DW ClearLine_VDC		;ClearLine
+	.DW CopyLine_VDC		;CopyLine
+	.DW GetLine_VDC			;GetLine
+	.DW PutLine_VDC			;PutLine
+
+	.DW CrsrOn_VDC			;CursorOn
+	.DW CrsrOff_VDC			;CursorOff
+	.DW CrsrBlink_VDC		;CursorBlink
+	.DW CrsrBlinkFast_VDC		;CursorBlinkFast
+	.DW CrsrBlinkNorm_VDC		;CursorBlinkNorm
+
+	.DW GetChar_VDC			;GetChar
+	.DW CharOut_VDC			;CharOut
+
+	.DW RevOn_VDC			;RevOn
+	.DW RevOff_VDC			;RevOff
+	.DW SwitchCharsets_VDC		;SwitchCharsets
+	.DW SetDebugBorder_VDC		;Bordercolor Black or Red
+
+	.DW SetSubMode			;Set VideoSubMode
+
+;--------------------------------------
+
+
+MakeLinePos_VDC:
+	tya
+	beq MakeXYPos_VDC
+	lda ComLib_LineConnect-1,y
+	beq MakeXYPos_VDC
+	dey
+MakeXYPos_VDC:
+	lda ComLib_ScrPosLo,y
+	sta ComLibZp_CursorPtr
+	sta ComLibZp_CursorColPtr
+	lda ComLib_ScrPosMi,y
+	sta ComLibZp_CursorPtr+1
+	ora #$10
+	sta ComLibZp_CursorColPtr+1
+	rts
+
+
+GetChar_VDC:
+	ldy ComLibZp_CursorYPos
+	jsr MakeXYPos_VDC
+	lda ComLibZp_CursorPtr
+	clc
+	adc ComLibZp_CursorXPos
+	tay
+	lda ComLibZp_CursorPtr+1
+	jsr VDC_Write12
+	ldx #$1f
+	jmp VDC_Read
+
+
+CharOut_VDC:
+	ldy ComLibZp_CursorYPos
+	pha
+	jsr MakeXYPos_VDC
+	lda ComLibZp_CursorPtr
+	clc
+	adc ComLibZp_CursorXPos
+	tay
+	lda ComLibZp_CursorPtr+1
+	adc #0
+	jsr VDC_Write12
+	pla
+	ldx #$1f
+	jsr VDC_Write
+	lda ComLibZp_CursorColPtr
+	clc
+	adc ComLibZp_CursorXPos
+	tay
+	lda ComLibZp_CursorColPtr+1
+	adc #0
+	jsr VDC_Write12
+	lda ComLibZp_Color
+	ora ComLibZp_VDCAttrib
+	ldx #$1f
+	jmp VDC_Write
+
+
+GetLine_VDC:
+	jsr MakeLinePos_VDC
+	ldy ComLibZp_CursorPtr
+	lda ComLibZp_CursorPtr+1
+	jsr VDC_Write12
+	jsr VDC_Set1F
+	jsr ComLib_GetLineLen
+	iny
+	tya
+	pha
+	ldx #0
+GetLine_VDC0:
+	jsr VDC_Get
+	sta ComLibBSS_LineBuf,x
+	inx
+	dey
+	bne GetLine_VDC0
+	ldy ComLibZp_CursorColPtr
+	lda ComLibZp_CursorColPtr+1
+	jsr VDC_Write12
+	jsr VDC_Set1F
+	pla
+	tay
+	ldx #0
+GetLine_VDC1:
+	jsr VDC_Get
+	sta ComLibBSS_ColBuf,x
+	inx
+	dey
+	bne GetLine_VDC1
+	rts
+
+
+PutLine_VDC:
+	jsr MakeLinePos_VDC
+	ldy ComLibZp_CursorPtr
+	lda ComLibZp_CursorPtr+1
+	jsr VDC_Write12
+	jsr VDC_Set1F
+	jsr ComLib_GetLineLen
+	tya
+	pha
+	ldx #0
+PutLine_VDC0:
+	lda ComLibBSS_LineBuf,x
+	jsr VDC_Out
+	inx
+	dey
+	bpl PutLine_VDC0
+	ldy ComLibZp_CursorColPtr
+	lda ComLibZp_CursorColPtr+1
+	jsr VDC_Write12
+	jsr VDC_Set1F
+	pla
+	tay
+	ldx #0
+PutLine_VDC1:
+	lda ComLibBSS_ColBuf,x
+	jsr VDC_Out
+	inx
+	dey
+	bpl PutLine_VDC1
+	rts
+
+;--------------------------------------
+
+RevOn_VDC:
+	lda ComLibZp_VDCAttrib
+	ora #$40
+	sta ComLibZp_VDCAttrib
+	rts
+
+RevOff_VDC:
+	lda ComLibZp_VDCAttrib
+	and #$ff-$40
+	sta ComLibZp_VDCAttrib
+	rts
+
+SwitchCharsets_VDC:
+	lda ComLibZp_VDCAttrib
+	eor #%10000000
+	sta ComLibZp_VDCAttrib
+	rts
+
+;--------------------------------------
+
+ClearLine_VDC:
+	sei
+	txa
+	pha
+	lda ComLib_ScrPosMi,x
+	ldy ComLib_ScrPosLo,x
+	jsr VDC_Write12
+	ldx #$18
+	jsr VDC_Read
+	and #$7f
+	jsr VDC_Out
+	lda #' '
+	ldx #$1f
+	jsr VDC_Write
+	ldy ComLibZp_CursorMaxXPos
+	dey
+	tya
+	ldx #$1e
+	jsr VDC_Write
+
+	pla
+	tax
+	pha
+	lda ComLib_ScrPosMi,x
+	ora #$10
+	ldy ComLib_ScrPosLo,x
+	jsr VDC_Write12
+	lda #0
+	ldx #$1f
+	jsr VDC_Write
+	ldy ComLibZp_CursorMaxXPos
+	dey
+	tya
+	ldx #$1e
+	jsr VDC_Write
+
+	pla
+	tax
+	cli
+	rts
+
+
+;--------------------------------------
+;
+;Copy Line X->Line Y with Colors
+;
+;--------------------------------------
+
+CopyLine_VDC:
+	sei
+	stx ComLibZp_VDCXSave
+	sty ComLibZp_VDCYSave
+
+	ldy ComLib_ScrPosLo,x
+	lda ComLib_ScrPosMi,x
+	ldx #$20
+	jsr VDC_WriteWORD
+	ldx #$18
+	jsr VDC_Read
+	ora #$80
+	jsr VDC_Out
+	ldx ComLibZp_VDCYSave
+	ldy ComLib_ScrPosLo,x
+	lda ComLib_ScrPosMi,x
+	jsr VDC_Write12
+	lda ComLibZp_CursorMaxXPos
+	ldx #$1e
+	jsr VDC_Write
+
+	ldx ComLibZp_VDCXSave
+	ldy ComLib_ScrPosLo,x
+	lda ComLib_ScrPosMi,x
+	ora #$10
+	ldx #$20
+	jsr VDC_WriteWORD
+	ldx ComLibZp_VDCYSave
+	ldy ComLib_ScrPosLo,x
+	lda ComLib_ScrPosMi,x
+	ora #$10
+	jsr VDC_Write12
+	lda ComLibZp_CursorMaxXPos
+	ldx #$1e
+	jsr VDC_Write
+
+	ldx ComLibZp_VDCXSave
+	ldy ComLibZp_VDCYSave
+	cli
+	rts
+
+
+;--------------------------------------
+;
+; Fuer jedes Display CrsrOn, CrsrOff und CrsrBlink
+;
+;--------------------------------------
+
+CrsrOn_VDC:
+	sei
+	lda #0
+	sta ComLibZp_CrsrBlinkCnt
+	sta ComLibZp_CrsrBlink
+	ldy ComLibZp_CursorYPos
+	jsr MakeXYPos_VDC
+	lda ComLibZp_CursorColPtr
+	clc
+	adc ComLibZp_CursorXPos
+	tay
+	lda ComLibZp_CursorColPtr+1
+	adc #0
+	jsr VDC_Write12
+	ldx #$1f
+	jsr VDC_Read
+	sta ComLibZp_CrsrStoreCol
+	lda #1
+	sta ComLibZp_CrsrFlag
+	cli
+	rts
+
+
+CrsrOff_VDC:
+	sei
+	lda #0
+	sta ComLibZp_CrsrFlag
+	sec
+	rol ComLibZp_CrsrBlink
+	jsr ShowCrsr_VDC
+	cli
+	rts
+
+
+CrsrBlink_VDC:
+	lda ComLibZp_CrsrFlag
+	beq CrsrBlink_VDC0
+	dec ComLibZp_CrsrBlinkCnt
+	bpl CrsrBlink_VDC0
+	lda ComLibZp_CrsrBlinkVal
+	sta ComLibZp_CrsrBlinkCnt
+	jsr ShowCrsr_VDC
+	inc ComLibZp_CrsrBlink
+CrsrBlink_VDC0:
+	rts
+
+
+ShowCrsr_VDC:
+	ldx ComLibZp_CursorYPos
+	lda ComLib_ScrPosLo,x
+	clc
+	adc ComLibZp_CursorXPos
+	tay
+	lda ComLib_ScrPosMi,x
+	adc #$10
+	jsr VDC_Write12
+	ldx #$1f
+	lda ComLibZp_CrsrBlink
+	lsr
+	lda ComLibZp_CrsrStoreCol
+	bcs ShowCrsr_VDC0
+	and #$f0
+	ora Palette+Palette_Cursor
+	ora #%01000000
+ShowCrsr_VDC0:
+	jmp VDC_Write
+
+
+;--------------------------------------
+
+
+@0ComLibVDCS6_InitDisplay:
+	lda $d030
+	cmp #$fc+1
+	bcc InitDisplay_VDCS6_Ok
+	rts
+
+InitDisplay_VDCS6_Ok:
+	lda #$15
+	sta ComLibZp_VDCVPos
+	jsr CopyFont_Super6
+	lda #30
+	sta ComLibZp_CursorMinLines
+	lda #39
+	sta ComLibZp_CursorMaxLines
+	ldx #$24
+InitDisplay_VDCS6_0:
+	lda InitTab_VDCSuper6,x
+	cmp #$ff
+	beq InitDisplay_VDCS6_1
+	jsr VDC_Write
+InitDisplay_VDCS6_1:
+	dex
+	bpl InitDisplay_VDCS6_0
+
+	lda Option_VDCSuper6Lines
+	sta ComLibZp_CursorMaxYPos
+	jmp InitDisplay_VDC
+
+
+@0ComLibVDC25_InitDisplay:
+	lda $d030
+	cmp #$fc+1
+	bcc InitDisplay_VDC25_Ok
+	rts
+InitDisplay_VDC25_Ok:
+	lda #$13
+	sta ComLibZp_VDCVPos
+	jsr CopyFont_Cbm
+	lda #25
+	sta ComLibZp_CursorMinLines
+	lda #35
+	sta ComLibZp_CursorMaxLines
+
+	ldx #$24
+InitDisplay_VDC25_0:
+	lda InitTab_VDC25,x
+	cmp #$ff
+	beq InitDisplay_VDC25_1
+	jsr VDC_Write
+InitDisplay_VDC25_1:
+	dex
+	bpl InitDisplay_VDC25_0
+
+	lda Option_VDC25Lines
+	sta ComLibZp_CursorMaxYPos
+
+
+InitDisplay_VDC:
+	ldx #80				;Save A for "SetSubMode"!
+	stx ComLibZp_CursorMaxXPos
+	ldx #0
+	stx ComLibZp_CursorXPos
+	stx ComLibZp_CursorYPos
+	stx ComLibZp_RedirOutput
+	jsr SetSubMode
+
+	lda #<VDCVects
+	ldx #>VDCVects
+	.LongJsr(L_LongLib_LoadAXY)
+	jsr ComLib_InstallVects
+
+	lda #<VDCPalette
+	ldx #>VDCPalette
+	.LongJsr(L_LongLib_LoadAXY)
+	jsr ComLib_SetPalette
+	lda #0
+	sta ComLibZp_VDCAttrib
+	jsr SetDebugBorder_VDC
+	clc
+
+CrsrBlinkNorm_VDC:
+	lda #10
+	.DB $2c
+CrsrBlinkFast_VDC:
+	lda #7
+	sta ComLibZp_CrsrBlinkVal
+	rts
+
+
+InitTab_VDC25:
+	.DB $7e, $50, $66, $49, $26, $00, $19, $20
+	.DB $00, $07, $20, $07, $00, $00, $00, $00
+	.DB $FF, $FF, $FF, $FF, $10, $00, $78, $08
+	.DB $20, $47, $f0, $00, $20, $07, $FF, $FF
+	.DB $FF, $FF, $7d, $64, $05
+
+InitTab_VDCSuper6:
+	.DB $7e, $50, $66, $49, $2a, $00, $27, $28
+	.DB $00, $06, $20, $06, $00, $00, $00, $00
+	.DB $FF, $FF, $FF, $FF, $10, $00, $78, $07
+	.DB $20, $47, $f0, $00, $20, $06, $FF, $FF
+	.DB $FF, $FF, $7d, $64, $05
+
+
+CopyFont_Super6:
+	lda #6
+	sta ComLibZp_StringFlag
+	lsr
+	pha
+	lda #<ComLibVDCS6_Char
+	ldx #>ComLibVDCS6_Char
+	bne CopyFont
+
+CopyFont_Cbm:
+	lda #8
+	sta ComLibZp_StringFlag
+	pha
+	lda #<$d000
+	ldx #>$d000
+CopyFont:
+	sta ComLibZp_StringPtr
+	stx ComLibZp_StringPtr+1
+
+	lda #>$2000
+	ldy #<$2000
+	jsr VDC_Write12
+	jsr VDC_Set1F
+
+	lda #0
+	sta ComLibZp_VDCAttrib
+	jsr CopyFontRts
+	dec ComLibZp_VDCAttrib
+	jsr CopyFontRts
+	pla
+	clc
+	adc ComLibZp_StringPtr+1
+	sta ComLibZp_StringPtr+1
+	lda #0
+	sta ComLibZp_VDCAttrib
+	jsr CopyFontRts
+	dec ComLibZp_VDCAttrib
+CopyFontRts:
+	.LongJsr(L_CopyVDCFontRts)
+	rts
+
+;--------------------------------------
+
+SetSubMode:
+	pha
+	jsr ComLib_MakeScrPosTab
+	pla
+;	tay
+	ldx #6
+	jsr VDC_Write
+;	tya
+	lsr
+	clc	
+	adc ComLibZp_VDCVPos
+	ldx #7
+	jmp VDC_Write
+
+
+SetDebugBorder_VDC:
+	lda #OptionFlag_MMap
+	bit OptionFlags
+	beq SetDebugBorder_VDC0
+	lda #1
+	.DB $2c
+SetDebugBorder_VDC0:
+	lda #0
+	ldx #26
+	jmp VDC_Write
+
+;--------------------------------------
+; VDCWrite12            Set Update Adress with A(H), Y(L). X used.
+; VDCWriteWORD          Write A(H) to X, Y(L) to X+1, A, X used.
+; VDCWrite              Write A to VDC Reg X
+; VDCOut                Wait for VDC Ready and write A to Port
+; VDCRead               Read VDC Reg X to A
+; VDCGet                Wait for VDC Ready and read Port to A
+; VDCSet1F              Point $d601 to VDC Reg $1f
+; VDCSetAdr             Point $d601 to VDC Reg A
+;--------------------------------------
+
+VDC_Write12:
+	ldx #$12
+VDC_WriteWORD:
+	jsr VDC_Write
+	tya
+	inx
+VDC_Write:
+	stx $d600
+VDC_Out:
+	bit $d600
+	bpl VDC_Out
+	sta $d601
+	rts
+
+VDC_Read:
+	stx $d600
+VDC_Get:
+	bit $d600
+	bpl VDC_Get
+	lda $d601
+	rts
+
+VDC_Set1F:
+	lda #$1f
+VDC_SetAdr:
+	sta $d600
+VDC_Set1F0:
+	bit $d600
+	bpl VDC_Set1F0
+	rts
+
+;--------------------------------------
+/* ToDo: Copy VIC Palette from CRT Ram instead of Rom to enable editing of the colors */
+VDCPalette:
+;	.DSB Palette_len
+	.DB 14	;Default
+	.DB 8	;Error
+	.DB 2	;Command
+	.DB 15	;Cursor
+	.DB 5	;SystemTexts
+	.DB 3	;Adress
+	.DB 6	;DisAssBytes
+	.DB 7	;DisAssMne
+	.DB 9	;DisAssIll
+	.DB 13	;DisAssFPoint
+	.DB 4	;MDumpBytes
+	.DB 6	;MDumpSeperator
+	.DB 5	;MDumpChars
+
+;--------------------------------------
+
+	.)	;*** ComLib_VDC ***
+
+
+

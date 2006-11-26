@@ -1,0 +1,3789 @@
+/***************************************************************************
+ *   Copyright (C) 2000 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+
+;--------------------------------------
+;
+; Dreamon
+;
+;--------------------------------------
+
+; DE00 bits 0 und 1
+;     |  $8000  |  $a000  |  $e000  |  $dx00  |
+;-----+---------+---------+---------+---------+
+; $00 | RR-Rom  | C64-Rom | C64-Rom | RR-Rom  | Alle koennen mit $01 auf C64-Ram geschaltet werden
+;-----+---------+---------+---------+---------+
+; $01 |  Loch   | RR-Rom  | C64-Rom |  Loch   | Alle koennen mit $01 auf C64-Ram geschaltet werden
+;-----+---------+---------+---------+---------+
+; $02 | C64Ram  | C64-Rom | C64-Rom | RR-Rom  |
+;-----+---------+---------+---------+---------+
+; $03 | RR-Rom  |  Loch   | RR-Rom  |  Loch   |  Speicherloch im Ram bei $1000-$xxxx und im Rom bei $a000-$xxxx, Ohne REU_Comp nur Bank 0 anwehlbar
+;-----+---------+---------+---------+---------+
+
+;     |  $8000  |  $a000  |  $e000  |  $dx00  |
+;-----+---------+---------+---------+---------+
+; $20 | RR-Ram  | C64-Rom | C64-Rom | RR-Ram  | Alle koennen mit $01 auf C64-Ram geschaltet werden
+;-----+---------+---------+---------+---------+
+; $21 | RR-Ram  | RR-Rom  | C64-Rom | RR-Ram  | Alle koennen mit $01 auf C64-Ram geschaltet werden
+;-----+---------+---------+---------+---------+
+; $22 | C64Ram  | C64-Rom | C64-Rom | RR-Ram  |
+;-----+---------+---------+---------+---------+
+; $23 | RR-Ram  | Loch    | RR-Rom  | RR-Ram  | Speicherloch im Ram bei $1000-$xxxx und im Rom bei $a000-$xxxx, Ohne REU_Comp nur Bank 0 anwehlbar
+;-----+---------+---------+---------+---------+
+
+#segdef "zeropage", $02-$f0
+#segdef "bss", $0200-$8000
+#segdef "bank0",$8000-$a000, fillup, force
+#segdef "bank1",$8000-$a000, fillup, force
+#segdef "bank2",$8000-$a000, fillup, force
+#segdef "bank3",$8000-$a000, fillup, force
+#segdef "crtram", $8000-$a000
+
+#outfile @,"bank0","bank1","bank2","bank3"
+
+;---------------------------------------
+; macros
+
+; from "Opcodes.hx"
+#macro POE(a,b,c,d) { .DW ({a}&$1f)|({b}&$1f)<<5|({c}&$1f)<<10|({d}&1)<<15 }
+
+; from "MessagesMacros.hx"
+#macro ShowErr(erridx) { .DB 0, {erridx}|$80 }
+#macro ShowMsg(msgidx) { .DB 0, {msgidx} }
+#macro TextNo { =__TxtCnt++ }
+
+; struct replacement until it's implemented in dreamass
+#macro STRUCT		{_STRUCTUREZP:=0}
+#macro SBYTE		{:=_STRUCTUREZP : _STRUCTUREZP+=1}
+#macro SWORD		{:=_STRUCTUREZP : _STRUCTUREZP+=2}
+#macro SLONG		{:=_STRUCTUREZP : _STRUCTUREZP+=3}
+#macro SAPTR		{:=_STRUCTUREZP : _STRUCTUREZP+=4}
+#macro SAREA(a)		{:=_STRUCTUREZP : _STRUCTUREZP+={a}}
+#macro SLEN		{:=_STRUCTUREZP }
+
+; Lo / Hi Rom switching
+
+#macro PhaseToHighRom	{.PSEUDOPC (* & $1fff)|$e000}
+;---------------------------------------
+
+	.SETSCR
+
+
+#macro LongJsr(dst)	{jsr LongJump : .DB {dst}}
+
+ToggleEGDelay = $c0
+BeachMode = %00000000
+BasicMode = %00011000				;Basic resides in Bank 3
+
+;#define __MACH_PIEP__
+;__FUNSTUFF__ = 1
+;#define __FASTFREEZE__
+
+
+	.segment "zeropage"
+	*=2
+
+__BSSStart	= $07e8
+
+OutputBuffer		= $0200
+
+
+;Page 3 is almost comlete wilderness
+;only $0314-$0319 are used for the Vectors
+#ifdef __FASTFREEZE__
+;and somewhere Bouncer
+Bouncer = $0300
+DeBounce_Cnt = $0301
+DeBounce_Code = $0302		;8 bytes
+#else
+	.segment "bss"
+	* = $031a
+
+;--------------------------------------
+
+CmdLine			.DSB 160
+
+Dump_MemLen		.DB 0			;for Memory Ascii and Screencode Dump
+Dump_MemMaxLen		.DB 0
+Dump_AscLen		.DB 0			;for Ascii and Screencode Dump
+Dump_AscMaxLen		.DB 0
+
+InitStatus		.DB 0
+
+;--------------------------------------
+
+Label_Save		.DSB 4
+Label_Val		.DSB 4
+
+;--------------------------------------
+
+GetNumBSS_Pad1		.DW 0			;Pad1 muss direkt vor Pad2 sein
+GetNumBSS_Pad2		.DB 0			;Pad2 muss direkt vor Pad1 sein
+GetNumBSS_ModeNr	.DB 0
+
+;--------------------------------------
+#endif
+
+	.segment "bss"
+	* = __BSSStart		; continue bss at __BSSStart
+
+
+#include "dreamon.hx"
+
+#include "silversurfer.hx"
+
+#include "out_buf.hx"
+#include "sub_zero.hx"
+#include "com_lib.hx"
+#include "messages.hx"
+#include "keyb.hx"
+#include "keys.hx"
+#include "long_lib.hx"
+#include "get_num.hx"
+#include "area.hx"
+#include "opcodes.hx"
+#include "file_lib.hx"
+#include "fpoint.hx"
+#include "fkeys.hx"
+#include "cmd_range.hx"
+#include "message_macros.hx"
+#include "mapping.hx"
+#include "prefs.hx"
+#include "version.hx"
+
+
+;--------------------------------------
+; 0-initialized Data
+;--------------------------------------
+
+	.segment "bss"
+
+CmdRangeBSS_Jmp		= *
+GetNumBSS_OpJmp		= *
+OpcodesBSS_TraceJmp	= *
+OpcodesBSS_StepInJmp	= *
+ExecCmdBSS_Jmp		= *
+ComLibBSS_KeySpiJmp	.DW 0
+
+ComLibBSS_A		.DB 0
+ComLibBSS_X		.DB 0
+ComLibBSS_Y		.DB 0
+
+Palette			.DSB Palette_len
+
+;--------------------------------------
+
+;BSSBLOCK(12*MaxScrDimX)
+_BSSBLOCK = *
+_BSSBLOCKSIZE = $240
+	.DSB _BSSBLOCKSIZE
+
+;	.PSEUDOPC(_BSSBLOCK)
+;temp buffers for Area.src
+FillBufByte		= _BSSBLOCK		;.DSB 160
+FillBufMask		= _BSSBLOCK+$0a0	;.DSB 160
+AreaBSS_Buf		= _BSSBLOCK+$140	;.DSB $100
+;BSSBLOCK_RESTART
+;#if *>_BSSBLOCK+_BSSBLOCKSIZE
+;#error "BSSBlock too large!"
+;#endif
+;	.REALPC
+
+
+;	.PSEUDOPC(_BSSBLOCK)
+;temp buffers to edit and grab a line after CR
+ComLibBSS_LineBuf	= _BSSBLOCK			;.DSB 2*MaxScrDimX
+ComLibBSS_ColBuf	= _BSSBLOCK+2*MaxScrDimX	;.DSB 2*MaxScrDimX
+;BSSBLOCK_RESTART
+;#if *>_BSSBLOCK+_BSSBLOCKSIZE
+;#error "BSSBlock too large!"
+;#endif
+;	.REALPC
+
+
+;	.PSEUDOPC(_BSSBLOCK)
+;temp buffers to store the new register values
+Regs_TmpRegs		= _BSSBLOCK		;.DSB SubZero_len
+;BSSBLOCK_RESTART
+;#if *>_BSSBLOCK+_BSSBLOCKSIZE
+;#error "BSSBlock too large!"
+;#endif
+;	.REALPC
+
+
+;	.PSEUDOPC(_BSSBLOCK)
+;temp buffers for disc access
+LdBf			= _BSSBLOCK		;.DSB $100		;Buffer for Load
+FileNameBuf		= _BSSBLOCK+$100	;.DSB $100
+;BSSBLOCK_RESTART
+;#if *>_BSSBLOCK+_BSSBLOCKSIZE
+;#error "BSSBlock too large!"
+;#endif
+;	.REALPC
+
+
+;	.PSEUDOPC(_BSSBLOCK)
+;temp buffers for CRT Ram access (labels, fkeys)
+CRTRamBSS_Buffer	= _BSSBLOCK		;.DSB $100
+;BSSBLOCK_RESTART
+;#if *>_BSSBLOCK+_BSSBLOCKSIZE
+;#error "BSSBlock too large!"
+;#endif
+;	.REALPC
+
+
+;	.PSEUDOPC(_BSSBLOCK)
+;temp buffers to evaluate a term
+GetNumBSS_OpBuf		= _BSSBLOCK			;.DSB MaxScrDimX
+GetNumBSS_PosBuf	= _BSSBLOCK+MaxScrDimX		;.DSB MaxScrDimX
+GetNumBSS_NumBuf0	= _BSSBLOCK+2*MaxScrDimX	;.DSB MaxScrDimX
+GetNumBSS_NumBuf1	= _BSSBLOCK+3*MaxScrDimX	;.DSB MaxScrDimX
+GetNumBSS_NumBuf2	= _BSSBLOCK+4*MaxScrDimX	;.DSB MaxScrDimX
+GetNumBSS_NumBuf3	= _BSSBLOCK+5*MaxScrDimX	;.DSB MaxScrDimX
+;BSSBLOCK_END
+;#if *>_BSSBLOCK+_BSSBLOCKSIZE
+;#error "BSSBlock too large!"
+;#endif
+;	.REALPC
+
+;--------------------------------------
+
+InputBuffer		.DSB $100
+
+;--------------------------------------
+; Hier endet der BSS Bereich, der bei
+; jedem Freezen mit 0 initialisiert wird
+;--------------------------------------
+
+BSSZeroInit_End = *
+
+;--------------------------------------
+
+
+
+
+;--------------------------------------
+; Bank 0 Start
+;--------------------------------------
+
+	.segment "bank0"
+	*=$8000
+
+	.(
+
+KickStack = $0140				;Start der Reset Routine, die auf den Stack kopiert wird
+
+	.DW Bank0_Reset				;Reset Vektor
+	.DW $fe5e				;NMI Vektor wird hier nicht benutzt, deswegen zurueck zum System
+	.PET "CBM80"
+
+
+Bank0_Reset:
+	lda #%01000010				;Allow Banking of Ram in $de00 and enable REU compatible map
+	sta $de01
+
+	lda #%00000011
+	sta $de00
+	jmp Kick0
+
+;--------------------------------------
+	.PhaseToHighRom
+;--------------------------------------
+
+Kick0:
+	lda #%00100011
+	sta $de00
+
+	ldx #0
+	txa
+Kick_InitRam:
+	sta $02,x				;fill the Pages 0, 2 and 3 with 0
+	sta $0100,x
+	sta $0200,x
+	sta $0300,x
+	inx
+	bne Kick_InitRam
+
+;ToDo - Detect if the ram contents are valid before overwriting them
+
+	ldx #StringBufAbs_len-1
+InitStringBufAbs:
+	lda StringBufInitTab,x
+	sta StringBufAbs,x
+	dex
+	bpl InitStringBufAbs
+
+	ldx #__BSSSaveMeEnd-__BSSSaveMeStart
+InitBSSSaveMe:
+	lda SubZero_BSSPages+(__BSSSaveMeStart-__BSSConstStart)-1,x
+	sta SubZero_BSSSaved-1,x
+	dex
+	bne InitBSSSaveMe
+
+	ldx #FKeyDef_Length
+InitFKeys:
+	lda FKeyDef_Start-1,x
+	sta StringBufStart-1,x
+	dex
+	bne InitFKeys
+
+#ifdef __FUNSTUFF__
+	jsr FunKick_InitE0
+#endif
+
+	lda #%00000011
+	sta $de00
+	jmp Kick1
+
+;--------------------------------------
+	.REALPC
+;--------------------------------------
+
+Kick1:
+	lda #%00000000
+	sta $de00
+
+	ldx #ToggleEGDelay
+KickDelay:
+	inx
+	bne KickDelay
+
+	jsr ResetMenu
+
+	jsr $fda3				;Init IO
+	lda #$a0
+	sta $0284				;$a000
+	lda #$08
+	sta $0282				;free Mem starts at $0800
+	lsr
+	sta $0288				;Screen at $0400
+
+	jsr $fd15				;Init $0314-$0333
+	jsr $ff5b				;Init VIC and $02a6
+
+	cli
+
+	ldx #BasicVectors_Len-1
+InitBasicVectors:
+	lda BasicVectors,x
+	sta $0300,x
+	dex
+	bpl InitBasicVectors
+
+	lda #<Freeze_Brk			;new break vector is monitor
+	sta $0316
+	lda #>Freeze_Brk
+	sta $0317
+
+	jsr $e3bf
+	jsr $e422
+	lda #<DreaMonBasicHello
+	ldy #>DreaMonBasicHello
+	jsr $ab1e
+
+	ldy #KickStack_End-KickStack_Start	;kopiere Reset-Routine auf den Stack,
+Kick2:
+	lda KickStack_Start-1,y			;da das Rom, in dem dieser Code gerade
+	sta KickStack-1,y				;laeuft, ausgeblendet werden soll
+	dey
+	bne Kick2
+	jmp KickStack
+
+BasicVectors:
+	.DW $e38b				;$0300
+	.DW Vect_0302				;$0302 (org $a483)
+	.DW $a57c				;$0304
+	.DW $a71a				;$0306
+	.DW $a7e4				;$0308
+	.DW Vect_030A				;$030a (org $ae86)
+BasicVectors_Len = * - BasicVectors
+
+DreaMonBasicHello:
+	.DB $0d,$05				;White
+	.PET "   dreamon v"
+	.DB DREAMON_VERSION_MAIN|$30,'.'
+	.DB DREAMON_VERSION_SUB |$30,'.'
+	.DB DREAMON_VERSION_DEV|$30
+	.PET "  by doc bacardi/drm",$0d,0
+
+
+KickStack_Start:
+    .PSEUDOPC KickStack
+	lda #%00000010 | BasicMode		;ExRom und Game aus, damit das orginal Rom durchkommt
+	sta $de00
+	jmp $e39d				;Continue Basic Coldstart
+
+#if *>$01ff
+#error "Die Reset Routine auf dem Stack ist zu lang. Variable KickStack nach vorne verschieben!"
+#endif
+    .REALPC
+KickStack_End:
+
+	.)
+
+;--------------------------------------
+	.PhaseToHighRom
+;--------------------------------------
+; Jetzt folgen die Daten, die bei jedem
+; Freezen aus dem CRT-Ram in den Speicher
+; zurueckkopiert werden muessen
+
+SubZero_BSSPages:
+
+    .PSEUDOPC BSSZeroInit_End
+
+__BSSConstStart:
+
+;--------------------------------------
+
+VectsStart:
+
+ComLibVect_ClearLine:
+	jmp SecureDummy
+ComLibVect_CopyLine:
+	jmp SecureDummy
+ComLibVect_GetLine:
+	jmp SecureDummy
+ComLibVect_PutLine:
+	jmp SecureDummy
+
+@0ComLibVect_CursorOn:
+	jmp SecureDummy
+@0ComLibVect_CursorOff:
+	jmp SecureDummy
+@0ComLibVect_CursorBlink:
+	jmp SecureDummy
+@0ComLibVect_CursorBlinkFast:
+	jmp SecureDummy
+@0ComLibVect_CursorBlinkNorm:
+	jmp SecureDummy
+
+@0ComLibVect_GetChar:
+	jmp SecureDummy
+@0ComLibVect_CharOut:
+	jmp SecureDummy
+
+@0ComLibVect_RevOn:
+	jmp SecureDummy
+@0ComLibVect_RevOff:
+	jmp SecureDummy
+@0ComLibVect_SwitchCharsets:
+	jmp SecureDummy
+@0ComLibVect_SetDebugBorder:
+	jmp SecureDummy
+
+@0ComLibVect_VideoSubMode:
+	jmp SecureDummy
+
+VectsEnd:
+
+
+SecureDummy:
+	rts
+
+;--------------------------------------
+
+	.(
+
+@0NextSpaces:
+	.LongJsr(L_NextCmdChar)
+	bcc Spaces
+	rts
+@0Spaces:
+	ldy CmdLinePos
+	cpy CmdLineLen
+	bcs Spaces2
+Spaces0:
+	lda CmdLine,y
+	cmp #' '
+	bne Spaces1
+	iny
+	cpy CmdLineLen
+	bcc Spaces0
+	rts
+Spaces1:
+	sty CmdLinePos
+	clc
+Spaces2:
+	rts
+
+
+@0GetCRTRam:
+	php
+	sei
+	jsr CRTInit
+	pha
+	jsr MakeCRTAdress
+GetCRTRam_NewBank:
+	ldy #0
+GetCRTRam1:
+	lda (CRTRamZp_Adress),y
+	sta CRTRamBSS_Buffer,x
+	inx
+	iny
+	cpy CRTRamZp_SegSize
+	bne GetCRTRam1
+
+	jsr MakeCRTNextAdress
+	bcc GetCRTRam_NewBank
+	bcs CRTEnd
+
+@0PutCRTRam:
+	php
+	sei
+	jsr CRTInit
+	pha
+	jsr MakeCRTAdress
+PutCRTRam_NewBank:
+	ldy #0
+PutCRTRam1:
+	lda CRTRamBSS_Buffer,x
+	sta (CRTRamZp_Adress),y
+	inx
+	iny
+	cpy CRTRamZp_SegSize
+	bne PutCRTRam1
+
+	jsr MakeCRTNextAdress
+	bcc PutCRTRam_NewBank
+CRTEnd:
+	pla
+	;no need for Bouncer here as IRQ is masked
+	sta $de00
+	ldx #ToggleEGDelay
+CRT_Dl0:
+	inx
+	bne CRT_Dl0
+	plp
+	rts
+
+
+CRTInit:
+	sei
+	lda LongLibZp_Akku0
+	sta CRTRamZp_SrcAdr
+	lda LongLibZp_Akku0+1
+	sta CRTRamZp_SrcAdr+1
+	ldx #0
+	lda $de00			;Save actual Ram Bank
+	and #%00011000			;Only Bankbits 13 and 14
+#if BeachMode>0
+	ora #BeachMode			;Game/ExRom wiederherstgellen (sind read only)
+#endif
+	rts
+
+
+MakeCRTNextAdress:
+	clc
+	tya
+	adc CRTRamZp_SrcAdr
+	sta CRTRamZp_SrcAdr
+	bcc MakeCRTNextAdress0
+	inc CRTRamZp_SrcAdr+1
+MakeCRTNextAdress0:
+	lda CRTRamZp_Length
+	sec
+	sbc CRTRamZp_SegSize
+	beq MakeCRTAdress_Rts
+	tay
+
+MakeCRTAdress:
+	sty CRTRamZp_Length
+	lda CRTRamZp_SrcAdr+1		;One Ram Bank is $2000 bytes, so bit 6 and 5 determine the Bank number
+	and #%01100000
+	lsr
+	lsr
+	ora #%00100011			;Ultimax to enable writing to crt ram
+	;no need for Bouncer here as IRQ is masked
+	sta $de00
+	ldy #ToggleEGDelay
+MakeCRTAdress_Dl0:
+	iny
+	bne MakeCRTAdress_Dl0
+
+	lda CRTRamZp_SrcAdr
+	sta CRTRamZp_Adress
+	lda CRTRamZp_SrcAdr+1		;how much space is left from the Adress to the end of the Bank ($2000 - (LongLibZp_Akku0 AND #$1fff))
+	and #%00011111
+	sta CRTRamZp_Zp0
+	ora #$80
+	sta CRTRamZp_Adress+1
+	lda #0
+	sec
+	sbc CRTRamZp_SrcAdr
+	tay
+	lda #$20
+	sbc CRTRamZp_Zp0
+	bne MakeCRTAdress_CopyAll
+	lda CRTRamZp_Length		;copy a whole page (CRTRamZp_Length==0)?
+	beq MakeCRTAdress0
+	cpy CRTRamZp_Length
+	bcc MakeCRTAdress0
+MakeCRTAdress_CopyAll:
+	ldy CRTRamZp_Length
+MakeCRTAdress0:
+	sty CRTRamZp_SegSize
+	clc
+MakeCRTAdress_Rts:
+	rts
+
+
+
+@0System_IRQ:
+;	lda #1
+;	sta $d019
+	inc $d019
+
+	lda $de00
+	and #%00011000			;Only Bankbits 13 and 14
+#if BeachMode>0
+	ora #BeachMode			;Game/ExRom wiederherstgellen (sind read only)
+#endif
+	pha
+	lda #%00010000|BeachMode	;Bank 2
+	;no need for Bouncer here as IRQ is masked
+	sta $de00
+	ldx #ToggleEGDelay
+SystemIRQ_Dl0:
+	inx
+	bne SystemIRQ_Dl0
+
+
+	jsr KeyB_ScanKeys
+	jsr KeyB_AutoKeys
+	jsr ComLibVect_CursorBlink
+
+	pla
+	;no need for Bouncer here as IRQ is masked
+	sta $de00
+	ldx #ToggleEGDelay
+SystemIRQ_Dl1:
+	inx
+	bne SystemIRQ_Dl1
+
+SystemIrq_End:
+	pla
+	tay
+	pla
+	tax
+	pla
+	rti
+
+
+@0System_NMI:
+	inc $d020
+	rti
+
+
+@0System_BRK:
+	sec
+	lda $0105,x			;Hole das Lowbyte der Rücksprungadresse
+	sbc #1				;Subtrahiere 1 um an den Parameter des BRK's zu gelangen
+	sta MsgZp_Ptr			;Lowbyte für den Pointer aufs Parameterbyte
+	lda $0106,x			;das Selbe für's High byte
+	sbc #0
+	sta MsgZp_Ptr+1
+	lda ComLibZp_Color		;Sichere die momentane Farbe...
+	pha				;...auf dem stack
+	ldy #0
+	lda (MsgZp_Ptr),y		;hole das Parameterbyte des BRK Befehls
+	ldx $de00
+	stx SystemBrk_Bank+1
+	ldx #%00010000|BeachMode	;Bank 2
+	;no need for Bouncer here as IRQ is masked
+	stx $de00
+	ldx #ToggleEGDelay
+SystemBRK_Dl0:
+	inx
+	bne SystemBRK_Dl0
+	jsr MessageServer
+SystemBrk_Bank:
+	lda #0
+	and #%00011000			;Only Bankbits 13 and 14
+#if BeachMode>0
+	ora #BeachMode			;Game/ExRom wiederherstgellen (sind read only)
+#endif
+	;no need for Bouncer here as IRQ is masked
+	sta $de00
+	ldx #ToggleEGDelay
+SystemBRK_Dl1:
+	inx
+	bne SystemBRK_Dl1
+	pla
+	sta ComLibZp_Color
+	jmp SystemIrq_End
+
+
+Mapping_01Tab:
+	.DB $20		;MappingIdx_Mem0
+	.DB $21		;MappingIdx_Mem1
+	.DB $22		;MappingIdx_Mem2
+	.DB $23		;MappingIdx_Mem3
+	.DB $24		;MappingIdx_Mem4
+	.DB $25		;MappingIdx_Mem5
+	.DB $26		;MappingIdx_Mem6
+	.DB $27		;MappingIdx_Mem7
+	.DB $27		;MappingIdx_CrtRam0
+
+Mapping_DETab:
+	.DB %00000010	;MappingIdx_Mem0
+	.DB %00000010	;MappingIdx_Mem1
+	.DB %00000010	;MappingIdx_Mem2
+	.DB %00000010	;MappingIdx_Mem3
+	.DB %00000010	;MappingIdx_Mem4
+	.DB %00000010	;MappingIdx_Mem5
+	.DB %00000010	;MappingIdx_Mem6
+	.DB %00000010	;MappingIdx_Mem7
+	.DB %00100011	;MappingIdx_CrtRam0
+
+
+@0Mapping_LdaByte:
+	lda $de00
+	and #%00011000			;Only Bankbits 13 and 14
+#if BeachMode>0
+	ora #BeachMode			;Game/ExRom wiederherstgellen (sind read only)
+#endif
+	sta Mapping_LdaBank+1
+	lda Mapping_DETab,y
+	;no need for Bouncer here as IRQ is masked
+	sta $de00
+	lda Mapping_01Tab,y
+	sta 1
+
+	ldy #ToggleEGDelay
+Mapping_LdaDl0:
+	iny
+	bne Mapping_LdaDl0
+
+	lda (MappingZp_Adress),y
+	ldy #$37
+	sty 1
+Mapping_LdaBank:
+	ldy #0
+	;no need for Bouncer here as IRQ is masked
+	sty $de00
+
+	ldy #ToggleEGDelay
+Mapping_LdaDl1:
+	iny
+	bne Mapping_LdaDl1
+
+	rts
+
+
+@0Mapping_StaByte:
+	pha
+	lda $de00
+	and #%00011000			;Only Bankbits 13 and 14
+#if BeachMode>0
+	ora #BeachMode			;Game/ExRom wiederherstgellen (sind read only)
+#endif
+	sta Mapping_StaBank+1
+	lda Mapping_DETab,y
+	;no need for Bouncer here as IRQ is masked
+	sta $de00			;Select Ram Bank 1
+	lda Mapping_01Tab,y
+	sta 1
+	pla
+
+	ldy #ToggleEGDelay
+Mapping_StaDl0:
+	iny
+	bne Mapping_StaDl0
+
+	sta (MappingZp_Adress),y
+	ldy #$37
+	sty 1
+Mapping_StaBank:
+	ldy #0
+	;no need for Bouncer here as IRQ is masked
+	sty $de00
+
+	ldy #ToggleEGDelay
+Mapping_StaDl1:
+	iny
+	bne Mapping_StaDl1
+
+	rts
+
+@0LongJumpParam:
+	pha				;platz aufm Stack schaffen
+	php
+	sei
+	sta LongJump_A+1		;Sichere Akku
+	stx LongJump_X+1		;Sichere X
+	sty LongJump_Y+1		;Sichere Y
+	tsx
+	lda $de00			;Sichere momentane Bank
+	and #%00011000			;Only Bankbits 13 and 14
+#if BeachMode>0
+	ora #BeachMode			;Game/ExRom wiederherstgellen (sind read only)
+#endif
+	sta $0102,x
+	ldx LongJump_A+1
+	jmp LongJump_In0
+
+@0LongJump:
+	pha				;Platzhalter fuer DE00 Save
+	php				;Sichere Status
+	sei
+	sta LongJump_A+1		;Sichere Akku
+	stx LongJump_X+1		;Sichere X
+	sty LongJump_Y+1		;Sichere Y
+	tsx				;Hole Byte hinter dem jsr
+	lda $de00			;Sichere momentane Bank
+	and #%00011000			;Only Bankbits 13 and 14
+#if BeachMode>0
+	ora #BeachMode			;Game/ExRom wiederherstgellen (sind read only)
+#endif
+	sta $0102,x
+	clc				;Fuer Addition weiter unten
+	lda $0103,x
+	sta LongJump_Get+1
+	adc #1				;Setze Ruecksprung hinter das Byte
+	sta $0103,x
+	lda $0104,x
+	sta LongJump_Get+2
+	adc #0
+	sta $0104,x
+	ldy #1
+LongJump_Get:
+	ldx $ffff,y
+LongJump_In0:
+	lda #%00000000|BeachMode	;Bank 0
+	;no need for Bouncer here as IRQ is masked
+	sta $de00
+
+	ldy #ToggleEGDelay
+LongJump_Dl0:
+	iny
+	bne LongJump_Dl0
+
+	lda JumpTable_Lo,x
+	sta JumpTable+1
+	lda JumpTable_Hi,x
+	sta JumpTable+2
+	lda JumpTable_Bank,x
+#ifdef __FASTFREEZE__
+	sta Bouncer			;here Bouncer is important though IRQ is masked as this is the mem config for the routine to be called
+#endif
+	sta $de00
+
+	ldx #ToggleEGDelay
+LongJump_Dl1:
+	inx
+	bne LongJump_Dl1
+
+LongJump_A:
+	lda #0
+LongJump_X:
+	ldx #0
+LongJump_Y:
+	ldy #0
+	plp
+JumpTable:
+	jsr $ffff
+	sta LongJump_A2+1
+	php
+	pla
+	sta LongJump_SR+1
+	pla
+#ifdef __FASTFREEZE__
+	sta Bouncer
+#endif
+	sta $de00
+
+	txa
+	ldx #ToggleEGDelay
+LongJump_Dl2:
+	inx
+	bne LongJump_Dl2
+	tax
+
+LongJump_SR:
+	lda #0
+	pha
+LongJump_A2:
+	lda #0
+	plp
+	rts
+
+
+@0MemExecCmd:
+	.PET "m-e"
+	.DB 0,0
+
+@0BlockCmd0Txt:
+	.PET "#"
+@0BlockCmd1Txt:
+	.PET "b-p 5 0"
+@0BlockCmd2Txt:
+	.PET " 0 5 "
+
+	.)
+
+__BSSConstEnd:
+
+;--------------------------------------
+
+__BSSSaveMeStart:
+
+Option_VideoMode
+	.DB 0
+Option_VDC25Lines
+	.DB 25
+Option_VDCSuper6Lines
+	.DB 31
+Option_Speeder
+	.DB 0
+
+__BSSSaveMeEnd:
+
+
+#print "BSS Ende:", *
+
+    .REALPC
+
+;--------------------------------------
+
+StringBufInitTab:
+	.DW (StringBufStart & $7fff)				;StringBufAbs_Start
+	.DW ((StringBufStart+FKeyDef_Length) & $7fff)		;StringBufAbs_FKeysEnd
+	.DW ((StringBufStart+FKeyDef_Length) & $7fff)		;StringBufAbs_LabelsEnd
+	.DW $8000						;StringBufAbs_TempEnd
+	.DW $8000						;StringBufAbs_End
+
+FKeyDef_Start:
+#include "fkey_defs.src"
+FKeyDef_Length=*-FKeyDef_Start
+
+
+;--------------------------------------
+	.REALPC
+;--------------------------------------
+
+	.(
+
+Bank0 = %00000000|BeachMode
+Bank1 = %00001000|BeachMode
+Bank2 = %00010000|BeachMode
+Bank3 = %00011000|BeachMode
+
+@0JumpTable_Bank:
+	.DB Bank0	;GetAdress
+	.DB Bank2	;ComLib_SetVideoMode
+	.DB Bank2	;ComLib_SetCol
+	.DB Bank2	;ComLibVect_CursorOn
+	.DB Bank2	;ComLibVect_CursorOff
+	.DB Bank2	;ComLib_PrintChar
+	.DB Bank2	;ComLib_GrabScrLine
+	.DB Bank2	;ComLib_PrintSpiChar
+	.DB Bank2	;ComLib_GetLineXPos
+	.DB Bank2	;ComLib_ScrCode2Lower
+	.DB Bank2	;ComLib_PrintRawColChar
+	.DB Bank2	;ComLib_SpaceOut
+	.DB Bank1	;LongLib_LoadPtr
+	.DB Bank1	;LongLib_StorePtr
+	.DB Bank1	;LongLib_Akku0Out
+	.DB Bank1	;LongLib_LoadAXY
+	.DB Bank1	;LongLib_AddBYTE
+	.DB Bank2	;KeyB_GetKey
+	.DB Bank1	;ReAss
+	.DB Bank1	;DumpLib_ReMemAscDump
+	.DB Bank1	;DumpLib_ReMemScrDump
+	.DB Bank1	;DumpLib_ReAscDump
+	.DB Bank1	;DumpLib_ReScrDump
+	.DB Bank1	;AreaCompare
+	.DB Bank1	;AreaFill
+	.DB Bank1	;AreaHunt
+	.DB Bank1	;AreaOHunt
+	.DB Bank1	;AreaTransfer
+	.DB Bank1	;AreaSwap
+	.DB Bank0	;ExecExit
+	.DB Bank0	;FileLib_DCmd
+	.DB Bank0	;Go
+	.DB Bank1	;Ass
+	.DB Bank0	;Load
+	.DB Bank0	;Verify
+	.DB Bank0	;Save
+	.DB Bank2	;ShowRegs
+	.DB Bank1	;FPoint_Manage
+	.DB Bank1	;GetNum_EvalNumber
+	.DB Bank1	;Label_Define
+	.DB Bank1	;Prefs
+	.DB Bank1	;TestTrace
+	.DB Bank2	;CmdRange
+	.DB Bank2	;ComLib_PrinterEnable
+	.DB Bank2	;KeyB_CheckStop
+	.DB Bank2	;ComLib_PrinterDisable
+	.DB Bank2	;ComLibVect_GetChar
+	.DB Bank2	;ComLib_LineFeedUp
+	.DB Bank2	;ComLib_PrintColChar
+	.DB Bank2	;ComLib_ByteOut
+	.DB Bank2	;ComLib_PrintRawChar
+	.DB Bank2	;ComLib_FillRestline
+	.DB Bank2	;ComLib_Ascii2Screen
+	.DB Bank1	;GetNum_GetHexLong
+	.DB Bank2	;ComLib_DollarOut
+	.DB Bank2	;ComLib_SpacesOut
+	.DB Bank2	;ComLib_DollarByteOut
+	.DB Bank2	;ComLib_DollarWordOut
+	.DB Bank2	;ComLib_DollarLongOut
+	.DB Bank1	;GetNum_GetRange
+	.DB Bank1	;Opcodes_StepIn
+	.DB Bank1	;LongLib_SubBYTE
+	.DB Bank1	;Opcodes_DisassRange
+	.DB Bank1	;DumpLib_MemAscDumpRange
+	.DB Bank1	;DumpLib_MemScrDumpRange
+	.DB Bank1	;DumpLib_AscDumpRange
+	.DB Bank1	;DumpLib_ScrDumpRange
+	.DB Bank1	;Opcodes_DisassScrl
+	.DB Bank1	;DumpLib_MemAscDumpScrl
+	.DB Bank1	;DumpLib_MemScrDumpScrl
+	.DB Bank1	;DumpLib_AscDumpScrl
+	.DB Bank1	;DumpLib_ScrDumpScrl
+	.DB Bank2	;CmdRangeJumpIn0
+	.DB Bank2	;CmdRangeNextAdrAdd
+	.DB Bank2	;ComLib_PrinterFlush
+	.DB Bank2	;ComLib_RedirOutputOn
+	.DB Bank2	;ComLib_RedirOutputOff
+	.DB Bank2	;ComLib_Screen2Ascii
+	.DB Bank1	;NextCmdChar
+	.DB Bank1	;LongLib_WORDAddBYTE
+	.DB Bank1	;GetNum_GetHexNDig
+	.DB Bank1	;GetNum_GetDezLong
+	.DB Bank2	;ComLib_DezWordOut
+	.DB Bank1	;OutputBuf_Init
+	.DB Bank1	;OutputBuf_Clear
+	.DB Bank1	;OutputBuf_Byte
+	.DB Bank1	;OutputBuf_Flush
+	.DB Bank1	;LongLib_SubLONGPtrFrom
+	.DB Bank1	;LongLib_Inc
+	.DB Bank1	;LongLib_CmpWithLONGPtr
+	.DB Bank1	;InputBuf_Init
+	.DB Bank0	;DebugExec
+	.DB Bank1	;LongLib_LoadWORD
+	.DB Bank3	;CopyVDCFontRts
+	.DB Bank1	;LongLib_CmpWithWORDPtr
+	.DB Bank1	;LongLib_StoreWORD
+	.DB Bank1	;LongLib_WORDSubBYTE
+	.DB Bank2	;YesNo
+
+@0JumpTable_Lo:
+	.DB <GetAdress
+	.DB <ComLib_SetVideoMode
+	.DB <ComLib_SetCol
+	.DB <ComLibVect_CursorOn
+	.DB <ComLibVect_CursorOff
+	.DB <ComLib_PrintChar
+	.DB <ComLib_GrabScrLine
+	.DB <ComLib_PrintSpiChar
+	.DB <ComLib_GetLineXPos
+	.DB <ComLib_ScrCode2Lower
+	.DB <ComLib_PrintRawColChar
+	.DB <ComLib_SpaceOut
+	.DB <LongLib_LoadPtr
+	.DB <LongLib_StorePtr
+	.DB <LongLib_Akku0Out
+	.DB <LongLib_LoadAXY
+	.DB <LongLib_AddBYTE
+	.DB <KeyB_GetKey
+	.DB <ReAss
+	.DB <DumpLib_ReMemAscDump
+	.DB <DumpLib_ReMemScrDump
+	.DB <DumpLib_ReAscDump
+	.DB <DumpLib_ReScrDump
+	.DB <AreaCompare
+	.DB <AreaFill
+	.DB <AreaHunt
+	.DB <AreaOHunt
+	.DB <AreaTransfer
+	.DB <AreaSwap
+	.DB <ExecExit
+	.DB <FileLib_DCmd
+	.DB <Go
+	.DB <Ass
+	.DB <Load
+	.DB <Verify
+	.DB <Save
+	.DB <ShowRegs
+	.DB <FPoint_Manage
+	.DB <GetNum_EvalNumber
+	.DB <Label_Define
+	.DB <Prefs
+	.DB <TestTrace
+	.DB <CmdRange
+	.DB <ComLib_PrinterEnable
+	.DB <KeyB_CheckStop
+	.DB <ComLib_PrinterDisable
+	.DB <ComLibVect_GetChar
+	.DB <ComLib_LineFeedUp
+	.DB <ComLib_PrintColChar
+	.DB <ComLib_ByteOut
+	.DB <ComLib_PrintRawChar
+	.DB <ComLib_FillRestline
+	.DB <ComLib_Ascii2Screen
+	.DB <GetNum_GetHexLong
+	.DB <ComLib_DollarOut
+	.DB <ComLib_SpacesOut
+	.DB <ComLib_DollarByteOut
+	.DB <ComLib_DollarWordOut
+	.DB <ComLib_DollarLongOut
+	.DB <GetNum_GetRange
+	.DB <Opcodes_StepIn
+	.DB <LongLib_SubBYTE
+	.DB <Opcodes_DisassRange
+	.DB <DumpLib_MemAscDumpRange
+	.DB <DumpLib_MemScrDumpRange
+	.DB <DumpLib_AscDumpRange
+	.DB <DumpLib_ScrDumpRange
+	.DB <Opcodes_DisassScrl
+	.DB <DumpLib_MemAscDumpScrl
+	.DB <DumpLib_MemScrDumpScrl
+	.DB <DumpLib_AscDumpScrl
+	.DB <DumpLib_ScrDumpScrl
+	.DB <CmdRangeJumpIn0
+	.DB <CmdRangeNextAdrAdd
+	.DB <ComLib_PrinterFlush
+	.DB <ComLib_RedirOutputOn
+	.DB <ComLib_RedirOutputOff
+	.DB <ComLib_Screen2Ascii
+	.DB <NextCmdChar
+	.DB <LongLib_WORDAddBYTE
+	.DB <GetNum_GetHexNDig
+	.DB <GetNum_GetDezLong
+	.DB <ComLib_DezWordOut
+	.DB <OutputBuf_Init
+	.DB <OutputBuf_Clear
+	.DB <OutputBuf_Byte
+	.DB <OutputBuf_Flush
+	.DB <LongLib_SubLONGPtrFrom
+	.DB <LongLib_Inc
+	.DB <LongLib_CmpWithLONGPtr
+	.DB <InputBuf_Init
+	.DB <DebugExec
+	.DB <LongLib_LoadWORD
+	.DB <CopyVDCFontRts
+	.DB <LongLib_CmpWithWORDPtr
+	.DB <LongLib_StoreWORD
+	.DB <LongLib_WORDSubBYTE
+	.DB <YesNo
+
+@0JumpTable_Hi:
+	.DB >GetAdress
+	.DB >ComLib_SetVideoMode
+	.DB >ComLib_SetCol
+	.DB >ComLibVect_CursorOn
+	.DB >ComLibVect_CursorOff
+	.DB >ComLib_PrintChar
+	.DB >ComLib_GrabScrLine
+	.DB >ComLib_PrintSpiChar
+	.DB >ComLib_GetLineXPos
+	.DB >ComLib_ScrCode2Lower
+	.DB >ComLib_PrintRawColChar
+	.DB >ComLib_SpaceOut
+	.DB >LongLib_LoadPtr
+	.DB >LongLib_StorePtr
+	.DB >LongLib_Akku0Out
+	.DB >LongLib_LoadAXY
+	.DB >LongLib_AddBYTE
+	.DB >KeyB_GetKey
+	.DB >ReAss
+	.DB >DumpLib_ReMemAscDump
+	.DB >DumpLib_ReMemScrDump
+	.DB >DumpLib_ReAscDump
+	.DB >DumpLib_ReScrDump
+	.DB >AreaCompare
+	.DB >AreaFill
+	.DB >AreaHunt
+	.DB >AreaOHunt
+	.DB >AreaTransfer
+	.DB >AreaSwap
+	.DB >ExecExit
+	.DB >FileLib_DCmd
+	.DB >Go
+	.DB >Ass
+	.DB >Load
+	.DB >Verify
+	.DB >Save
+	.DB >ShowRegs
+	.DB >FPoint_Manage
+	.DB >GetNum_EvalNumber
+	.DB >Label_Define
+	.DB >Prefs
+	.DB >TestTrace
+	.DB >CmdRange
+	.DB >ComLib_PrinterEnable
+	.DB >KeyB_CheckStop
+	.DB >ComLib_PrinterDisable
+	.DB >ComLibVect_GetChar
+	.DB >ComLib_LineFeedUp
+	.DB >ComLib_PrintColChar
+	.DB >ComLib_ByteOut
+	.DB >ComLib_PrintRawChar
+	.DB >ComLib_FillRestline
+	.DB >ComLib_Ascii2Screen
+	.DB >GetNum_GetHexLong
+	.DB >ComLib_DollarOut
+	.DB >ComLib_SpacesOut
+	.DB >ComLib_DollarByteOut
+	.DB >ComLib_DollarWordOut
+	.DB >ComLib_DollarLongOut
+	.DB >GetNum_GetRange
+	.DB >Opcodes_StepIn
+	.DB >LongLib_SubBYTE
+	.DB >Opcodes_DisassRange
+	.DB >DumpLib_MemAscDumpRange
+	.DB >DumpLib_MemScrDumpRange
+	.DB >DumpLib_AscDumpRange
+	.DB >DumpLib_ScrDumpRange
+	.DB >Opcodes_DisassScrl
+	.DB >DumpLib_MemAscDumpScrl
+	.DB >DumpLib_MemScrDumpScrl
+	.DB >DumpLib_AscDumpScrl
+	.DB >DumpLib_ScrDumpScrl
+	.DB >CmdRangeJumpIn0
+	.DB >CmdRangeNextAdrAdd
+	.DB >ComLib_PrinterFlush
+	.DB >ComLib_RedirOutputOn
+	.DB >ComLib_RedirOutputOff
+	.DB >ComLib_Screen2Ascii
+	.DB >NextCmdChar
+	.DB >LongLib_WORDAddBYTE
+	.DB >GetNum_GetHexNDig
+	.DB >GetNum_GetDezLong
+	.DB >ComLib_DezWordOut
+	.DB >OutputBuf_Init
+	.DB >OutputBuf_Clear
+	.DB >OutputBuf_Byte
+	.DB >OutputBuf_Flush
+	.DB >LongLib_SubLONGPtrFrom
+	.DB >LongLib_Inc
+	.DB >LongLib_CmpWithLONGPtr
+	.DB >InputBuf_Init
+	.DB >DebugExec
+	.DB >LongLib_LoadWORD
+	.DB >CopyVDCFontRts
+	.DB >LongLib_CmpWithWORDPtr
+	.DB >LongLib_StoreWORD
+	.DB >LongLib_WORDSubBYTE
+	.DB >YesNo
+
+	.)
+
+#macro LongJmpNr { =__LongJmpCnt++ }
+__LongJmpCnt=0
+
+L_GetAdress			.LongJmpNr
+L_ComLib_SetVideoMode		.LongJmpNr
+
+L_ComLib_SetCol			.LongJmpNr
+L_ComLibVect_CursorOn		.LongJmpNr
+L_ComLibVect_CursorOff		.LongJmpNr
+L_ComLib_PrintChar		.LongJmpNr
+L_ComLib_GrabScrLine		.LongJmpNr
+L_ComLib_PrintSpiChar		.LongJmpNr
+L_ComLib_GetLineXPos		.LongJmpNr
+L_ComLib_ScrCode2Lower		.LongJmpNr
+L_ComLib_PrintRawColChar	.LongJmpNr
+L_ComLib_SpaceOut		.LongJmpNr
+
+L_LongLib_LoadPtr		.LongJmpNr
+L_LongLib_StorePtr		.LongJmpNr
+L_LongLib_Akku0Out		.LongJmpNr
+L_LongLib_LoadAXY		.LongJmpNr
+L_LongLib_AddBYTE		.LongJmpNr
+
+L_KeyB_GetKey			.LongJmpNr
+
+L_ReAss				.LongJmpNr
+L_DumpLib_ReMemAscDump		.LongJmpNr
+L_DumpLib_ReMemScrDump		.LongJmpNr
+L_DumpLib_ReAscDump		.LongJmpNr
+L_DumpLib_ReScrDump		.LongJmpNr
+L_AreaCompare			.LongJmpNr
+L_AreaFill			.LongJmpNr
+L_AreaHunt			.LongJmpNr
+L_AreaOHunt			.LongJmpNr
+L_AreaTransfer			.LongJmpNr
+L_AreaSwap			.LongJmpNr
+L_ExecExit			.LongJmpNr
+L_FileLib_DCmd			.LongJmpNr
+L_Go				.LongJmpNr
+L_Ass				.LongJmpNr
+L_Load				.LongJmpNr
+L_Verify			.LongJmpNr
+L_Save				.LongJmpNr
+L_ShowRegs			.LongJmpNr
+L_FPoint_Manage			.LongJmpNr
+L_GetNum_EvalNumber		.LongJmpNr
+L_Label_Define			.LongJmpNr
+L_Prefs				.LongJmpNr
+L_TestTrace			.LongJmpNr
+L_CmdRange			.LongJmpNr
+
+L_ComLib_PrinterEnable		.LongJmpNr
+L_KeyB_CheckStop		.LongJmpNr
+L_ComLib_PrinterDisable		.LongJmpNr
+L_ComLibVect_GetChar		.LongJmpNr
+L_ComLib_LineFeedUp		.LongJmpNr
+
+L_ComLib_PrintColChar		.LongJmpNr
+L_ComLib_ByteOut		.LongJmpNr
+L_ComLib_PrintRawChar		.LongJmpNr
+L_ComLib_FillRestline		.LongJmpNr
+L_ComLib_Ascii2Screen		.LongJmpNr
+
+L_GetNum_GetHexLong		.LongJmpNr
+L_ComLib_DollarOut		.LongJmpNr
+L_ComLib_SpacesOut		.LongJmpNr
+L_ComLib_DollarByteOut		.LongJmpNr
+L_ComLib_DollarWordOut		.LongJmpNr
+L_ComLib_DollarLongOut		.LongJmpNr
+
+L_GetNum_GetRange		.LongJmpNr
+L_Opcodes_StepIn		.LongJmpNr
+L_LongLib_SubBYTE		.LongJmpNr
+
+L_Opcodes_DisassRange		.LongJmpNr
+L_DumpLib_MemAscDumpRange	.LongJmpNr
+L_DumpLib_MemScrDumpRange	.LongJmpNr
+L_DumpLib_AscDumpRange		.LongJmpNr
+L_DumpLib_ScrDumpRange		.LongJmpNr
+L_Opcodes_DisassScrl		.LongJmpNr
+L_DumpLib_MemAscDumpScrl	.LongJmpNr
+L_DumpLib_MemScrDumpScrl	.LongJmpNr
+L_DumpLib_AscDumpScrl		.LongJmpNr
+L_DumpLib_ScrDumpScrl		.LongJmpNr
+
+L_CmdRangeJumpIn0		.LongJmpNr
+L_CmdRangeNextAdrAdd		.LongJmpNr
+
+L_ComLib_PrinterFlush		.LongJmpNr
+L_ComLib_RedirOutputOn		.LongJmpNr
+L_ComLib_RedirOutputOff		.LongJmpNr
+L_ComLib_Screen2Ascii		.LongJmpNr
+
+L_NextCmdChar			.LongJmpNr
+L_LongLib_WORDAddBYTE		.LongJmpNr
+
+L_GetNum_GetHexNDig		.LongJmpNr
+L_GetNum_GetDezLong		.LongJmpNr
+
+L_ComLib_DezWordOut		.LongJmpNr
+
+L_OutputBuf_Init		.LongJmpNr
+L_OutputBuf_Clear		.LongJmpNr
+L_OutputBuf_Byte		.LongJmpNr
+L_OutputBuf_Flush		.LongJmpNr
+
+L_LongLib_SubLONGPtrFrom	.LongJmpNr
+L_LongLib_Inc			.LongJmpNr
+L_LongLib_CmpWithLONGPtr	.LongJmpNr
+
+L_InputBuf_Init			.LongJmpNr
+
+L_DebugExec			.LongJmpNr
+L_LongLib_LoadWORD		.LongJmpNr
+
+L_CopyVDCFontRts		.LongJmpNr
+
+L_LongLib_CmpWithWORDPtr	.LongJmpNr
+L_LongLib_StoreWORD		.LongJmpNr
+L_LongLib_WORDSubBYTE		.LongJmpNr
+
+L_YesNo				.LongJmpNr
+
+;--------------------------------------
+
+	.(
+
+ResetMenuZp_Cnt			= $a5	;BYTE
+ResetMenuZp_Col			= $a6	;BYTE
+
+ResetMenuZp_SBitCnt		= $a7	;BYTE
+ResetMenuZp_CBitCnt		= $a8	;BYTE
+ResetMenuZp_RowCnt		= $a9	;BYTE
+ResetMenuZp_ScreenPtr		= $aa	;WORD
+ResetMenuZp_ColorPtr		= $ac	;WORD
+ResetMenuZp_PackedPtr		= $ae	;WORD
+ResetMenuZp_ColCompIdx		= $b0	;BYTE
+ResetMenuZp_ColCnt		= $b1	;BYTE
+ResetMenuZp_SByte		= $b2	;BYTE
+ResetMenuZp_CByte		= $b3	;BYTE
+
+System_Type			= $b4	;BYTE
+System_Vdc			= $b5	;BYTE
+System_Surfer			= $b6	;BYTE
+System_Timing			= $b7	;BYTE
+
+ShowSystemZp_Zp0		= $b8	;BYTE
+
+ResetVIC:
+	.DB     $ff,$71,$00,$00,$00,$08,$00
+	.DB $14,$00,$01,$00,$00,$00,$00,$00
+	.DB $00,$00,$06,$0c,$0f,$04,$00
+ResetVIC_len = * - ResetVIC
+
+
+ResetVectors:
+	.DW ResetMenu_Irq, ResetMenu_Brk, ResetMenu_Nmi
+
+ResetMenu_Nmi = $fec1
+ResetMenu_Brk = $febc
+
+ResetMenu_Irq:
+	asl $d019
+	lda $d012
+	bmi ResetMenu_Irq0
+	lda #$5b
+	ldx #$fe
+	bne ResetMenu_Irq1
+ResetMenu_Irq0:
+	lda #$1b
+	ldx #$71
+ResetMenu_Irq1:
+	sta $d011
+	stx $d012
+	jmp $febc
+
+
+@0ResetMenu:
+	ldx #$7f
+	stx $dc0d
+	stx $dd0d
+	lda $dc0d
+	lda $dd0d
+
+	ldx #4
+	stx $288
+	inx
+ResetMenuB:
+	lda ResetVectors,x
+	sta $0314,x
+	dex
+	bpl ResetMenuB
+	stx $dc02
+
+;Akku must be >=$80 here
+	jsr $e51d
+
+	ldx #ResetVIC_len
+ResetMenuA:
+	lda ResetVIC-1,x
+	sta $d011-1,x
+	dex
+	bne ResetMenuA
+	stx $dc03
+
+ResetMenu0:
+	lda #$a0
+	sta $0400,x
+	sta $0418,x
+	lda #6
+	sta $d800,x
+	sta $d818,x
+	inx
+	bne ResetMenu0
+
+	lda #$c7
+	sta ResetMenuZp_Cnt
+	ldx #$64
+ResetMenu1:
+	lda Logo_Scr-1,x
+	jsr ResetMenuXX
+	dex
+	bne ResetMenu1
+
+ResetMenu2:
+	stx ResetMenuZp_Cnt
+	lda Logo_Col,x
+	sta ResetMenuZp_Col
+	ldx #7
+ResetMenu3:
+	lda #6
+	asl ResetMenuZp_Col
+	bcc ResetMenu4
+	lda #$0f
+ResetMenu4:
+	sta $d828,y
+	iny
+	dex
+	bpl ResetMenu3
+	ldx ResetMenuZp_Cnt
+	inx
+	cpx #$19
+	bcc ResetMenu2
+
+	jsr Reset_ShowMenu
+	jsr Detect_System
+
+	cli
+Reset_GetKeys:
+	jsr $ea87
+	lda $c6
+	beq Reset_GetKeys
+	jsr $e5b4
+
+	ldx #ResetMenu_Keys_len-1
+Reset_GetKeys0:
+	cmp ResetMenu_Keys,x
+	beq Reset_GetKeys1
+	dex
+	bpl Reset_GetKeys0
+	bmi Reset_GetKeys
+
+Reset_GetKeys1:
+	sei
+
+	ldy #0
+	lda #' '
+Reset_Cls:
+	sta $0518,y
+	sta $0600,y
+	sta $0700,y
+	iny
+	bne Reset_Cls
+
+	lda ResetMenu_JmpTabHi,x
+	pha
+	lda ResetMenu_JmpTabLo,x
+	pha
+	rts
+
+ResetMenu_Keys:
+	.DB $85				;F1
+	.DB $89				;F2
+	.DB $86				;F3
+;	.DB $87				;F5
+	.DB $8b				;F6
+	.DB $88				;F7
+	.DB $8c				;f8
+ResetMenu_Keys_len = * - ResetMenu_Keys
+
+ResetMenu_JmpTabLo:
+	.DB <(NormalReset_FillMemBD-1)	;F1
+	.DB <(NormalReset_FillMem00-1)	;F2
+	.DB <(NormalReset_Plain-1)	;F3
+;	.DB <(Toolkit-1)		;F5
+	.DB <(FastLoad_FillMemBD-1)	;F6
+	.DB <(FastLoad_Plain-1)		;F7
+	.DB <(FastLoad_FillMem00-1)	;f8
+
+ResetMenu_JmpTabHi:
+	.DB >(NormalReset_FillMemBD-1)	;F1
+	.DB >(NormalReset_FillMem00-1)	;F2
+	.DB >(NormalReset_Plain-1)	;F3
+;	.DB >(Toolkit-1)		;F5
+	.DB >(FastLoad_FillMemBD-1)	;F6
+	.DB >(FastLoad_Plain-1)		;F7
+	.DB >(FastLoad_FillMem00-1)	;f8
+
+
+NormalReset_FillMemBD:
+	lda #$bd
+	.DB $2c
+NormalReset_FillMem00:
+	lda #$00
+	jsr Reset_FillMem
+NormalReset_Plain:
+	ldx #SwitchOff_len-1
+NormalReset0:
+	lda SwitchOff,x
+	sta SwitchOff_Org,x
+	dex
+	bpl NormalReset0
+	jmp SwitchOff_Org
+
+SwitchOff:
+    .PSEUDOPC 2
+SwitchOff_Org:
+	lda #%00000110
+	sta $de00
+	ldx #0
+SwitchOff_Dl0:
+	inx
+	bne SwitchOff_Dl0
+	jmp $fce2
+    .REALPC
+SwitchOff_len = * - SwitchOff
+
+
+FastLoad_FillMemBD:
+	lda #$bd
+	.DB $2c
+FastLoad_FillMem00:
+	lda #$00
+	jsr Reset_FillMem
+FastLoad_Plain:
+	sei
+	rts
+
+;Macht auf einem C128 Probleme, da anscheinend doch etwas in die I/O Regs kommt.
+;Einfach ins Ram damit
+Reset_FillMem:
+	pha
+	ldx #ResetFill_len-1
+Reset_FillMem0:
+	lda ResetFill_Org,x
+	sta ResetFill,x
+	dex
+	bpl Reset_FillMem0
+	pla
+	jmp ResetFill
+
+
+ResetFill_Org:
+    .PSEUDOPC 2
+ResetFill:
+	ldy #%00000010
+	sty $de00
+	ldy #$34
+	sty 1
+	ldy #0
+Reset_Fill0:
+	sta $0800,y
+	iny
+	bne Reset_Fill0
+	inc Reset_Fill0+2
+	bne Reset_Fill0
+	lda #$37
+	sta 1
+	lda #%00000000
+	sta $de00
+	ldy #0
+Reset_FillDl0:
+	iny
+	bne Reset_FillDl0
+	rts
+    .REALPC
+ResetFill_len = * - ResetFill_Org
+
+
+ResetMenuXX:
+	pha
+	jsr ResetMenuYY
+	pla
+	lsr
+	lsr
+	lsr
+	lsr
+ResetMenuYY:
+	and #$0f
+	tay
+	lda Logo_Tiles,y
+	ldy ResetMenuZp_Cnt
+	sta $0428,y
+	dec ResetMenuZp_Cnt
+	rts
+
+
+Reset_ShowMenu:
+	ldx #8
+Reset_ShowMenu0:
+	lda Reset_ShowMenuTab,x
+	sta ResetMenuZp_SBitCnt,x
+	dex
+	bpl Reset_ShowMenu0
+
+Reset_ShowMenu1:
+	ldy #0
+	lda #28
+	sta ResetMenuZp_ColCnt
+Reset_ShowMenu2:
+	tya
+	ldx #5
+Reset_ShowMenu3:
+	dec ResetMenuZp_SBitCnt
+	bne Reset_ShowMenu4
+	pha
+	lda (ResetMenuZp_PackedPtr),y
+	sta ResetMenuZp_SByte
+	lda #8
+	sta ResetMenuZp_SBitCnt
+	pla
+	inc ResetMenuZp_PackedPtr
+	bne Reset_ShowMenu4
+	inc ResetMenuZp_PackedPtr+1
+Reset_ShowMenu4:
+	lsr ResetMenuZp_SByte
+	rol
+	dex
+	bpl Reset_ShowMenu3
+	ora #$40
+	sta (ResetMenuZp_ScreenPtr),y
+
+	dec ResetMenuZp_CBitCnt
+	bne Reset_ShowMenu7
+	ldx ResetMenuZp_ColCompIdx
+	lda Menu_Col,x
+	sta ResetMenuZp_CByte
+	lda #8
+	sta ResetMenuZp_CBitCnt
+	inc ResetMenuZp_ColCompIdx
+Reset_ShowMenu7:
+	lsr ResetMenuZp_CByte
+	lda #$0e
+	bcc Reset_ShowMenu8
+	lda #$01
+Reset_ShowMenu8:
+	sta (ResetMenuZp_ColorPtr),y
+
+	iny
+	dec ResetMenuZp_ColCnt
+	bne Reset_ShowMenu5
+	ldy #40-28+1
+Reset_ShowMenu5:
+	tya
+	clc
+	adc ResetMenuZp_ScreenPtr
+	sta ResetMenuZp_ScreenPtr
+	bcc Reset_ShowMenu6
+	inc ResetMenuZp_ScreenPtr+1
+Reset_ShowMenu6:
+	tya
+	clc
+	adc ResetMenuZp_ColorPtr
+	sta ResetMenuZp_ColorPtr
+	bcc Reset_ShowMenu9
+	inc ResetMenuZp_ColorPtr+1
+Reset_ShowMenu9:
+	dey
+	beq Reset_ShowMenu2
+
+	dec ResetMenuZp_RowCnt
+	bne Reset_ShowMenu1
+	rts
+
+Reset_ShowMenuTab:
+	.DB $01		;ResetMenuZp_SBitCnt
+	.DB $01		;ResetMenuZp_CBitCnt
+	.DB 13		;ResetMenuZp_RowCnt
+	.DW $0546	;ResetMenuZp_ScreenPtr
+	.DW $d946	;ResetMenuZp_ColorPtr
+	.DW Menu_Scr	;ResetMenuZp_PackedPtr
+	.DB 0		;ResetMenuZp_ColCompIdx
+
+
+Detect_System:
+	ldx #3
+	lda #0
+Detect_System0:
+	sta System_Type,x
+	dex
+	bpl Detect_System0
+
+;look for VDC register
+	ldx #0
+	stx $d600
+	stx $d400
+Detect_System1:
+	bit $d600
+	bmi Detect_System2
+	inx
+	bne Detect_System1
+	beq Detect_System3
+
+Detect_System2:
+	inc System_Type
+;look for VDC size
+	lda #>$3fff
+	ldy #<$3fff
+	jsr VDC_Write12
+	ldx #$1f
+	lda #$02
+	jsr VDC_Write
+	lda #>$ffff
+	ldy #<$ffff
+	jsr VDC_Write12
+	ldx #$1f
+	lda #$01
+	jsr VDC_Write
+	lda #>$3fff
+	ldy #<$3fff
+	jsr VDC_Write12
+	ldx #$1f
+	jsr VDC_Read
+	sta System_Vdc
+Detect_System3:
+
+;look for silversurfer
+	lda $de01
+	ora #%00000001
+	sta $de01
+
+	ldx #0
+Detect_System4:
+	stx Surf_SCR
+	cpx Surf_SCR
+	bne Detect_System5
+	inx
+	bne Detect_System4
+	inc System_Surfer
+Detect_System5:
+
+DetectPalNtsc0:
+	lda $d011
+	bpl DetectPalNtsc0
+DetectPalNtsc1:
+	lda $d011
+	bpl DetectPalNtsc2
+	lda $d012
+	cmp #$37
+	bne DetectPalNtsc1
+	inc System_Timing
+DetectPalNtsc2:
+
+
+;TODO - look for reu
+;sizes in K can be
+;128, 256, 512, 1024, 2048, 4096, 8192 or 16384
+
+
+	ldx #$27
+Show_System0:
+	lda #$a0
+	sta $07c0,x
+	lda #$0b
+	sta $dbc0,x
+	dex
+	bpl Show_System0
+
+	ldx #3
+Show_System1:
+	lda ShowSystemText0,x
+	sta $07c0,x
+	dex
+	bpl Show_System1
+
+	lda #5
+	ldx System_Type
+	jsr ShowSystem_MakeOffset
+Show_System2:
+	lda ShowSystemText1,x
+	sta $07c4,y
+	dex
+	dey
+	bpl Show_System2
+
+	lda #5
+	ldx System_Timing
+	jsr ShowSystem_MakeOffset
+Show_System3:
+	lda ShowSystemText2,x
+	sta $07c9,y
+	dex
+	dey
+	bpl Show_System3
+
+	lda #7
+	ldx System_Vdc
+	jsr ShowSystem_MakeOffset
+Show_System4:
+	lda ShowSystemText3,x
+	sta $07cf,y
+	dex
+	dey
+	bpl Show_System4
+
+	lda #9
+	ldx System_Surfer
+	jsr ShowSystem_MakeOffset
+Show_System5:
+	lda ShowSystemText4,x
+	sta $07df,y
+	dex
+	dey
+	bpl Show_System5
+
+	rts
+
+ShowSystem_MakeOffset:
+	sta ShowSystemZp_Zp0
+	lda #0
+	clc
+ShowSystem_MakeOffset0:
+	adc ShowSystemZp_Zp0
+	dex
+	bpl ShowSystem_MakeOffset0
+	tax
+	dex
+	ldy ShowSystemZp_Zp0
+	dey
+	rts
+
+VDC_Write12:
+	ldx #$12
+	jsr VDC_Write
+	tya
+	inx
+VDC_Write:
+	stx $d600
+VDC_Out:
+	bit $d600
+	bpl VDC_Out
+	sta $d601
+	rts
+
+VDC_Read:
+	stx $d600
+VDC_Get:
+	bit $d600
+	bpl VDC_Get
+	lda $d601
+	rts
+
+ShowSystemText0:
+	.DB $93,$99,$93,$ba			;"sys"
+
+ShowSystemText1:
+	.DB $e0,$c3,$f6,$f4,$e0			;" c64 "
+	.DB $e0,$f1,$f2,$f8,$e0			;" 128 "
+
+ShowSystemText2:
+	.DB $ce,$d4,$d3,$c3,$e0			;"ntsc "
+	.DB $e0,$d0,$c1,$cc,$e0			;" pal "
+
+ShowSystemText3:
+	.DB $8e,$8f,$a0,$96,$84,$83,$a0		;"no vdc "
+	.DB $e0,$d6,$c4,$c3,$f1,$f6,$e0		;" vdc16 "
+	.DB $e0,$d6,$c4,$c3,$f6,$f4,$e0		;" vdc64 "
+
+ShowSystemText4:
+	.DB $8e,$8f,$a0,$93,$95,$92,$86,$85,$92	;"no surfer"
+	.DB $e0,$d3,$d5,$d2,$c6,$c5,$d2,$e0,$a0	;" surfer  "
+#include "bootlogo.src"
+
+#include "resetmenu.src"
+
+	.)
+
+	.(
+
+#include "sub_zero.src"
+
+;--------------------------------------
+;Die folgenden Routinen laufen, wenn Bank0 ab $e000 eingeblendet wird
+	.PhaseToHighRom
+;--------------------------------------
+
+TamaIsTurtleSoup:
+
+	lda #%00000011
+	;no need for Bouncer here as IRQ is masked
+	sta $de00
+	ldx #ToggleEGDelay
+Switcher0:
+	inx
+	bne Switcher0
+
+	jmp Freeze_Beach
+
+;--------------------------------------
+	.REALPC
+;--------------------------------------
+
+Freeze_Beach:
+	lda #$27
+	sta 1
+
+	lda #%00000000
+#ifdef __FASTFREEZE__
+	sta Bouncer			;Init of Bouncer
+#endif
+	sta $de00
+#ifdef __FASTFREEZE__
+	sta DeBounce_Cnt
+#endif
+	ldx #ToggleEGDelay
+Switcher1:
+	inx
+	bne Switcher1
+
+	jsr InitCI
+	lda #<System_IRQ
+	sta $0314
+	lda #>System_IRQ
+	sta $0315
+	lda #<System_BRK
+	sta $0316
+	lda #>System_BRK
+	sta $0317
+	lda #<System_NMI
+	sta $0318
+	lda #>System_NMI
+	sta $0319
+
+;***DEBUG***
+/*
+	sei
+	ldx #testcode_len-1
+copytest:
+	lda testcode_org,x
+	sta $0100,x
+	dex
+	bpl copytest
+
+	jmp $0100
+
+testcode_org:
+    .PSEUDOPC($0100)
+	lda #$03
+	sta $de00
+
+	ldx #0
+DL0:
+	inx
+	bne DL0
+
+	brk
+	.DB $ea
+
+	jmp Continue
+    .REALPC
+testcode_len = * - testcode_org
+
+Continue:
+*/
+;***/DEBUG***
+
+#ifdef __MACH_PIEP__
+	lda #9
+	sta $0409
+#endif
+	ldy #0
+	.LongJsr(L_ComLib_SetVideoMode)
+
+#ifdef __MACH_PIEP__
+	lda #$a
+	sta $040a
+#endif
+
+;--------------------------------------
+
+	lda #OptionFlag_FollowXep | OptionFlag_Verbose
+	sta OptionFlags
+
+	lda #8
+	sta FileZp_Device
+
+	lda SubZeroZp_Regs+SubZero_Status
+	sta Intern_MX
+
+;--------------------------------------
+
+	lda #15
+	sta KeyBZp_InitRepeatVal
+	lda #255-2
+	sta KeyBZp_RepeatVal
+	lda #0
+	sta FKeysBSS_MacroStackPos
+
+;	sta InputBufZp_Dev
+;	sta OutputBufZp_Dev
+	cli
+
+;--------------------------------------
+
+	lda Palette+Palette_Default
+	.LongJsr(L_ComLib_SetCol)
+
+	.ShowMsg(Msg_Hallo)
+
+	.ShowMsg(Msg_CR)
+	.ShowMsg(Msg_CR)
+
+	.LongJsr(L_ShowRegs)
+
+/*
+	lda InitStatus
+	lsr
+	bcc InitStatus_CodeOk
+	.ShowErr(Err_DreaMonCheckSum)
+InitStatus_CodeOk:
+	lsr
+	bcc InitStatus_FPOk
+	.ShowErr(Err_FrozenByUnknownFP)
+InitStatus_FPOk:
+	lsr
+	bcc InitStatus_StrBufOk
+	.ShowErr(Err_StrBufCheckSum)
+InitStatus_StrBufOk:
+*/
+	lda SubZeroZp_Regs+SubZero_PC
+	ldx SubZeroZp_Regs+SubZero_PC+1
+	ldy #0
+	.LongJsr(L_LongLib_LoadAXY)
+	ldx #Adress
+	.LongJsr(L_LongLib_StorePtr)
+
+;--------------------------------------
+
+InputCmd:
+	lda Palette+Palette_Default
+	.LongJsr(L_ComLib_SetCol)
+InputCmdS:
+	.LongJsr(L_ComLibVect_CursorOn)
+InputCmd0:
+	.LongJsr(L_KeyB_GetKey)
+	bmi InputCmd7
+	bvc InputCmd0
+	pha
+	.LongJsr(L_ComLibVect_CursorOff)
+	pla
+	
+	cmp #Key_CR
+	beq InputCmd5
+
+	.LongJsr(L_ComLib_PrintChar)
+	jmp InputCmdS
+InputCmd7:
+	pha
+	.LongJsr(L_ComLibVect_CursorOff)
+	pla
+	cmp #Key_CDo
+	bne InputCmd1
+	ldy ComLibZp_CursorYPos
+	iny
+	cpy ComLibZp_CursorMaxYPos
+	bcc InputCmd4
+	ldy #RangeFlag_SingleLine
+	bne InputCmd2
+InputCmd1:
+	cmp #Key_CUp
+	bne InputCmd4
+	ldy ComLibZp_CursorYPos
+	bne InputCmd4
+	ldy #RangeFlag_SingleLine+RangeFlag_Up
+InputCmd2:
+	sty RangeZp_Flags
+	pha
+	.LongJsr(L_ComLib_GrabScrLine)
+	bcs InputCmd6
+	jsr Spaces
+	ldx #4
+InputCmd8:
+	cmp ExecCmdKeys,x
+	beq InputCmd9
+	dex
+	bpl InputCmd8
+	bmi InputCmd6
+InputCmd9:
+	txa
+	adc #(CmdJumpTableScrlEnd-CmdJumpTableScrl)-1	; '-1' da das Carry Flag hier immer gesetzt ist (cmp, beq)
+	sta RangeZp_Cmd
+	jsr GetAdress
+	bcs InputCmd6
+	pla
+	.LongJsr(L_CmdRangeJumpIn0)
+	jmp InputCmd
+InputCmd6:
+	pla
+InputCmd4:
+	.LongJsr(L_ComLib_PrintSpiChar)
+	jmp InputCmd
+
+InputCmd5:
+	pha
+	.LongJsr(L_ComLib_GrabScrLine)
+	pla
+	bcs InputCmd4
+	.LongJsr(L_ComLib_GetLineXPos)
+	sta CmdCursorXPos
+	jsr ExecCmd
+	jmp InputCmd
+
+;--------------------------------------
+
+ExecCmd:
+	jsr Spaces
+	.LongJsr(L_ComLib_ScrCode2Lower)
+	ldx #ExecCmdKeysEnd-ExecCmdKeys-1
+ExecCmd0:
+	cmp ExecCmdKeys,x
+	beq ExecCmd2
+	dex
+	bpl ExecCmd0
+	ldx #4
+ExecCmd1:
+	cmp ExecRangeKeys,x
+	beq ExecCmd3
+	dex
+	bpl ExecCmd1
+	rts
+ExecCmd2:
+	lda ExecJumpTab,x
+	jmp LongJumpParam
+ExecCmd3:
+	lda #L_CmdRange
+	jmp LongJumpParam
+
+
+;--------------------------------------
+
+@0FPoint_Manage:
+@0Prefs:
+
+
+LazyBaccy:
+	inc $d020
+	jmp LazyBaccy
+
+
+ExecJumpTab:
+	.DB L_ReAss,			L_DumpLib_ReMemAscDump,		L_DumpLib_ReMemScrDump
+	.DB L_DumpLib_ReAscDump,	L_DumpLib_ReScrDump
+	.DB L_AreaCompare,		L_AreaFill,			L_AreaHunt,		L_AreaOHunt
+	.DB L_AreaTransfer,		L_AreaSwap
+	.DB L_ExecExit,			L_FileLib_DCmd,			L_Go,			L_Ass
+	.DB L_Load,			L_Verify,			L_Save
+	.DB L_ShowRegs
+	.DB L_FPoint_Manage
+	.DB L_GetNum_EvalNumber,	L_Label_Define
+	.DB L_Prefs
+#if DREAMON_DEBUG_VERSION
+	.DB L_DebugExec
+	.DB L_TestTrace
+#endif
+
+ExecCmdKeys:
+	.SCR ">:;"
+	.SCR ".,"
+	.SCR "cfho"
+	.SCR "tw"
+	.SCR "x@ga"
+	.SCR "lvs"
+	.SCR "r"
+	.SCR "z"
+	.SCR "?",$1c
+	.SCR "p"
+#if DREAMON_DEBUG_VERSION
+	.SCR "y"
+	.SCR "k"
+#endif
+ExecCmdKeysEnd:
+
+ExecRangeKeys:
+	.SCR "dmnij"		;a copy of this tab is in bank 2 for the cmdrange routine
+
+;--------------------------------------
+
+#if DREAMON_DEBUG_VERSION
+@0DebugExec:
+	jsr NextSpaces
+	bcs DebugExec_Err
+	.LongJsr(L_GetNum_GetHexLong)
+	bcs DebugExec_Err
+	cmp #2
+	bcs DebugExec_Err
+	jsr Spaces
+	bcs DebugExec0
+DebugExec_Err:
+	sec
+	rts
+DebugExec0:
+	.ShowMsg(Msg_CR)
+	jmp (LongLibZp_Akku0)
+#endif
+
+
+/*
+ExecJumpTabLo:
+;	.DB <ReAss,			<DumpLib_ReMemAscDump,		<DumpLib_ReMemScrDump
+;	.DB <DumpLib_ReAscDump,		<DumpLib_ReScrDump
+	.DB <AreaCompare,		<AreaFill,			<AreaHunt,		<AreaOHunt
+	.DB <AreaTransfer,		<AreaSwap
+	.DB <ExecExit,			<FileLib_DCmd,			<Go,			<Ass
+	.DB <Load,			<Verify,			<Save
+;	.DB <ShowRegs,			<SetRegsA,			<SetRegsB
+	.DB <FPoint_Manage
+	.DB <GetNum_EvalNumber,		<Label_Define
+	.DB <Prefs
+#if DREAMON_DEBUG_VERSION
+	.DB <TestTrace
+#endif
+
+ExecJumpTabHi:
+;	.DB >ReAss,			>DumpLib_ReMemAscDump,		>DumpLib_ReMemScrDump
+;	.DB >DumpLib_ReAscDump,		>DumpLib_ReScrDump
+	.DB >AreaCompare,		>AreaFill,			>AreaHunt,		>AreaOHunt
+	.DB >AreaTransfer,		>AreaSwap
+	.DB >ExecExit,			>FileLib_DCmd,			>Go,			>Ass
+	.DB >Load,			>Verify,			>Save
+;	.DB >ShowRegs,			>SetRegsA,			>SetRegsB
+	.DB >FPoint_Manage
+	.DB >GetNum_EvalNumber,		>Label_Define
+	.DB >Prefs
+#if DREAMON_DEBUG_VERSION
+	.DB >TestTrace
+#endif
+*/
+
+;--------------------------------------
+; Init CIAs and IRQ
+;--------------------------------------
+
+InitCI:
+	lda #0
+	sta $dc03
+
+	lda #$ff	;wichtig fuer lda #$7f unten!
+	sta $dc02
+	lsr		;lda #$7f
+	sta $dc0d
+	lda $dc0d
+
+;Init IRQ (KeyB, CrsrBlink)
+	lda #$10
+	sta $d012
+	lda $d011
+	and #$7f
+	sta $d011
+	lda #1
+	sta $d01a
+	lda $d019
+	sta $d019
+
+	rts
+
+;--------------------------------------
+
+@0ExecExit:
+	jsr NextSpaces
+	bcs RestoreSysMon
+	.LongJsr(L_ComLib_ScrCode2Lower)
+	cmp #'t'
+	beq Trace
+ExitErr:
+	sec
+	rts
+
+
+Trace:
+/*
+	jsr Opcodes_Trace
+	lda #FPointTraceTyp
+	sta FPointZp_Act+FPE_Typ
+	ldx #OpcodeZp_Adr
+	jsr FPoint_CreateNew
+	bcc RestoreSysMon
+*/
+	.ShowErr(Err_TooManyFPoints)
+	rts
+
+
+@0Go:
+	jsr NextSpaces
+	bcs GoErr
+	.LongJsr(L_GetNum_GetHexLong)
+	bcs GoErr
+	tax
+	jsr Spaces
+	bcs Go0
+GoErr:
+	sec
+	rts
+Go0:
+	cpx #2
+	bcc Go1
+	lda SubZeroZp_Regs+SubZero_01
+	and #%00101000
+	sta SubZeroZp_Regs+SubZero_PC
+	lda LongLibZp_Akku0+2
+	and #%00000111
+	ora SubZeroZp_Regs+SubZero_PC
+	sta SubZeroZp_Regs+SubZero_01
+Go1:
+	lda LongLibZp_Akku0
+	sta SubZeroZp_Regs+SubZero_PC
+	lda LongLibZp_Akku0+1
+	sta SubZeroZp_Regs+SubZero_PC+1
+
+RestoreSysMon:
+/*
+	sei
+	jsr MkStrBufCheckSum			;M,XSize -> 8, DataBank -> 0
+	rep #%00100000
+    MSize_16
+	lda StringBufZp_TmpLen
+	sta CheckSum_StringBuf
+	sep #%00100000
+    MSize_8
+	cli
+*/
+
+RestoreSys:
+	sei
+
+	lda $dd0d				;Release NMI-Lock
+
+	ldx #RestoreSysSwap_Len-1
+RestoreSysSwap_Copy:
+	lda RestoreSysSwap_Org,x
+	sta RestoreSysSwap,x
+	dex
+	bpl RestoreSysSwap_Copy
+	jmp RestoreSysSwap
+
+RestoreSysSwap_Org:
+    .PSEUDOPC $100
+RestoreSysSwap:
+	ldx #%00100011			;switch Ram at $8000 to Rom
+	;no need for Bouncer here as IRQ is masked
+	stx $de00
+RestoreSysSwap_Dl0:
+	inx
+	bne RestoreSysSwap_Dl0
+	jmp RestoreSys0
+    .REALPC
+RestoreSysSwap_Len=* - RestoreSysSwap_Org
+
+;--------------------------------------
+;Die folgenden Routinen laufen, wenn Bank0 ab $e000 eingeblendet wird
+	.PhaseToHighRom
+;--------------------------------------
+
+RestoreSys0:
+/*
+	jsr FPoint_RestoreFreeze
+
+	ldx #14			;Start, FKeysEnd, LabelsEnd, TempEnd, End
+CopyZpToStringBuf:
+	lda StringBufZp_Start,x
+	sta StringBufAbs,x
+	dex
+	bpl CopyZpToStringBuf
+*/
+/*
+	lda FPointZp_Cnt
+	sta FPointAbsCnt
+	lda FPointZp_Cnt+1
+	sta FPointAbsCnt+1
+*/
+
+;copy __BSSSaveMe to CRT Ram
+	ldx #__BSSSaveMeEnd-__BSSSaveMeStart
+CopyPages6:
+	lda __BSSSaveMeStart-1,x
+	sta SubZero_BSSSaved-1,x
+	dex
+	bne CopyPages6
+
+	lda SubZero_SidVolume
+	sta $d418
+
+	ldx #0
+RestoreSys_D8:
+	lda SubZero_Col,x
+	sta $d800,x
+	lda SubZero_Col+$0100,x
+	sta $d900,x
+	lda SubZero_Col+$0200,x
+	sta $da00,x
+	lda SubZero_Col+$0300,x
+	sta $db00,x
+	inx
+	bne RestoreSys_D8
+
+	lda SubZeroZp_Regs+SubZero_01
+	sta SubZero_LoMem+1
+	lda SubZeroZp_Regs+SubZero_PC
+	sta AbsSubZero_PC
+	lda SubZeroZp_Regs+SubZero_PC+1
+	sta AbsSubZero_PC+1
+	lda SubZeroZp_Regs+SubZero_Status
+	sta AbsSubZero_Status
+	lda SubZeroZp_Regs+SubZero_A
+	sta AbsSubZero_A
+	lda SubZeroZp_Regs+SubZero_Y
+	sta AbsSubZero_Y
+	lda SubZeroZp_Regs+SubZero_X
+	sta AbsSubZero_X
+
+	ldx SubZeroZp_Regs+SubZero_StackPtr
+	txs
+
+;restore saved Pages from CRT Ram to Bank 0
+	ldy #0
+	sty Adress
+	sty Adress+2
+	lda #1
+	sta Adress+1
+	lda #>(SubZero_LoMem+$0100)
+	sta Adress+3
+	ldx #>(__BSSSaveMeEnd-$0100)
+CopyPages8:
+	lda (Adress+2),y
+	sta (Adress),y
+	iny
+	bne CopyPages8
+	inc Adress+1
+	inc Adress+3
+	dex
+	bne CopyPages8
+	ldy #<(__BSSSaveMeEnd)
+CopyPages9:
+	lda CopyPagesAdr1,y
+	sta CopyPagesAdr0,y
+	dey
+	bne CopyPages9
+
+;Copy LoMem from $0002 - $07ff
+;!!!!!!!!!!!!!!!!!!!
+;!!! NOT 0 and 1 !!!
+;!!!!!!!!!!!!!!!!!!!
+	ldx #$fe
+RestoreSys_Zp:
+	lda SubZero_LoMem+1,x
+	sta $01,x
+	dex
+	bne RestoreSys_Zp
+
+	stx $dc0f				;bit 7 = 0 -> write to rtc regs set time (instead of alarmtime)
+	stx $dd0f
+
+	ldx #3
+RestoreCIAptr:
+	lda SubZero_CIA1,x			;restore the port settings
+	sta $dc00,x
+	lda SubZero_CIA2,x
+	sta $dd00,x
+	lda SubZero_CIA1TimerAPos,x		;restore the timer positions
+	sta $dc04,x
+	lda SubZero_CIA2TimerAPos,x
+	sta $dd04,x
+	lda SubZero_CIA1+8,x			;restorte the rtc time, *** hours first ***
+	sta $dc08,x
+	lda SubZero_CIA2+8,x
+	sta $dd08,x
+	dex
+	bpl RestoreCIAptr
+	lda #$10				;strobe transfers the latch to the timer
+	sta $dc0e
+	sta $dc0f
+	sta $dd0e
+	sta $dd0f
+
+	ldx #4
+RestoreCIATLatch:
+	lda SubZero_CIA1+4-1,x			;restore the timer latch
+	sta $dc04-1,x
+	lda SubZero_CIA2+4-1,x
+	sta $dd04-1,x
+	dex
+	bne RestoreCIATLatch
+
+	lda $dc0d
+	lda $dd0d
+	lda SubZero_CIA1+$0d
+	ora #$80
+	sta $dc0d
+	lda SubZero_CIA2+$0d
+	ora #$80
+	sta $dd0d
+
+	stx SubZero_VIC+$19			;clear the irq flags (x is zero here)
+	lda SubZero_Raster
+	sta SubZero_VIC+$12
+	lda SubZero_Raster+1
+	sta SubZero_VIC+$11
+
+	ldx #$2f		;debug! was 30
+RestoreSys_Vic:
+	lda SubZero_VIC,x
+	sta $d000,x
+	dex
+	bpl RestoreSys_Vic
+
+	lda AbsSubZero_PC+1
+	pha
+	lda AbsSubZero_PC
+	pha
+	lda AbsSubZero_Status
+	pha
+	lda AbsSubZero_A
+	pha
+
+	tsx
+	ldy #Restore_OnStackLen-1
+Restore_CopyOnStack:
+	lda Restore_OnStack,y
+	sta $0100,x
+	dex
+	dey
+	bpl Restore_CopyOnStack
+
+	inx
+	stx AbsSubZero_PC
+	lda #1
+	sta AbsSubZero_PC+1
+
+	lda AbsSubZero_Y
+	tay
+	lda AbsSubZero_X
+	tax
+	lda SubZero_LoMem
+	sta 0
+	lda SubZero_LoMem+1
+	sta 1
+	lda SubZero_CIA1+$0e
+	sta $dc0e
+	lda SubZero_CIA1+$0f
+	sta $dc0f
+	lda SubZero_CIA2+$0e
+	sta $dd0e
+	lda SubZero_CIA2+$0f
+	sta $dd0f
+	lda #%00000010 | BasicMode
+
+	jmp (AbsSubZero_PC)
+
+Restore_OnStack:
+	;no need for Bouncer here as IRQ is masked
+	sta $de00
+	pla
+	rti
+Restore_OnStackLen=*-Restore_OnStack
+
+;--------------------------------------
+
+#ifdef __FUNSTUFF__
+
+@0FunKick_InitE0:
+	ldx #0
+	stx $0400
+	ldy #$1f
+LamerTrap2:
+	lda $a137,x
+	cmp $b00e,y
+	bne LamerTrap3
+	inc $0400
+LamerTrap3:
+	inx
+	dey
+	bpl LamerTrap2
+
+	lda $0400
+	cmp #$10
+	bcs LamerTrap4
+	rts
+
+LamerTrap4:
+	ldx #$7f
+	stx $d011
+	inx
+	stx $d020
+	stx $d021
+	lda #$16
+	sta $d018
+	lda #3
+	sta $dd00
+	lda #8
+	sta $d016
+	ldx #FunScreen_Len-1
+FunScreen0:
+	lda FunScreen_Org,x
+	sta $0100,x
+	dex
+	bpl FunScreen0
+	jmp $100
+
+FunScreen_Org:
+    .PSEUDOPC $100
+	ldx #%00000000
+	stx $de00
+	ldy #0
+	lda #1
+FunScreen1a:
+	sta $d800,x
+	sta $d900,x
+	sta $da00,x
+	sta $db00,x
+	inx
+	bne FunScreen1a
+FunScreen1b:
+	lda FunScreen,x
+	sta $0400,x
+	lda FunScreen+$100,x
+	sta $0500,x
+	lda FunScreen+$200,x
+	sta $0600,x
+	lda FunScreen+$300,x
+	sta $0700,x
+	inx
+	bne FunScreen1b
+	lda #$1b
+	sta $d011
+	txa
+
+FunScreen2:
+	ldx #$8a
+FunScreen3:
+	sta $db39,x
+	dex
+	bne FunScreen3
+
+FunScreen4:
+	bit $d011
+	bpl FunScreen4
+FunScreen5:
+	bit $d011
+	bmi FunScreen5
+
+	dey
+	bne FunScreen4
+	eor #1
+	ldy #$10
+	bne FunScreen2
+    .REALPC
+FunScreen_Len = * - FunScreen_Org
+
+#endif
+
+;--------------------------------------
+	.REALPC
+;--------------------------------------
+
+@0GetAdress:
+	.LongJsr(L_NextCmdChar)
+	bcs GetAdressErr
+	jsr Spaces
+	bcs GetAdressErr
+	.LongJsr(L_GetNum_GetHexLong)
+	bcs GetAdressErr
+	ldx #Adress
+	.LongJsr(L_LongLib_StorePtr)
+	clc
+GetAdressErr:
+	rts
+
+;--------------------------------------
+
+#include "file_lib.src"
+
+;#include "fpoint.src"
+;--------------------------------------
+
+#ifdef __FUNSTUFF__
+
+@0FunScreen:
+#include "fun_screen.src"
+
+#endif
+
+;--------------------------------------
+	.PhaseToHighRom
+;--------------------------------------
+
+#print "Bank0 bytes left:", $fe10-*
+	.DSB $fe10-*
+
+	.(
+    .PSEUDOPC($de10)
+
+	php
+	sei
+	pha
+	lda #%00000000	;No BasicMode here. Warp to Bank 0
+	sta $de00
+	txa
+	ldx #ToggleEGDelay
+SoftDelay:
+	inx
+	bne SoftDelay
+	tax
+	jmp Freeze_Soft0
+
+    .REALPC
+	.)
+
+;--------------------------------------
+
+#print $fffa-*
+	.DSB $fffa-*
+
+	.DW Bank0_Freeze_n				;NMI (hier kommt der Freezer an)
+	.DW Bank0_Freeze_r				;Reset
+	.DW Bank0_Freeze_i				;IRQ
+
+#if *!=$10000
+#error "Bank0 ist nicht $2000 bytes lang"
+#endif
+
+;--------------------------------------
+	.REALPC
+;--------------------------------------
+
+	.)
+
+;--------------------------------------
+; Bank 0 Ende
+;--------------------------------------
+
+
+
+;--------------------------------------
+; Bank 1 Start
+;--------------------------------------
+
+	.segment "bank1"
+	*=$8000
+
+	.(
+
+#include "out_buf.src"
+#include "get_num.src"
+#include "area.src"
+#include "dump.src"
+
+#include "opcodes.src"
+#include "long_lib.src"
+
+#include "mapping.src"
+
+
+
+@0NextCmdChar:
+	sty NextCmdCharZp_Y
+	ldy CmdLinePos
+	iny
+	cpy CmdLineLen
+	beq NextCmdChar0
+	bcs NextCmdChar1
+	lda CmdLine,y
+NextCmdChar0:
+	sty CmdLinePos
+NextCmdChar1:
+	ldy NextCmdCharZp_Y
+	rts
+
+
+
+#print "Bank1 bytes left:", $a000-*
+	.DSB $a000-*
+
+#if *!=$a000
+#error "Bank1 ist nicht $2000 bytes lang"
+#endif
+
+	.)
+
+;--------------------------------------
+; Bank 1 Ende
+;--------------------------------------
+
+
+;--------------------------------------
+; Bank 2 Start
+;--------------------------------------
+
+	.segment "bank2"
+	*=$8000
+
+	.(
+
+#include "com_lib.src"
+#include "com_lib_vic.src"
+#include "com_lib_vdc25.src"
+
+#include "messages.src"
+#include "message_texts.src"
+
+#include "keyb.src"
+#include "fkeys.src"
+
+#include "cmd_range.src"
+#include "regs.src"
+
+/*
+#include "file_lib.src"
+#include "fpoint.src"
+
+#include "relocate.src"
+#include "prefs.src"
+*/
+
+@0YesNo:
+	.ShowMsg(Msg_YesNo)
+	lda #1
+	sta YesNoZp1
+YesNo0:
+	.LongJsr(L_ComLibVect_CursorOn)
+YesNo1:
+	jsr KeyB_GetKey
+	bmi YesNo1
+	bvc YesNo1
+	cmp #Key_CR
+	beq YesNo3
+	sta YesNoZp0
+	.LongJsr(L_ComLib_ScrCode2Lower)
+	ldx #0
+	cmp #'y'
+	beq YesNo2
+	inx
+	cmp #'n'
+	bne YesNo1
+YesNo2:
+	stx YesNoZp1
+	.LongJsr(L_ComLibVect_CursorOff)
+	lda YesNoZp0
+	.LongJsr(L_ComLib_PrintChar)
+	lda #Key_CLe
+	.LongJsr(L_ComLib_PrintSpiChar)
+	jmp YesNo0
+YesNo3:
+	.LongJsr(L_ComLibVect_CursorOff)
+	.ShowMsg(Msg_CR)
+	lda YesNoZp1
+	lsr
+	rts
+
+
+#print "Bank2 bytes left:", $a000-*
+	.DSB $a000-*
+
+#if *!=$a000
+#error "Bank2 ist nicht $2000 bytes lang"
+#endif
+
+	.)
+
+;--------------------------------------
+; Bank 2 Ende
+;--------------------------------------
+
+
+
+
+
+;--------------------------------------
+; Bank 3 Start
+;--------------------------------------
+
+	.segment "bank3"
+	*=$8000
+
+	.(
+
+@0CopyVDCFontRts:
+	sei
+	ldx #ComLibZp_StringPtr
+	.LongJsr(L_LongLib_LoadPtr)
+	ldx #$7f
+CopyVDCFontRts0:
+	ldy #0
+CopyVDCFontRts1:
+	lda #$33
+	sta 1
+	lda (LongLibZp_Akku0),y
+	eor ComLibZp_VDCAttrib
+	pha
+	lda #$27
+	sta 1
+	pla
+	jsr CopyVDCFont_Out
+	iny
+	cpy ComLibZp_StringFlag
+	bcc CopyVDCFontRts1
+	tya
+	.LongJsr(L_LongLib_AddBYTE)
+	lda ComLibZp_VDCAttrib
+CopyVDCFontRts2:
+	jsr CopyVDCFont_Out
+	iny
+	cpy #16
+	bcc CopyVDCFontRts2
+	dex
+	bpl CopyVDCFontRts0
+	cli
+	rts
+
+CopyVDCFont_Out:
+	bit $d600
+	bpl CopyVDCFont_Out
+	sta $d601
+	rts
+
+@0ComLibVDCS6_Char:
+#include "charset8x6.src"
+
+;--------------------------------------
+; The Basic routines
+
+TokenZp_Cnt = $02
+
+Petscii2Tokens:
+	jsr GetBasicLine
+	stx $7a
+	sty $7b
+	jsr $0073
+	tax
+	beq Petscii2Tokens
+	ldx #$ff
+	stx $3a
+	bcs Tokens
+	jsr SysCall
+	.DW $a49c-1
+	rts
+
+Tokens:
+	ldx #0
+	stx TokenZp_Cnt
+Tokens0:
+	ldy #0
+Tokens1:
+	lda Token_Text,x		;get next char from tokenlist
+	bpl Tokens2			;>=$80 -> it is a 'new token' marker
+	cpy #1				;did any chars match before
+	bcs Tokens4
+	inc TokenZp_Cnt
+	and #$7f			;clear bit 7
+	beq Tokens4			;was it $80 -> end of Tab marker
+
+Tokens2:
+	inx
+	cmp ($7a),y
+	bne Tokens3
+	iny
+	bne Tokens1	;bra
+
+Tokens3:
+	lda Token_Text,x
+	bmi Tokens0
+	inx
+	bne Tokens3	;bra
+
+Tokens4:
+	tya
+	clc
+	adc $7a
+	sta $7a
+	bcc Tokens5
+	inc $7b
+Tokens5:
+	ldx TokenZp_Cnt
+	lda Token_RHi,x
+	pha
+	lda Token_RLo,x
+	pha
+	rts
+
+Token_Text:
+	.DB '%'
+	.DB '/'|$80
+	.DB '&'|$80
+	.DB $5c|$80			;Pound Sign
+	.DB $4d|$80,$4f,$4e		;mon
+	.DB $80				;End Of Tab
+
+Token_RLo:
+	.DB <(Token_LoadAndRun-1)
+	.DB <(Token_Load-1)
+	.DB <(Token_Verify-1)
+	.DB <(Token_Save-1)
+	.DB <(Token_Mon-1)
+	.DB <($a579-1)
+
+Token_RHi:
+	.DB >(Token_LoadAndRun-1)
+	.DB >(Token_Load-1)
+	.DB >(Token_Verify-1)
+	.DB >(Token_Save-1)
+	.DB >(Token_Mon-1)
+	.DB >($a579-1)
+
+
+Token_LoadAndRun:
+	sei
+	ldx #Token_LoadAndRunTxt_len
+	stx $c6
+Token_LoadAndRun0:
+	lda Token_LoadAndRunTxt-1,x
+	sta $0277-1,x
+	dex
+	bne Token_LoadAndRun0
+	cli
+	jmp Token_Load
+
+Token_LoadAndRunTxt:
+	.PET "rU:",$0d
+Token_LoadAndRunTxt_len = * - Token_LoadAndRunTxt
+
+
+Token_Save:
+	jsr Token_GetName
+	jsr SysCall
+	.DW $e159-1
+	rts
+
+Token_Verify:
+	lda #1
+	.DB $2c
+Token_Load:
+	lda #0
+	sta $0a
+	jsr Token_GetName
+	jsr SysCall
+	.DW $e16f-1
+	rts
+
+Token_GetName:
+	jsr $0079
+	cmp #$22
+	bne Token_GetName0
+	jsr $0073
+Token_GetName0:
+	ldx $7a
+Token_GetName1:
+	jsr $0073
+	tay
+	beq Token_GetName2
+	cmp #$22
+	bne Token_GetName1
+
+Token_GetName2:
+	txa
+	sec
+	eor #$ff
+	adc $7a
+	ldy #2
+	jsr $ffbd
+	lda #0
+	ldx $ba
+	ldy #1
+	jmp $ffba
+
+
+GetBasicLine:
+	ldx #$00
+GetBasicLine0:
+	jsr CharIn
+	cmp #$0d
+	beq GetBasicLine1
+	sta $0200,x
+	inx
+	cpx #$59
+	bcc GetBasicLine0
+	ldx #$17
+	jsr SysCall			;This one never returns
+	.DW $a437-1
+GetBasicLine1:
+	jmp $aaca
+
+CharIn:
+	lda $d3				;Save start column of input
+	sta $ca
+	lda $d6				;Save start row of input
+	sta $c9
+
+	tya
+	pha
+	txa
+	pha
+	lda $d0
+	beq CharIn0
+	jmp $e63a
+
+CharIn0:
+	ldx #WaitForKey_len-1
+CharInCopy0:
+	lda WaitForKey_Org,x
+	sta WaitForKey,x
+	dex
+	bpl CharInCopy0
+
+	ldx #%00000000 | BasicMode
+	ldy #ToggleEGDelay
+	cli
+
+	jsr WaitForKey
+
+;	sei
+	lda $cf
+	beq CharIn1
+	lda $ce
+	ldx $0287
+	ldy #0
+	sty $cf
+	jsr $ea13
+
+CharIn1:
+	jsr $e5b4
+	cmp #$0d
+	beq CharIn3
+
+	ldx #8
+CharIn2:
+	cmp SpecialKeys0,x
+	beq CharIn4
+	dex
+	bpl CharIn2
+
+	jsr $e716
+	jmp CharIn0
+
+CharIn3:
+	jmp $e602
+
+CharIn4:
+	ldy SpecialKeys1,x
+	lda SpecialKey0,y
+	bmi CharIn6
+CharIn4a:
+	lda SpecialKeys1+1,x
+	sta $c6
+	ldx #0
+CharIn5:
+	lda SpecialKey0,y
+	sta $0277,x
+	inx
+	iny
+	cpy $c6
+	bcc CharIn5
+	stx $c6
+	bcs CharIn0	;bra
+
+CharIn6:
+	cmp #$80			;is it the magic for "Load and Run"?
+	bne CharIn7
+	lda #'%'
+	bne CharIn8
+
+CharIn7:
+	cmp #$81			;is it the Magic for "Load"?
+	bne CharIn10
+	lda #'/'
+CharIn8:
+	sta $0277
+	ldx #4
+	ldy #6
+	sty $c6
+	dey
+	lda ($d1),y
+	dey
+	cmp #$22
+	beq CharIn9
+	ldy #9
+CharIn9:
+	lda LoadTexts,y
+	sta $0278,x
+	dey
+	dex
+	bpl CharIn9
+	bmi CharIn15
+
+CharIn10:
+	cmp #$82			;is it the Magic for "Next Device"?
+	bne CharIn4a
+
+	ldx $ba				;get a correct starting device
+	stx $bc
+	jsr ValidDev			;so that the compare will match
+	stx $bb
+CharIn11:
+	inx
+	jsr ValidDev
+	stx $ba
+
+	lda #0
+	sta $90
+	txa
+	jsr $ed0c
+	lda #$ff
+	jsr $edb9
+	lda $90
+	bpl CharIn16
+
+	ldx $ba
+	cpx $bb
+	bne CharIn11
+	lda $bc
+	sta $ba
+	bcs CharIn15
+
+CharIn16:
+	jsr $edfe
+	lda $ba
+	jsr $ed0c
+	lda #$ef
+	jsr $f651
+	lda #$40			;"@"
+	sta $0277
+	lda #'#'
+	sta $0278
+
+	ldx #'0'
+	lda $ba
+CharIn12:
+	cmp #10
+	bcc CharIn13
+	sbc #10
+	inx
+	bne CharIn12
+CharIn13:
+	ldy #2
+	cpx #'0'
+	beq CharIn14
+	stx $0279
+	iny
+CharIn14:
+	ora #$30
+	sta $0277,y
+	lda #$0d
+	iny
+	sta $0277,y
+	iny
+	sty $c6
+CharIn15:
+	jmp CharIn0
+
+WaitForKey_Org:
+    .PSEUDOPC($0210)
+WaitForKey:
+	lda $c6
+	sta $cc
+	beq WaitForKey
+	sei
+	stx $de00
+WaitForKeyDl0:
+	iny
+	bne WaitForKeyDl0
+	rts
+    .REALPC
+WaitForKey_len = *-WaitForKey_Org
+
+ValidDev:
+	cpx #8
+	bcc ValidDev0
+	cpx #31
+	bcc ValidDev1
+ValidDev0:
+	ldx #8
+ValidDev1:
+	rts
+
+
+
+SpecialKeys0:
+	.DB $85				;F1
+	.DB $89				;F2
+	.DB $86				;F3
+	.DB $8a				;F4
+	.DB $87				;F5
+	.DB $8b				;F6
+	.DB $88				;F7
+	.DB $8c				;F8
+	.DB $83				;Run
+SpecialKeys1:
+	.DB 0
+	.DB SpecialKey1-SpecialKey0	;F1
+	.DB SpecialKey2-SpecialKey0	;F2
+	.DB SpecialKey3-SpecialKey0	;F3
+	.DB SpecialKey4-SpecialKey0	;F4
+	.DB SpecialKey5-SpecialKey0	;F5
+	.DB SpecialKey6-SpecialKey0	;F6
+	.DB SpecialKey7-SpecialKey0	;F7
+	.DB SpecialKey8-SpecialKey0	;F8
+	.DB SpecialKey9-SpecialKey0	;Run
+
+SpecialKey0:
+	.DB $80
+SpecialKey1:
+	.DB $81
+SpecialKey2:
+	.PET "@$",$0d
+SpecialKey3:
+	.DB $82
+SpecialKey4:
+	.PET "lI",$0d
+SpecialKey5:
+	.PET "mon",$0d
+SpecialKey6:
+	.PET "rU:",$0d
+SpecialKey7:
+	.PET "mon",$0d
+SpecialKey8:
+	.DB $80
+SpecialKey9:
+
+
+LoadTexts:
+	.PET "    ",$d
+	.PET "0:*",0,0
+
+;--------------------------------------
+
+GetBasicToken:
+	lda #0
+	sta $0d
+	jsr $0073
+	bcs NoDigit
+	jsr SysCall
+	.DW $bcf3-1
+	rts
+NoDigit:
+	cmp #'$'
+	bne NoHex
+
+	lda #0
+	sta $63
+	sta $62
+
+	ldy #3
+GetHex0:
+	jsr $0073
+	bcc GetHex1
+	cmp #$41		;"a"
+	bcc GetHex3
+	cmp #$47		;"g"
+	bcs GetHex3
+	sbc #6
+GetHex1:
+	and #$0f
+
+	ldx #3
+GetHex2:
+	asl $63
+	rol $62
+	dex
+	bpl GetHex2
+	ora $63
+	sta $63
+
+	dey
+	bpl GetHex0
+	jsr $0073
+GetHex3:
+	ldx #$90
+	sec
+	jsr SysCall
+	.DW $bc49-1
+	rts
+
+NoHex:
+	jsr SysCall
+	.DW $ae92-1
+	rts
+
+
+;--------------------------------------
+;Die folgenden Routinen laufen, wenn Bank0 ab $e000 eingeblendet wird
+	.PhaseToHighRom
+;--------------------------------------
+
+#print $fe10-*
+	.DSB $fe10-*
+
+	.(
+    .PSEUDOPC($de10)
+
+@0Freeze_Soft:
+	php
+	sei
+	pha
+	lda #%00000000	;No BasicMode here. Warp to Bank 0
+	sta $de00
+
+@0SysCall:
+;AR uses 9E/F and A5-A8
+	sta $a5
+	stx $a6
+	sty $a7
+
+	php
+	sei
+	pla
+	sta $a8
+
+	lda #>(SysCall_RestoreBank-1)		;After the rom routine finished de00 has to be restored
+	pha
+	lda #<(SysCall_RestoreBank-1)
+	pha
+
+	tsx
+	lda $0103,x
+	sta $9e
+	clc
+	adc #2
+	sta $0103,x
+	lda $0104,x
+	sta $9f
+	adc #0
+	sta $0104,x
+	ldy #2
+	lda ($9e),y
+	pha
+	dey
+	lda ($9e),y
+	pha
+
+	lda #%00000010 | BasicMode
+	sta $de00
+	ldx #ToggleEGDelay
+SysCall_Dl0:
+	inx
+	bne SysCall_Dl0
+
+	lda $a8
+	pha
+
+	lda $a5
+	ldx $a6
+	ldy $a7
+	plp
+	rts
+
+SysCall_RestoreBank:
+	php
+	sei
+	sta $a5
+	stx $a6
+
+	lda #%00000000 | BasicMode
+	sta $de00
+	ldx #ToggleEGDelay
+SysCall_Dl1:
+	inx
+	bne SysCall_Dl1
+
+	lda $a5
+	ldx $a6
+	plp
+	rts
+
+
+@0Freeze_Brk:
+	
+@0Vect_0302:
+	lda #%00000000 | BasicMode
+	jsr SetBank
+	jsr Petscii2Tokens
+	lda #%00000010 | BasicMode
+	jsr SetBank
+	jmp $a7e1
+
+@0Vect_030A:
+	lda #%00000000 | BasicMode
+	jsr SetBank
+	jsr GetBasicToken
+	lda #%00000010 | BasicMode
+	jsr SetBank
+	rts
+
+
+@0Token_Mon:
+	jsr Freeze_Soft
+	lda #%00000010 | BasicMode			;freeze destroys Game/ExRom settings. Restore it here
+	bne SetBank	;bra
+
+SetBank:
+	sta $de00
+	txa
+	ldx #ToggleEGDelay
+SetBank0:
+	inx
+	bne SetBank0
+	tax
+	cli
+	rts
+
+	.)
+
+    .REALPC
+
+;--------------------------------------
+
+#print "Bank3 bytes left:", $10000-*
+	.DSB $10000-*
+
+#if *!=$10000
+#error "Bank3 ist nicht $2000 bytes lang"
+#endif
+
+;--------------------------------------
+	;.REALPC
+;--------------------------------------
+
+	.)
+
+;--------------------------------------
+; Bank 3 Ende
+;--------------------------------------
+
+
+
+
+
+;--------------------------------------
+; CRT Ram Bank 0 Start
+;--------------------------------------
+
+	.segment "crtram"
+	* = $8000
+
+SubZero_LoMem		.DSB __BSSSaveMeEnd
+#if (SubZero_LoMem&$ff)!=0
+#error "SubZero_LoMem list nicht mehr am Pageanfang!"
+#endif
+SubZero_Col		.DSB $400
+SubZero_BSSSaved	.DSB __BSSSaveMeEnd-__BSSSaveMeStart
+
+AbsSubZero_A		.DB 0
+AbsSubZero_X		.DB 0
+AbsSubZero_Y		.DB 0
+AbsSubZero_Source	.DB 0
+AbsSubZero_PC		.DW 0
+AbsSubZero_Status	.DB 0
+AbsSubZero_StackPtr	.DB 0
+
+SubZero_VIC		.DSB $31
+SubZero_Raster		.DW 0
+SubZero_CIA1		.DSB $10
+SubZero_CIA2		.DSB $10
+
+SubZero_SidVolume	.DB 0
+
+SubZero_CIA1TimerAPos	.DW 0			;must be right before TimerBPos
+SubZero_CIA1TimerBPos	.DW 0			;must be right after TimerAPos
+
+SubZero_CIA2TimerAPos	.DW 0			;must be right before TimerBPos
+SubZero_CIA2TimerBPos	.DW 0			;must be right after TimerAPos
+
+;--------------------------------------
+
+StringBufAbs:
+StringBufAbs_Start	.DW 0
+StringBufAbs_FKeysEnd	.DW 0
+StringBufAbs_LabelsEnd	.DW 0
+StringBufAbs_TempEnd	.DW 0
+StringBufAbs_End	.DW 0
+StringBufAbs_len=*-StringBufAbs
+
+;--------------------------------------
+; End of fixed data in CRT Ram
+; FKeys, Labels and TempFKeys follow
+;--------------------------------------
+StringBufStart:
+
+#if *>$a000
+#error "CRT Ram Bank 0 too big!"
+#endif
+
+;--------------------------------------
+; CRT Ram Bank 0 Ende
+;--------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if 0 /* Normal Monitor */
+
+
+
+
+/*
+SubZeroD3Offs_Sys	= $00
+SubZeroD3Offs_SysLong	= $04
+SubZeroD3Offs_Jsr	= $08
+SubZeroD3Offs_JsrLong	= $0c
+*/
+/*
+SubZeroD3Start:
+	jmp SubZero_Sys			;SubZeroD3_Sys
+	jmp SubZero_SysLong			;SubZeroD3_SysLong
+	jmp SubZero_Jsr			;SubZeroD3_Jsr
+	jmp SubZero_JsrLong			;SubZeroD3_JsrLong
+SubZeroD3Len=*-SubZeroD3Start:
+*/
+;--------------------------------------
+
+;--------------------------------------
+; *** Absolute Data in CRT Ram ***
+;--------------------------------------
+
+FPointAbsCnt		MBYTE
+FPointAbsRemoteFlags	MBYTE
+
+;--------------------------------------
+
+FPointTypTab		MAREA($80)
+FPointParTab		MAREA($80)
+FPointALoTab		MAREA($80)
+FPointAMiTab		MAREA($80)
+FPointAHiTab		MAREA($80)
+FPointResTab		MAREA(4*$80)
+
+_DreaMon_CheckSumEnd:
+#if ((_DreaMon_CheckSumEnd-_DreaMon_Start) & 1)=1
+	.DB 0				;Padding
+#endif
+CheckSum_Code		MWORD		;MUSS direkt dahinter stehen!
+
+;--------------------------------------
+
+/*
+FPoint_LenTab:
+	.DB 2,3
+FPoint_FC0Tab:
+	.DB 2,6
+FPoint_FC1Tab:
+    INLINE
+	jsr $d300+SubZeroD3Offs_Jsr
+	jsr @SubZero_JsrLong
+    OUTLINE
+*/
+;--------------------------------------
+
+FPointBSS_ParseTab0:
+			.SCR "jl"
+FPointBSS_ParseTab1:
+			.SCR "ncar"
+FPointBSS_ManageTab0:
+			.SCR "lla"
+
+ComLib_DezWordOutTab0:	.DW 10,100,1000,10000
+
+
+CheckSum_StringBuf	.DW 0
+
+;--------------------------------------
+/*
+PrefsSetMBSSTab0:
+	.SCR "ndp"
+PrefsSetMBSSTab1:
+	.DB 0,0,0
+	.DB SubZeroZp_Regs+SubZero_DirectPage+1,SubZeroZp_Regs+SubZero_DirectPage,SubZeroZp_Regs+SubZero_DataBank
+	.DB 0,0,SubZeroZp_Regs+SubZero_PC+2 *** nur noch word laenge!
+*/
+;--------------------------------------
+
+
+#endif /* Normal Monitor */
+
+

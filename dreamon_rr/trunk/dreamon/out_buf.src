@@ -1,0 +1,162 @@
+/***************************************************************************
+ *   Copyright (C) 2000 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+
+;--------------------------------------
+;
+;  IOBufs for DreaMon
+;
+;--------------------------------------
+
+	.(	/* IOBufs */
+
+;--------------------------------------
+;
+;  Routines
+;
+; OutputBuf_Init
+; OutputBuf_Clear
+; OutputBuf_Byte
+; OutputBuf_Flush
+;
+;--------------------------------------
+
+@0InputBuf_Init:
+	sta InputBufZp_Len
+	lda 0,x
+	sta InputBufZp_Adr
+	lda 1,x
+	sta InputBufZp_Adr+1
+	lda 2,x
+	sta InputBufZp_Adr+2
+;	lda InputBufZp_Dev
+;	beq Get
+;	jmp FileLib_MR
+
+Get:
+	sei
+	lda #0
+	sta OutputBufZp_Cnt
+Get0:
+	clc
+	lda OutputBufZp_Cnt
+	adc InputBufZp_Adr
+	sta MappingZp_Adress
+	lda InputBufZp_Adr+1
+	adc #0
+	sta MappingZp_Adress+1
+	lda InputBufZp_Adr+2
+	adc #0
+	sta MappingZp_Adress+2
+	jsr MakeMappingR
+	jsr Mapping_LdaByte
+	ldy OutputBufZp_Cnt
+	sta InputBuffer,y
+	iny
+	inc OutputBufZp_Cnt
+	cpy InputBufZp_Len
+	bne Get0
+	cli
+	clc
+	rts
+
+
+
+@0OutputBuf_Init:
+	lda 0,x
+	sta OutputBufZp_Adr
+	lda 1,x
+	sta OutputBufZp_Adr+1
+	lda 2,x
+	sta OutputBufZp_Adr+2
+@0OutputBuf_Clear:
+	lda #0
+	sta OutputBufZp_Len
+	rts
+
+@0OutputBuf_Byte:
+	sta OutputBufZp_A
+	txa
+	pha
+	tya
+	pha
+	ldy OutputBufZp_Len
+	lda OutputBufZp_A
+	sta OutputBuffer,y
+	inc OutputBufZp_Len
+	bne Byte0
+	jsr DoFlush
+Byte0:
+	pla
+	tay
+	pla
+	tax
+	lda OutputBufZp_A
+	rts
+
+
+@0OutputBuf_Flush:
+	lda OutputBufZp_Len
+	beq FlushEnd
+DoFlush:
+;	lda OutputBufZp_Dev
+;	bne Flush2
+	sei
+	ldy #0
+	sty OutputBufZp_Cnt
+Flush0:
+	lda OutputBufZp_Adr
+	sta MappingZp_Adress
+	lda OutputBufZp_Adr+1
+	sta MappingZp_Adress+1
+	lda OutputBufZp_Adr+2
+	sta MappingZp_Adress+2
+	jsr MakeMappingR
+	ldx OutputBufZp_Cnt
+	lda OutputBuffer,x
+	jsr Mapping_StaByte
+	inc OutputBufZp_Adr
+	bne Flush1
+	inc OutputBufZp_Adr+1
+	bne Flush1
+	inc OutputBufZp_Adr+2
+Flush1:
+	ldy OutputBufZp_Cnt
+	iny
+	sty OutputBufZp_Cnt
+	cpy OutputBufZp_Len
+	bne Flush0
+	lda #0
+	sta OutputBufZp_Len
+	cli
+FlushEnd:
+	clc
+	rts
+
+;Flush2:
+;	jmp FileLib_MW
+
+
+/*-----------------------------------*/
+
+
+	.)	/* IOBufs */
+
+

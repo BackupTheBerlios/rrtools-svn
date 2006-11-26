@@ -1,0 +1,201 @@
+/***************************************************************************
+ *   Copyright (C) 2000 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+
+/*-----------------------------------*/
+
+MsgTexts:
+__TxtCnt=1
+
+@0Msg_CR			.TextNo
+	.DB Key_CR,0
+
+@0Msg_Hallo			.TextNo
+	.SCR Spi_Idn,Key_Clr,Spi_Idn,"dreamon crt v"
+	.DB DREAMON_VERSION_MAIN|$30,'.'
+	.DB DREAMON_VERSION_SUB |$30,'.'
+	.DB DREAMON_VERSION_DEV|$30
+	.SCR " "
+#if DREAMON_DEBUG_VERSION==1
+	.SCR Spi_Idn,Key_C2,Spi_Idn,"** debug version **"
+#endif
+	.DB 0
+
+@0Msg_ShowRegs0			.TextNo
+	.SCR "  pc  ac xr yr sp nv-bdizc 01",Key_CR,0
+
+@0Msg_Load_Searching0		.TextNo
+	.SCR Key_CR,"searching for ",$22,0
+@0Msg_LoadSave_Dots		.TextNo
+	.SCR $22,"...",0
+@0Msg_Load_Found0			.TextNo
+	.SCR "found",Key_CR,0
+@0Msg_Load_Load			.TextNo
+	.SCR "load",0
+@0Msg_Save_Save			.TextNo
+	.SCR Key_CR,"sav",0
+@0Msg_Verify_Verify		.TextNo
+	.SCR "verify",0
+@0Msg_LoadSave_ing		.TextNo
+	.SCR "ing",0
+@0Msg_LoadSave_From		.TextNo
+	.SCR " from $",0
+@0Msg_LoadSave_To			.TextNo
+	.SCR " to $",0
+
+@0Msg_LoadSave_Break		.TextNo
+	.SCR Key_CR,Spi_Idn,"break.",Key_CR,0
+
+@0Msg_Verify_Hi			.TextNo
+	.SCR Key_CR,"verify ",0
+@0Msg_Verify_Ok			.TextNo
+	.SCR "ok",Key_CR,0
+@0Msg_Verify_NotOk		.TextNo
+	.SCR "error!",Key_CR,0
+
+@0Msg_LoadSave_FKeys		.TextNo
+	.SCR "ing fkeys",0
+@0Msg_LoadSave_Labels		.TextNo
+	.SCR "ing labels",0
+
+@0Msg_Speeder_FileNotFound	.TextNo
+	.SCR "file not found!",Key_CR,0
+@0Msg_Speeder_DeviceOff		.TextNo
+	.SCR "device off!",Key_CR,0
+@0Msg_Speeder_ReadError		.TextNo
+	.SCR "read error!",Key_CR,0
+
+@0Msg_AreYouSure			.TextNo
+	.SCR Key_CR,"are you sure? ",0
+@0Msg_YesNo			.TextNo
+	.SCR "(y/n)> ",Spi_Idn,Key_CLe,0
+
+@0Msg_FPoint_EmptyList		.TextNo
+	.SCR "empty list.",Key_CR,0
+
+@0Msg_IEC_IOErr			.TextNo
+	.SCR Key_CR,"i/o error!",Key_CR,0
+@0Msg_IEC_DevNPresent		.TextNo
+	.SCR Key_CR,"device not present!",Key_CR,0
+
+@0Msg_Mapping_Data		.TextNo
+	.SCR "data bank",0
+@0Msg_Mapping_Program		.TextNo
+	.SCR "program bank",0
+@0Msg_Mapping_None		.TextNo
+	.SCR "none",0
+
+@0Msg_ShowPalette			.TextNo
+	.SCR Key_CR,"pp ",0
+@0Msg_ShowSpeeder			.TextNo
+	.SCR Key_CR,"speeder is o",0
+
+@0Err_LoadSave_NoFileName		.TextNo
+	.SCR "missing filename!",Key_CR,0
+@0Err_LoadSave_Syntax0		.TextNo
+	.SCR "error after filename!",Key_CR,0
+@0Err_LoadSave_Syntax1		.TextNo
+	.SCR "error after devicenumber!",Key_CR,0
+@0Err_Save_NoDev			.TextNo
+	.SCR "missing devicenumber!",Key_CR,0
+@0Err_Save_Syntax4		.TextNo
+	.SCR "error in file-startadress!",Key_CR,0
+@0Err_Save_Syntax5		.TextNo
+	.SCR "error after file-startadress!",Key_CR,0
+
+@0Err_DevNo_Syntax		.TextNo
+	.SCR "error in devicenumber!",Key_CR,0
+@0Err_DevNo_Ill			.TextNo
+	.SCR "illegal devicenumber!",Key_CR,0
+
+@0Err_Area_NoFrom			.TextNo
+	.SCR "missing startadress!",Key_CR,0
+@0Err_Area_NoTo			.TextNo
+	.SCR "missing endadress!",Key_CR,0
+@0Err_Area_NoWith			.TextNo
+	.SCR "missing destination adress!",Key_CR,0
+@0Err_Area_From			.TextNo
+	.SCR "error in startdress!",Key_CR,0
+@0Err_Area_To			.TextNo
+	.SCR "error in endadress!",Key_CR,0
+@0Err_Area_With			.TextNo
+	.SCR "error in destination adress!",Key_CR,0
+@0Err_Area_AFrom			.TextNo
+	.SCR "error after startadress!",Key_CR,0
+@0Err_Area_ATo			.TextNo
+	.SCR "error after endadress!",Key_CR,0
+@0Err_Area_Upside			.TextNo
+	.SCR "start is equal or greater than end!",Key_CR,0
+
+@0Err_Ass_IllAdrMode		.TextNo
+	.SCR "illegal adressmode!",Key_CR,0
+@0Err_Ass_NumberTooLarge		.TextNo
+	.SCR "number too large!",Key_CR,0
+
+@0Err_MissAfterComma		.TextNo
+	.SCR "missing operand after comma!",Key_CR,0
+@0Err_MissOp			.TextNo
+	.SCR "missing operand!",Key_CR,0
+@0Err_AOp				.TextNo
+	.SCR "error after operand!",Key_CR,0
+@0Err_Number			.TextNo
+	.SCR "error in number!",Key_CR,0
+
+@0Err_PTab_AscOvr			.TextNo
+	.SCR "screendump too high!",Key_CR,0
+@0Err_PTab_MemOvr			.TextNo
+	.SCR "memdump too high!",Key_CR,0
+@0Err_PTab_Zero			.TextNo
+	.SCR "lenght must not be zero!",Key_CR,0
+
+
+@0Err_TooManyFPoints		.TextNo
+	.SCR "too many Freeze Points set!",Key_CR,0
+
+@0Err_DefLabel_TooLong		.TextNo
+	.SCR "labelname longer than 32 chars!",Key_CR,0
+@0Err_DefLabel_IllChar		.TextNo
+	.SCR "bad labelname!",Key_CR,0
+@0Err_DefLabel_NoMem		.TextNo
+	.SCR "no labelmemory left!",Key_CR,0
+
+@0Err_FrozenByUnknownFP		.TextNo
+	.SCR "frozen by unknown source!",Key_CR,Key_CR,0
+
+@0Err_SetPalette			.TextNo
+	.SCR "palette are max. 12 colors from 0-f!",Key_CR,0
+@0Err_SetSpeeder			.TextNo
+	.SCR "only 0 (off) and 1 (on) are accepted!",Key_CR,0
+
+
+@0Err_StrBufCheckSum		.TextNo
+	.SCR "text buffer section checksum error!",Key_CR
+	.SCR "labels and fkeys might be damaged.",Key_CR,Key_CR,0
+
+;--------------------------------------
+
+
+
+
+
+
+
+
+

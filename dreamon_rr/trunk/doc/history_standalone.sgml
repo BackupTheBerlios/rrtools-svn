@@ -1,0 +1,41 @@
+<!DOCTYPE section PUBLIC "-//OASIS//DTD DocBook V3.1//EN" [
+
+
+	<!ENTITY % local.para.class "| Div">
+	<!ENTITY % local.base.char.class "| LineBreak">
+
+
+	<!ENTITY % div.module "INCLUDE">
+	<![ %div.module; [
+	<!ENTITY % local.div.attrib "">
+	<!ENTITY % div.role.attrib "" >
+	<!ENTITY % div.element "INCLUDE">
+	<![ %div.element; [
+	<!ELEMENT Div - O ANY>
+	<!--end of div.element-->]]>
+	<!ENTITY % div.attlist "INCLUDE">
+	<![ %div.attlist; [
+	<!--end of div.attlist-->]]>
+	<!--end of div.module-->]]>
+
+
+	<!ENTITY % linebreak.module "INCLUDE">
+	<![ %linebreak.module; [
+	<!ENTITY % local.linebreak.attrib "">
+	<!ENTITY % linebreak.role.attrib "">
+	<!ENTITY % linebreak.element "INCLUDE">
+	<![ %linebreak.element; [
+	<!ELEMENT LineBreak - O EMPTY>
+	<!--end of linebreak.element-->]]>
+	<!ENTITY % linebreak.attlist "INCLUDE">
+	<![ %linebreak.attlist; [
+	<!--end of linebreak.attlist-->]]>
+	<!--end of linebreak.module-->]]>
+
+
+
+	<!ENTITY AppendixHistory SYSTEM "history.sgml">
+]>
+<section id=history xreflabel="History"><title>History</title>
+&AppendixHistory;
+</section>

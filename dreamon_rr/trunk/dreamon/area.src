@@ -1,0 +1,880 @@
+/***************************************************************************
+ *   Copyright (C) 2000 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+;--------------------------------------
+
+	.(	;** Area **
+
+;--------------------------------------
+
+MakeLen:
+	ldx #RangeZp_To
+	jsr LongLib_LoadPtr
+	ldx #RangeZp_From
+	jsr LongLib_SubLONGPtrFrom
+	ldx #RangeZp_Len
+	jmp LongLib_StorePtr
+
+GetBlkLen:
+	lda RangeZp_Len+1
+	ora RangeZp_Len+2
+	bne GetBlkLen0
+	lda RangeZp_Len
+	beq GetBlkLen1
+	.DB $2c
+GetBlkLen0:
+	lda #0
+	sta AreaZp_BlkLen
+	clc
+	rts
+GetBlkLen1:
+	sec
+	rts
+
+AddBlk:
+	inc RangeZp_From+1
+	bne AddBlk0
+	inc RangeZp_From+2
+AddBlk0:
+	inc RangeZp_With+1
+	bne AddBlkDec
+	inc RangeZp_With+2
+AddBlkDec:
+	lda RangeZp_Len+1
+	bne AddBlk1
+	dec RangeZp_Len+2
+AddBlk1:
+	dec RangeZp_Len+1
+	rts
+
+
+@0AreaCompare:
+	jsr GetNum_GetAreaWith
+	bcc AreaCompare8
+AreaCompareExit:
+	.LongJsr(L_ComLib_PrinterDisable)
+AreaCompare8:
+	.ShowMsg(Msg_CR)
+	.LongJsr(L_ComLib_PrinterEnable)
+	jsr MakeLen
+AreaCompare0:
+	jsr GetBlkLen
+	bcs AreaCompare3
+	ldx #RangeZp_From
+	jsr InputBuf_Init
+	bcs AreaCompareExit
+	ldy #0
+Comp1:
+	lda InputBuffer,y
+	sta AreaBSS_Buf,y
+	iny
+	cpy AreaZp_BlkLen
+	bne Comp1
+	ldx #RangeZp_With
+	lda AreaZp_BlkLen
+	jsr InputBuf_Init
+	bcs AreaCompareExit
+	ldy #0
+Comp2:
+	lda AreaBSS_Buf,y
+	cmp InputBuffer,y
+	beq Comp7
+	jsr PrintHit
+Comp7:
+	iny
+	cpy AreaZp_BlkLen
+	bne Comp2
+	jsr AddBlk
+	.LongJsr(L_KeyB_CheckStop)
+	bne AreaCompare3
+	tya
+	beq AreaCompare0
+AreaCompare3:
+	.ShowMsg(Msg_CR)
+	clc
+AreaCompareErr:
+	.LongJsr(L_ComLib_PrinterDisable)
+	rts
+
+
+PrintHit:
+	ldx #6
+	lda #OptionFlag_Verbose
+	bit OptionFlags
+	beq PrintHit0
+	ldx #19
+PrintHit0:
+	clc
+	adc ComLibZp_CursorXPos
+	cmp ComLibZp_CursorMaxXPos
+	bcc PrintHit1
+	.ShowMsg(Msg_CR)
+PrintHit1:
+	ldx #RangeZp_From
+	jsr AdrYOut
+	lda #OptionFlag_Verbose
+	bit OptionFlags
+	beq PrintHit2
+	lda #'/'
+	.LongJsr(L_ComLib_PrintRawChar)
+	ldx #RangeZp_With
+	jsr AdrYOut
+	.LongJsr(L_ComLib_SpaceOut)
+	lda AreaBSS_Buf,y
+	.LongJsr(L_ComLib_ByteOut)
+	lda #'/'
+	.LongJsr(L_ComLib_PrintRawChar)
+	lda InputBuffer,y
+	.LongJsr(L_ComLib_ByteOut)
+PrintHit2:
+	ldx ComLibZp_CursorXPos
+	inx
+	cpx ComLibZp_CursorMaxXPos
+	bcs PrintHit3
+	.LongJsr(L_ComLib_SpaceOut)
+	rts
+PrintHit3:
+	.ShowMsg(Msg_CR)
+	.LongJsr(L_ComLib_PrinterFlush)
+	rts
+
+
+AdrYOut:
+	jsr LongLib_LoadPtr
+	tya
+	jsr LongLib_AddBYTE
+	jmp LongLib_Akku0Out
+
+
+
+@0AreaFill:
+	jsr GetNum_GetArea
+	bcc AreaFill0
+AreaFillExit:
+	rts
+AreaFill0:
+	lda #0
+	jsr GetH
+	bcs AreaFillErr
+	.ShowMsg(Msg_CR)
+	jsr MakeLen
+	ldx #RangeZp_From
+	jsr OutputBuf_Init
+	ldy #0
+	ldx #0
+Fill4:
+	jsr GetBlkLen
+	bcs Fill6
+Fill1:
+	lda FillBufByte,y
+	jsr OutputBuf_Byte
+	iny
+	cpy FillBufLen
+	bcc Fill5
+	ldy #0
+Fill5:
+	inx
+	cpx AreaZp_BlkLen
+	bne Fill1
+	jsr AddBlkDec
+	.LongJsr(L_KeyB_CheckStop)
+	bne Fill6
+	txa
+	beq Fill4
+Fill6:
+	jmp OutputBuf_Flush
+AreaFillErr:
+	sec
+	rts
+
+
+@0AreaHunt:
+	jsr GetNum_GetArea
+	bcc AreaHunt0
+AreaHuntErr0:
+	rts
+AreaHunt0:
+	lda #$80
+	jsr GetH
+	bcs AreaHuntErr0
+	.ShowMsg(Msg_CR)
+	.LongJsr(L_ComLib_PrinterEnable)
+	jsr MakeLen
+	jsr GetBlkLen
+	bcc Hunt16
+	jmp Hunt3
+Hunt16:
+	ldx #RangeZp_From
+	jsr InputBuf_Init
+	bcs AreaHuntErr0
+	ldx #RangeZp_Len
+	jsr LongLib_LoadPtr
+	lda AreaZp_BlkLen
+	bne Hunt10
+	dec LongLibZp_Akku0+1
+Hunt10:
+	jsr LongLib_SubBYTE
+	jsr LongLib_StorePtr
+	ldy #0
+Hunt12:
+	lda InputBuffer,y
+	sta AreaBSS_Buf,y
+	iny
+	cpy AreaZp_BlkLen
+	bne Hunt12
+AreaHunt6:
+	ldy #0
+	sty AreaZp_Zp0
+Hunt0:
+	ldy AreaZp_Zp0
+	ldx #0
+AreaHunt7:
+	lda AreaBSS_Buf,y
+	and FillBufMask,x
+	cmp FillBufByte,x
+	bne AreaHunt8
+	inx
+	cpx FillBufLen
+	bcs Hunt1
+	iny
+	cpy AreaZp_BlkLen
+	bne AreaHunt7
+	beq AreaHunt8
+Hunt1:
+	ldx #RangeZp_From
+	jsr LongLib_LoadPtr
+	lda AreaZp_Zp0
+	jsr LongLib_AddBYTE
+	jsr AreaAdrOut
+AreaHunt8:
+	inc AreaZp_Zp0
+	ldy AreaZp_Zp0
+	cpy AreaZp_BlkLen
+	beq Hunt3
+	cpy #$60			;Time to Fill up Buf?
+	bcc Hunt0
+	lda RangeZp_Len
+	ora RangeZp_Len+1
+	ora RangeZp_Len+2		;Something left to fill
+	beq Hunt0
+	ldx #0				;Move Buffer down
+Hunt13:
+	lda AreaBSS_Buf,y
+	sta AreaBSS_Buf,x
+	inx
+	iny
+	bne Hunt13
+	ldx #RangeZp_From
+	jsr LongLib_LoadPtr
+	lda #$60
+	jsr LongLib_AddBYTE
+	jsr LongLib_StorePtr
+	lda #$a0
+	jsr LongLib_AddBYTE
+
+	ldx #$60
+	lda RangeZp_Len+1
+	ora RangeZp_Len+2
+	bne Hunt14
+	lda RangeZp_Len
+	cmp #$60
+	bcs Hunt14
+	tax
+Hunt14:
+	txa
+	sec
+	eor #$ff
+	adc RangeZp_Len
+	sta RangeZp_Len
+	bcs HuntDec1
+	lda RangeZp_Len+1
+	bne HuntDec0
+	dec RangeZp_Len+2
+HuntDec0:
+	dec RangeZp_Len+1
+HuntDec1:
+	txa
+	clc
+	adc #$a0
+	sta AreaZp_BlkLen
+	txa
+	ldx #LongLibZp_Akku0
+	jsr InputBuf_Init
+	bcs AreaHuntExit
+	ldx #0
+	ldy #$a0
+Hunt15:
+	lda InputBuffer,x
+	sta AreaBSS_Buf,y
+	inx
+	iny
+	cpy AreaZp_BlkLen
+	bne Hunt15
+	.LongJsr(L_KeyB_CheckStop)
+	bne Hunt3
+	jmp AreaHunt6
+Hunt3:
+	lda ComLibZp_CursorXPos
+	beq AreaHunt10
+	.ShowMsg(Msg_CR)
+AreaHunt10:
+	clc
+	.LongJsr(L_ComLib_PrinterDisable)
+	rts
+AreaHuntErr:
+	sec
+AreaHuntExit:
+	.LongJsr(L_ComLib_PrinterDisable)
+	rts
+
+
+@0AreaOHunt:
+	jsr GetNum_GetArea
+	bcc AreaOHunt0
+	rts
+AreaOHunt0:
+	lda #$80
+	jsr GetH
+	bcs AreaHuntErr
+	.ShowMsg(Msg_CR)
+	.LongJsr(L_ComLib_PrinterEnable)
+	ldx #RangeZp_From
+	jsr LongLib_LoadPtr
+AreaOHunt1:
+	ldx #OpcodeZp_Adr
+	jsr LongLib_StorePtr
+	jsr Opcodes_Disass
+	lda OpcodeZp_Len
+	jsr LongLib_AddBYTE
+	ldx #RangeZp_To
+	jsr LongLib_CmpLONGPtrWith
+	bcc AreaOHunt10
+	.LongJsr(L_ComLib_RedirOutputOn)
+	jsr Opcodes_ShowOpcode
+	lda ComLibZp_CursorXPos
+	bne AreaOHuntLineLen
+	lda ComLibZp_CursorMaxXPos
+AreaOHuntLineLen:
+	sta AreaZp_Zp0
+	.LongJsr(L_ComLib_RedirOutputOff)
+	ldx #OpcodeZp_Adr
+	jsr LongLib_LoadPtr
+	ldx #17					;pos of the mnemonic in the disassembled line
+	stx GetHZp_Mode
+AreaOHunt6:
+	.LongJsr(L_KeyB_CheckStop)
+	bne AreaOHunt10			;Cursorpos egal!
+	ldy #0
+AreaOHunt7:
+	cpx AreaZp_Zp0
+	bcs AreaOHunt9
+	lda OutputBuffer,x
+	.LongJsr(L_ComLib_Screen2Ascii)
+	and FillBufMask,y
+	cmp FillBufByte,y
+	bne AreaOHunt8
+	inx
+	iny
+	cpy FillBufLen
+	bcc AreaOHunt7
+	lda #OptionFlag_Verbose
+	bit OptionFlags
+	bne AreaOHunt3
+	jsr AreaAdrOut
+	jmp AreaOHunt9
+AreaOHunt3:
+	ldy #0
+AreaOHunt2:
+	lda OutputBuffer,y
+	ldx OutputBuffer+80,y
+	.LongJsr(L_ComLib_PrintRawColChar)
+	iny
+	cpy ComLibZp_CursorMaxXPos
+	bcc AreaOHunt2
+	.ShowMsg(Msg_CR)
+	jmp AreaOHunt9
+AreaOHunt8:
+	inc GetHZp_Mode
+	ldx GetHZp_Mode
+	jmp AreaOHunt6
+AreaOHunt9:
+	jsr LongLib_Inc
+	ldx #RangeZp_To
+	jsr LongLib_CmpWithLONGPtr
+	bcs AreaOHunt10
+	jmp AreaOHunt1
+AreaOHunt10:
+	.ShowMsg(Msg_CR)
+	clc
+	.LongJsr(L_ComLib_PrinterDisable)
+	rts
+
+AreaOHuntErr:
+	sec
+	rts
+
+
+@0AreaTransfer:
+	jsr GetNum_GetAreaWith
+	bcs AreaTransferErr
+	.ShowMsg(Msg_CR)
+	jsr MakeLen
+	ldx #RangeZp_From
+	jsr LongLib_LoadPtr
+	ldx #RangeZp_With
+	jsr LongLib_CmpWithLONGPtr
+	bcc TransB
+
+	ldx #RangeZp_With
+	jsr OutputBuf_Init
+TransA:
+	jsr GetBlkLen
+	bcs TransA1
+	ldx #RangeZp_From
+	jsr InputBuf_Init
+	bcs AreaTransferErr
+	ldy #0
+TransA0:
+	lda InputBuffer,y
+	jsr OutputBuf_Byte
+	iny
+	cpy AreaZp_BlkLen
+	bne TransA0
+	jsr AddBlk
+	.LongJsr(L_KeyB_CheckStop)
+	bne TransA1
+	tya
+	beq TransA
+TransA1:
+	jmp OutputBuf_Flush
+AreaTransferErr:
+	rts
+
+TransB:
+	ldx #RangeZp_Len
+	jsr LongLib_LoadPtr
+	ldx #RangeZp_With
+	jsr LongLib_AddLONGPtr
+	jsr LongLib_StorePtr
+TransB0:
+	jsr GetBlkLen
+	bcs TransB5
+	tay
+	bne TransB1
+	jsr DecWith
+	jsr DecTo
+TransB1:
+	sec
+	lda RangeZp_To
+	sbc AreaZp_BlkLen
+	sta RangeZp_To
+	bcs TransB2
+	jsr DecTo
+TransB2:
+	sec
+	lda RangeZp_With
+	sbc AreaZp_BlkLen
+	sta RangeZp_With
+	bcs TransB3
+	jsr DecWith
+TransB3:
+	lda AreaZp_BlkLen
+	ldx #RangeZp_To
+	jsr InputBuf_Init
+	bcs TransBExit
+	ldx #RangeZp_With
+	jsr OutputBuf_Init
+	ldy #0
+TransB4:
+	lda InputBuffer,y
+	jsr OutputBuf_Byte
+	iny
+	cpy AreaZp_BlkLen
+	bne TransB4
+	jsr AddBlkDec
+	.LongJsr(L_KeyB_CheckStop)
+	bne TransB5
+	tya
+	beq TransB0
+TransB5:
+	jmp OutputBuf_Flush
+TransBExit:
+	rts
+
+DecTo:
+	lda RangeZp_To+1
+	bne DecTo0
+	dec RangeZp_To+2
+DecTo0:
+	dec RangeZp_To+1
+	rts
+
+DecWith:
+	lda RangeZp_With+1
+	bne DecWith0
+	dec RangeZp_With+2
+DecWith0:
+	dec RangeZp_With+1
+	rts
+
+
+AreaSwapErr:
+	sec
+AreaSwapExit:
+	rts
+@0AreaSwap:
+	jsr GetNum_GetAreaWith
+	bcs AreaSwapErr
+	.ShowMsg(Msg_CR)
+	jsr MakeLen
+	ldx #RangeZp_From
+	jsr LongLib_LoadPtr
+
+	ldx #RangeZp_With
+	jsr LongLib_CmpWithLONGPtr
+	bcs SwapB
+SwapA:
+	jsr GetBlkLen
+	bcs SwapA3
+	ldx #RangeZp_From
+	jsr InputBuf_Init
+	bcs AreaSwapExit
+	ldy #0
+SwapA0:
+	lda InputBuffer,y
+	sta AreaBSS_Buf,y
+	iny
+	cpy AreaZp_BlkLen
+	bne SwapA0
+	tya
+	ldx #RangeZp_With
+	jsr InputBuf_Init
+	bcs AreaSwapExit
+	ldx #RangeZp_With
+	jsr OutputBuf_Init
+	ldy #0
+SwapA1:
+	lda AreaBSS_Buf,y
+	jsr OutputBuf_Byte
+	iny
+	cpy AreaZp_BlkLen
+	bne SwapA1
+	tya
+	beq SwapA4
+	jsr OutputBuf_Flush
+	bcs AreaSwapExit
+SwapA4:
+	ldx #RangeZp_From
+	jsr OutputBuf_Init
+	ldy #0
+SwapA2:
+	lda InputBuffer,y
+	jsr OutputBuf_Byte
+	iny
+	cpy AreaZp_BlkLen
+	bne SwapA2
+	.LongJsr(L_KeyB_CheckStop)
+	bne SwapA3
+	jsr AddBlk
+	tya
+	beq SwapA
+SwapA3:
+	jmp OutputBuf_Flush
+
+SwapB:
+	ldx #RangeZp_Len
+	jsr LongLib_LoadPtr
+	ldx #RangeZp_With
+	jsr LongLib_AddLONGPtr
+	jsr LongLib_StorePtr
+SwapB0:
+	jsr GetBlkLen
+	bcs SwapB7
+	tay
+	bne SwapB1
+	dec RangeZp_To+1
+	dec RangeZp_With+1
+SwapB1:
+	sec
+	lda RangeZp_To
+	sbc AreaZp_BlkLen
+	sta RangeZp_To
+	bcs SwapB2
+	dec RangeZp_To+1
+SwapB2:
+	sec
+	lda RangeZp_With
+	sbc AreaZp_BlkLen
+	sta RangeZp_With
+	bcs SwapB3
+	dec RangeZp_With+1
+SwapB3:
+	ldx #RangeZp_From
+	jsr InputBuf_Init
+	bcs SwapBExit
+	ldy #0
+SwapB4:
+	lda InputBuffer,y
+	sta AreaBSS_Buf,y
+	iny
+	cpy AreaZp_BlkLen
+	bne SwapB4
+	tya
+	ldx #RangeZp_With
+	jsr InputBuf_Init
+	bcs SwapBExit
+	ldx #RangeZp_With
+	jsr OutputBuf_Init
+	ldy #0
+SwapB5:
+	lda AreaBSS_Buf,y
+	jsr OutputBuf_Byte
+	iny
+	cpy AreaZp_BlkLen
+	bne SwapB5
+	tya
+	beq SwapB8
+	jsr OutputBuf_Flush
+	bcs SwapBExit
+SwapB8:
+	ldx #RangeZp_From
+	jsr OutputBuf_Init
+	ldy #0
+SwapB6:
+	lda InputBuffer,y
+	jsr OutputBuf_Byte
+	iny
+	cpy AreaZp_BlkLen
+	bne SwapB6
+
+	.LongJsr(L_KeyB_CheckStop)
+	bne SwapB7
+	tya
+	beq SwapB0
+SwapB7:
+	jmp OutputBuf_Flush
+SwapBExit:
+	rts
+
+
+;--------------------------------------
+
+AreaAdrOut:
+	txa
+	pha
+	tya
+	pha
+	lda ComLibZp_CursorXPos
+	clc
+	adc #6
+	cmp ComLibZp_CursorMaxXPos
+	bcc AreaAdrOut0
+	.ShowMsg(Msg_CR)
+AreaAdrOut0:
+	jsr LongLib_Akku0Out
+	lda ComLibZp_CursorXPos
+	cmp ComLibZp_CursorMaxXPos
+	bcs AreaAdrOut1
+	.LongJsr(L_ComLib_SpaceOut)
+AreaAdrOut1:
+	.LongJsr(L_ComLib_PrinterFlush)
+	pla
+	tay
+	pla
+	tax
+	rts
+
+
+;--------------------------------------
+
+GetH:
+	sta GetHZp_Mode
+	lda #0
+	sta FillBufLen
+GetH0:
+	jsr Spaces
+	bcs GetHFertig
+	cmp #$22
+	bne GetHNoString
+GetHString:
+	jsr NextCmdChar
+	bcs GetHFertig
+	cmp #$22
+	beq GetHString0
+	.LongJsr(L_ComLib_Screen2Ascii)
+	ldy FillBufLen
+	sta FillBufByte,y
+	lda #$ff
+	sta FillBufMask,y
+	inc FillBufLen
+	jmp GetHString
+GetHString0:
+	jsr NextCmdChar
+	jmp GetHFertig
+
+GetHNoString:
+	jsr HuntWild
+	bcs GetHErr
+
+	ldy FillBufLen
+	ldx #$ff
+GetHWBytes0:
+	inx
+	lda GetHZp_Numb,x
+	sta FillBufByte,y
+	lda GetHZp_Mask,x
+	sta FillBufMask,y
+	iny
+	cpx GetHZp_Sys
+	bcc GetHWBytes0
+	sty FillBufLen
+GetHFertig:
+	jsr Spaces
+	bcs GetHFertig0
+	cmp #','
+	bne GetHErr
+	jsr NextCmdChar
+	bcs GetHErr
+	jmp GetH0
+GetHFertig0:
+	lda FillBufLen
+	beq GetHErr
+	clc
+	rts
+GetHErr:
+	sec
+	rts
+
+;--------------------------------------
+
+HuntWild:
+	bit GetHZp_Mode
+	bpl HuntNoWild
+	jsr Spaces
+	bcs HuntWildErr
+	cmp #'!'
+	beq HuntNoWild
+	cmp #'&'
+	beq HuntNoWild
+	cmp #'%'
+	bne HuntWildNoBin
+	ldy #2
+	bne HuntWildSys
+HuntNoWild:
+	lda #$ff
+	sta GetHZp_Mask
+	sta GetHZp_Mask+1
+	sta GetHZp_Mask+2
+	jsr GetNum_GetHexLong
+	bcs HuntWildErr
+	sta GetHZp_Sys
+	ldx #GetHZp_Numb
+	jmp LongLib_StorePtr
+
+HuntWildErr:
+	sec
+	rts
+
+
+HuntWildNoBin:
+	ldy #16
+	cmp #'$'
+	bne HuntWildNoHex
+HuntWildSys:
+	jsr NextCmdChar
+	bcs HuntWildErr
+HuntWildNoHex:
+	sty GetHZp_Sys
+
+	ldy #$ff
+	ldx #$ff
+	cmp #'?'
+	bne HuntWild0
+	inx
+HuntWild0:
+	stx GetHZp_Mask
+	ldx #0
+	stx GetHZp_Numb
+
+HuntWild1:
+	cmp #'?'
+	bne HuntWild2
+	jsr HuntWildAsl
+	jmp HuntWild3
+HuntWild2:
+	jsr GetNum_ToHex
+	bcs HuntWild5
+	cmp GetHZp_Sys
+	bcs HuntWild5
+	jsr HuntWildAsl
+	ora GetHZp_Numb
+	sta GetHZp_Numb
+	lda GetHZp_Sys
+	sec
+	sbc #1
+	ora GetHZp_Mask
+	sta GetHZp_Mask
+HuntWild3:
+	iny
+	cpy #6
+	bcc HuntWild4
+	lda GetHZp_Sys
+	cmp #16
+	beq HuntWild5
+	cpy #23
+	bcs HuntWild5
+HuntWild4:
+	jsr NextCmdChar
+	bcc HuntWild1
+HuntWild5:
+	tya
+	bmi HuntWildErr
+	ldy GetHZp_Sys
+	cpy #16
+	beq HuntWild6
+	lsr
+	lsr
+HuntWild6:
+	lsr
+	sta GetHZp_Sys
+	clc
+	rts
+
+HuntWildAsl:
+	pha
+	lda GetHZp_Sys
+	lsr
+HuntWildAsl0:
+	asl GetHZp_Numb
+	rol GetHZp_Numb+1
+	rol GetHZp_Numb+2
+	asl GetHZp_Mask
+	rol GetHZp_Mask+1
+	rol GetHZp_Mask+2
+	lsr
+	bcc HuntWildAsl0
+	pla
+	rts
+
+;--------------------------------------
+
+
+	.)	;** Area **
+

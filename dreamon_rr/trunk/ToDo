@@ -1,0 +1,19 @@
+
+*** Important Bugs ***
+
+- Die routine zur eingabe einer Taste muss aus Bank 2 weg.
+z.B: nach Bank0 oder ins ram.
+
+- sometimes 'Syntax Error' after F8 ("mon")
+
+*** Done ***
+
+- the Freezer does not work in decimal mode
+
+- "Are you sure" does not work
+
+- Im Monitor crasht 'd c000-' , statt eine Fehlermeldung auszugeben.
+
+- 'a c000 nop+' does not show an error! The '+' is not recognized as an error!
+'nop-' too.
+

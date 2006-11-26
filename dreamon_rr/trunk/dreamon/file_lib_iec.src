@@ -1,0 +1,497 @@
+/***************************************************************************
+ *   Copyright (C) 2000 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+
+;--------------------------------------
+;
+; FileLib Low Level Routines for IEC Bus
+;
+;--------------------------------------
+
+;--------------------------------------
+; File_IOErr
+; File_Open
+; File_Close
+; File_ReadByte
+; File_WriteByte
+; File_Listen
+; File_Talk
+; File_SecListen
+; File_SecTalk
+; File_UnListen
+; File_UnTalk
+;--------------------------------------
+
+	.(	;*** FileLibIEC ***
+
+;--------------------------------------
+
+@0File_IOErr:
+	jsr File_Close
+	lda FileZp_90
+	bmi IOErr0
+	.ShowMsg(Msg_IEC_IOErr)
+	.DB $2c
+IOErr0:
+	.ShowMsg(Msg_IEC_DevNPresent)
+	clc
+	rts
+
+;--------------------------------------
+
+@0File_SetName:
+	sta FileZp_NameLen
+	stx FileZp_NamePtr
+	sty FileZp_NamePtr+1
+	rts
+
+@0File_OpenAXY:
+	jsr File_SetName
+@0File_Open:
+	lda FileZp_SecAdr
+	bmi Open2
+	lda FileZp_NameLen
+	beq Open2
+	lda #0
+	sta FileZp_90
+	lda FileZp_Device
+	jsr File_Listen
+	lda FileZp_SecAdr
+	ora #$f0
+Open:
+	jsr File_SecListen
+	bcc Open0
+	lda #ErrNo_IEC_DevNPresent
+	ora FileZp_90
+	sta FileZp_90
+	rts
+Open0:
+	ldy #0
+Open1:
+	lda (FileZp_NamePtr),y
+	jsr File_WriteByte
+	iny
+	cpy FileZp_NameLen
+	bne Open1
+	jmp File_UnListen
+Open2:
+	clc
+	rts
+
+
+@0File_OpenSendName:
+	sta FileZp_NameLen
+	stx FileZp_NamePtr
+	sty FileZp_NamePtr+1
+	lda FileZp_NameLen
+	beq OpenSendName0
+	lda #0
+	sta FileZp_90
+	lda FileZp_Device
+	jsr File_Listen
+	lda FileZp_SecAdr
+	ora #$60
+	bne Open
+
+OpenSendName0:
+	clc
+	rts
+
+;--------------------------------------
+
+@0File_WriteByte:
+	bit FileZp_94
+	bmi WriteByte0
+	sec
+	ror FileZp_94
+	bne WriteByte1		;bra
+WriteByte0:
+	pha
+	jsr IECOut
+	pla
+WriteByte1:
+	sta FileZp_95
+	clc
+	rts
+
+@0File_Listen:
+	ora #$20
+	bne LisTal		;bra
+@0File_Talk:
+	ora #$40
+LisTal:
+	pha
+	bit FileZp_94
+	bpl LisTal0
+	sec
+	ror FileZp_A3
+	jsr IECOut
+	lsr FileZp_94
+	lsr FileZp_A3
+LisTal0:
+	pla
+	sta FileZp_95
+	sei
+	jsr DataLo
+	lda #8
+	ora $dd00
+	sta $dd00
+
+IECSendAtn:
+	sei
+	jsr ClkHi
+	jsr DataLo
+	jsr Wait1Ms
+
+IECOut:
+	sei
+	jsr DataLo
+	jsr GetPort
+	lda #ErrNo_IEC_DevNPresent
+	bcs IECOutErr
+	jsr ClkLo
+	bit FileZp_A3
+	bpl IECOut0
+IECOut6:
+	jsr GetPort
+	bcc IECOut6
+IECOut7:
+	jsr GetPort
+	bcs IECOut7
+IECOut0:
+	jsr GetPort
+	bcc IECOut0
+	jsr ClkHi
+
+	jsr Delay23z
+
+	lda #8
+	sta FileZp_A5
+IECOut1:
+	lda $dd00
+	cmp $dd00
+	bne IECOut1
+	asl
+	bcc IECOutErrTO
+	ror FileZp_95
+	bcs IECOut2
+	jsr DataHi
+	bne IECOut3		;bra
+IECOut2:
+	jsr DataLo
+IECOut3:
+
+	jsr Delay16z
+
+	jsr ClkLo
+
+	jsr Delay16z
+
+	lda $dd00
+	and #$df
+	ora #$10
+	sta $dd00
+
+	nop
+	nop
+	nop
+	nop
+
+	dec FileZp_A5
+	bne IECOut1
+	lda #$54
+IECOut4:
+
+	jsr Delay12z
+
+	bit $dd00
+	bpl IECOut5
+	sec
+	sbc #1
+	bne IECOut4
+IECOutErrTO:
+	lda #ErrNo_IEC_Write
+IECOutErr:
+	ora FileZp_90
+	sta FileZp_90
+	jsr UnLisTalIn2
+	sec
+	rts
+IECOut5:
+	clc
+	rts
+/*
+;Delay:
+;	phx
+	ldx #23
+Delay0:
+	bit $d012
+	dex
+	bne Delay0
+;	plx
+	rts
+
+;Delay3:
+;	phx
+	ldx #16
+Delay30:
+	bit $d012
+	dex
+	bne Delay30
+;	plx
+	rts
+
+;Delay4:
+;	phx
+	ldx #8
+Delay40:
+	bit $d012
+	dex
+	bne Delay40
+;	plx
+	rts
+
+;Delay5:
+;	phx
+	ldx #12
+Delay50:
+	bit $d012
+	dex
+	bne Delay50
+;	plx
+	rts
+*/
+
+Delay23z:
+	bit $ea
+	nop
+	nop
+Delay16z:
+	nop
+	nop
+Delay12z:
+	rts
+
+
+;--------------------------------------
+
+DataLo:
+	lda $dd00
+	and #%11011111
+	sta $dd00
+	rts
+
+DataHi:
+	lda $dd00
+	ora #%00100000
+	sta $dd00
+	rts
+
+ClkLo:
+	lda $dd00
+	and #%11101111
+	sta $dd00
+	rts
+
+ClkHi:
+	lda $dd00
+	ora #%00010000
+	sta $dd00
+	rts
+
+GetPort:
+	lda $dd00
+	cmp $dd00
+	bne GetPort
+	asl
+	rts
+
+Wait1Ms:
+	txa
+	ldx #$b8
+Wait1Ms0:
+	nop
+	nop
+	dex
+	bne Wait1Ms0
+	tax
+	rts
+
+;--------------------------------------
+
+@0File_SecTalk:
+	sta FileZp_95
+#if 1
+	jsr IECSendAtn
+#else
+	jsr File_Listen
+#endif
+
+	bcs SecTalkErr
+	sei
+	jsr DataHi
+	lda $dd00
+	and #%11100111
+	sta $dd00
+SecTalk0:
+	jsr GetPort
+	bmi SecTalk0
+	cli
+SecTalkErr:
+	rts
+
+;--------------------------------------
+
+@0File_SecListen:
+	sta FileZp_95
+#if 1
+	jsr IECSendAtn
+#else
+	jsr File_Listen
+#endif
+
+AtnLo:
+	lda $dd00
+	and #%11110111
+	sta $dd00
+	rts
+
+@0File_UnListen:
+	lda #$3f
+UnLisTal:
+	jsr LisTal
+UnLisTalIn2:
+	jsr AtnLo
+UnLisTalIn1:
+	txa
+	ldx #$0b
+UnLisTal0:
+	nop
+	nop
+	dex
+	bne UnLisTal0
+	tax
+	jsr ClkLo
+	jmp DataLo
+
+@0File_UnTalk:
+	sei
+	lda $dd00
+	ora #$18
+	sta $dd00
+	lda #$5f
+	bne UnLisTal		;bra
+
+;--------------------------------------
+
+@0File_ReadByte:
+	lda FileZp_90
+	beq IECGet
+	lda #$0d
+	sec
+	rts
+
+IECGet:
+	sei
+	lda #0
+	sta FileZp_A5
+	jsr ClkLo
+IECGet0:
+	jsr GetPort
+	bpl IECGet0
+IECGet1:
+	jsr DataLo
+	ldx #$38
+IECGet2:
+
+	bit $ea
+	bit $ea
+	bit $ea
+
+	bit $dd00
+	bvc IECGet4
+	dex
+	bne IECGet2
+	lda FileZp_A5
+	beq IECGet3
+	lda #ErrNo_IEC_Read
+	ora FileZp_90
+	sta FileZp_90
+	jsr UnLisTalIn2
+	sec
+	rts
+
+IECGet3:
+	jsr DataHi
+	jsr ClkLo
+	lda #ErrNo_IEC_EOF
+	ora FileZp_90
+	sta FileZp_90
+
+	jsr Delay23z
+
+	inc FileZp_A5
+	bne IECGet1		;bra
+
+IECGet4:
+	ldx #7
+IECGet5:
+	lda $dd00
+	cmp $dd00
+	bne IECGet5
+	asl
+	bpl IECGet5
+	ror FileZp_95
+IECGet6:
+	lda $dd00
+	cmp $dd00
+	bne IECGet6
+	asl
+	bmi IECGet6
+	dex
+	bpl IECGet5
+	jsr DataHi
+	bit FileZp_90
+	bvc IECGet7
+	jsr UnLisTalIn1
+IECGet7:
+	lda FileZp_95
+	cli
+	clc
+	rts
+
+;--------------------------------------
+
+@0File_Close:
+	lda FileZp_Device
+	jsr File_Listen
+	lda FileZp_SecAdr
+	and #$ef
+	ora #$e0
+	jsr File_SecListen
+	jsr File_UnListen
+	clc
+	rts
+
+;--------------------------------------
+
+
+	.)	;*** FileLibIEC ***
+

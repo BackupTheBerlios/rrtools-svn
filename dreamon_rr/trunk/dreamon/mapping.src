@@ -1,0 +1,199 @@
+/***************************************************************************
+ *   Copyright (C) 2000 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+
+;--------------------------------------
+
+	.(	/* Mapping */
+
+;--------------------------------------
+/*
++Mapping_LdByteY:
+	php
+	sty MappingZp_Y
+	jsr MakeMapping
+	jsr Mapping_LdaByte
+	bne MappedEnd
+
++Mapping_LdByte:
+	php
+	sty MappingZp_Y
+	ldy #0
+	jsr MakeMapping
+	jsr Mapping_LdaByte
+	bne MappedEnd
+
++Mapping_StByteY:
+	php
+	sty MappingZp_Y
+	jsr MakeMapping
+	jsr Mapping_StaByte
+	bne MappedEnd
+
++Mapping_StByte:
+	php
+	sty MappingZp_Y
+	ldy #0
+	jsr MakeMapping
+	jsr Mapping_StaByte
+MappedEnd:
+	ldy MappingZp_Y
+	plp
+	rts
+
+MakeMapping:
+	sei
+	pha
+	clc
+	tya
+	adc LongLibZp_Akku0
+	sta MappingZp_Adress
+	lda LongLibZp_Akku0+1
+	adc #0
+	sta MappingZp_Adress+1
+	lda LongLibZp_Akku0+2
+	adc #0
+	sta MappingZp_Adress+2
+	jsr MakeMappingR
+	pla
+	rts
+*/
+
+;	   Basic   IO	   Kernal  Char
+;$x7 %111    1	     1	     1	     0
+;$x6 %110    0	     1	     1	     0
+;$x5 %101    0	     1	     0	     0
+;$x4 %100    0	     0	     0	     0
+;$x3 %011    1	     0	     1	     1
+;$x2 %010    0	     0	     1	     1
+;$x1 %001    0	     0	     0	     1
+;$x0 %000    0	     0	     0	     0
+
+@0MakeMappingR:
+	lda OptionFlags
+	and #OptionFlag_MMap
+	bne MakeMappingOrgAdr
+	lda MappingZp_Adress+2
+	cmp #8
+	bcs MakeMappingOtherDevices
+	lda MappingZp_Adress
+	cmp #<__BSSSaveMeEnd
+	lda MappingZp_Adress+1
+	sbc #>__BSSSaveMeEnd
+	bcs MakeMapping0
+/* ---Pages 00-08 and BSS--- */
+;	lda MappingZp_Adress
+;	sta MappingZp_Adress
+	lda MappingZp_Adress+1
+	ora #>SubZero_LoMem
+	sta MappingZp_Adress+1
+	ldy #MappingIdx_CrtRam0
+	rts
+
+MakeMapping0:
+	lda MappingZp_Adress+1
+	cmp #$d0
+	bcc MakeMappingOrgAdr		;BSS End bis $d000 = no Mapping
+	cmp #$e0
+	bcc MakeMappingIO
+
+MakeMappingDEDF:			;Baccy is lazy
+MakeMappingSID:				;Baccy is lazy
+MakeMappingOrgAdr:
+	ldy MappingZp_Adress+2		;0 bis 7 entspricht MappingIdx_Mem?
+	rts
+
+MakeMappingOtherDevices:
+	rts
+
+@0MakeMappingIO:
+;---IOMapping D000 to E000---
+	lda MappingZp_Adress+2
+	and #7
+	cmp #5
+	bcc MakeMappingOrgAdr
+	lda MappingZp_Adress+1
+	cmp #$de
+	bcs MakeMappingDEDF
+	cmp #$dd
+	bcs MakeMappingCIA2
+	cmp #$dc
+	bcs MakeMappingCIA1
+	cmp #$d8
+	bcs MakeMappingCol
+	cmp #$d4
+	bcs MakeMappingSID
+;---VIC---
+	lda MappingZp_Adress
+	and #$3f
+	adc #<SubZero_VIC
+	sta MappingZp_Adress
+	lda #>SubZero_VIC
+	adc #0
+	sta MappingZp_Adress+1
+	ldy #MappingIdx_CrtRam0
+	rts
+
+MakeMappingCIA1:
+	clc
+	lda MappingZp_Adress
+	and #$0f
+	adc #<SubZero_CIA1
+	sta MappingZp_Adress
+	lda #>SubZero_CIA1
+	adc #0
+	sta MappingZp_Adress+1
+	ldy #MappingIdx_CrtRam0
+	rts
+
+MakeMappingCIA2:
+	clc
+	lda MappingZp_Adress
+	and #$0f
+	adc #<SubZero_CIA2
+	sta MappingZp_Adress
+	lda #>SubZero_CIA2
+	adc #0
+	sta MappingZp_Adress+1
+	ldy #MappingIdx_CrtRam0
+	rts
+
+MakeMappingCol:
+	clc
+	lda MappingZp_Adress
+	adc #<SubZero_Col
+	sta MappingZp_Adress
+	lda MappingZp_Adress+1
+	and #$03
+	adc #>SubZero_Col
+	sta MappingZp_Adress+1
+	ldy #MappingIdx_CrtRam0
+	rts
+
+;--------------------------------------
+
+	.)	/* Mapping */
+
+
+
+
+
+
+

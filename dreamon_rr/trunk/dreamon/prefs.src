@@ -1,0 +1,461 @@
+/***************************************************************************
+ *   Copyright (C) 2000 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+
+/*-------------------------------------
+  Edit Preferences
+-------------------------------------*/
+
+	.(	/* Prefs */
+
++Prefs:
+	jsr NextSpaces
+	bcc SetTabs
+
+ShowPrefs: /* !!!Nur zum Testen, da noch nicht drin!!! */
+	sec
+	rts
+
+SetTabs:
+	.(	; *Set Tabs*
+	cmp #"t"
+	bne SetNoT
+	jsr NextSpaces	
+	bcc SetTabLen0
+	ShowMsg(Msg_CR)
+	lda Dump_AscLen
+	jsr ComLib_ByteOut
+	lda #","
+	jsr ComLib_PrintChar
+	jsr ComLib_SpaceOut
+	lda Dump_MemLen
+	jsr ComLib_ByteOut
+	ShowMsg(Msg_CR)
+	clc
+	rts
+
+SetTabLenErr0:
+	ShowErr(Err_MissOp)
+	.DB $2c
+SetTabLenErr1:
+	ShowErr(Err_Number)
+	.DB $2c
+SetTabLenErr2:
+	ShowErr(Err_PTab_AscOvr)
+	.DB $2c
+SetTabLenErr3:
+	ShowErr(Err_PTab_MemOvr)
+	.DB $2c
+SetTabLenErr4:
+	ShowErr(Err_PTab_Zero)
+	.DB $2c
+SetTabLenErr5:
+	ShowErr(Err_AOp)
+	sec
+	rts
+
+SetTabLen0:
+	lda #0
+	jsr GetNum_GetHexNDig
+	bcs SetTabLenErr1		;can't eval num
+	lda LongLibZp_Akku0
+	beq SetTabLenErr4		;AscLen==0
+	cmp Dump_AscMaxLen
+	beq SetTabLen1
+	bcs SetTabLenErr2		;AscLen zu gross
+SetTabLen1:
+	sta Dump_AscLen
+	jsr Spaces
+	bcs SetTabLenErr0		;no second Arg
+	lda #0
+	jsr GetNum_GetHexNDig
+	bcs SetTabLenErr1		;can't eval num
+	lda LongLibZp_Akku0
+	beq SetTabLenErr4		;MemLen==0
+	cmp Dump_MemMaxLen
+	beq SetTabLen2
+	bcs SetTabLenErr3		;MemLen zu gross
+SetTabLen2:
+	sta Dump_MemLen
+	jsr Spaces
+	bcs SetTabLen3
+	cmp #";"
+	bne SetTabLenErr5		;Nach letztem Arg kommt noch was
+SetTabLen3:
+	ShowMsg(Msg_CR)
+	clc
+	rts
+
+SetNoT:
+	.)	; *Set Tabs*
+
+
+	.(	; *SetIO*
+
+	cmp #"i"
+	bne SetNoI
+	jsr NextSpaces
+	bcs SetI1			;Auf Compi zurueck
+	cmp #"o"
+	beq SetI0			;beides
+	jsr SetIO_GetDev
+	bcs SetI_Err
+	sta InputBufZp_Dev
+	ShowMsg(Msg_CR)
+	clc
+SetI_Err:
+	rts
+
+SetI0:
+	jsr NextSpaces
+	bcs SetI2
+	jsr SetIO_GetDev
+	bcs SetIO_Err
+	sta InputBufZp_Dev
+	jsr Spaces
+	bcs SetIO0
+	cmp #","
+	bne SetIO_Err0			;expecting ","
+	jsr NextSpaces
+	bcs SetIO_Err1			;Missing 2. arg after ","
+	jsr SetIO_GetDev
+	bcs SetIO_Err
+	sta OutputBufZp_Dev
+	ShowMsg(Msg_CR)
+	clc
+	rts
+SetIO_Err0:
+	ShowErr(Err_AOp)
+	.DB $2c
+SetIO_Err1:
+	ShowErr(Err_MissAfterComma)
+SetIO_Err:
+	sec
+	rts
+
+SetI1:
+	jsr SetI3
+	ShowMsg(Msg_CR)
+	clc
+	rts
+SetI2:
+	jsr SetI3
+	lda #","
+	jsr ComLib_PrintRawChar
+	jsr ComLib_SpaceOut
+	bra SetO2
+
+SetI3:
+	ShowMsg(Msg_CR)
+	lda InputBufZp_Dev
+	ldx #0
+	jsr LongLib_LoadAXY
+	jmp ComLib_DezWordOut
+
+
+SetO1:
+	ShowMsg(Msg_CR)
+SetO2:
+	lda OutputBufZp_Dev
+	ldx #0
+	jsr LongLib_LoadAXY
+	jsr ComLib_DezWordOut
+	ShowMsg(Msg_CR)
+	clc
+	rts
+
+SetIO0:
+	lda InputBufZp_Dev
+	sta OutputBufZp_Dev
+	ShowMsg(Msg_CR)
+	clc
+	rts
+
+SetNoI:
+	cmp #"o"
+	bne SetNoO
+	jsr NextSpaces
+	bcs SetO1
+	jsr SetIO_GetDev
+	bcs SetO_Err
+	sta OutputBufZp_Dev
+	ShowMsg(Msg_CR)
+	clc
+SetO_Err:
+	rts
+
+SetIO_GetDev:
+	jsr GetNum_GetDezLong
+	bcs GetDevErr1
+	cmp #1
+	bcs GetDevErr0
+	lda LongLibZp_Akku0
+	beq GetDevOk
+	cmp #8
+	bcc GetDevErr0
+	cmp #32
+	bcs GetDevErr0
+GetDevOk:
+	clc
+	rts
+GetDevErr0:
+	ShowErr(Err_DevNo_Ill)
+	.DB $2c
+GetDevErr1:
+	ShowErr(Err_Number)
+	sec
+	rts
+
+
+SetNoO:
+	.)	; *SetIO*
+
+
+	.(	;** Set Mapping Mode **
+
+	cmp #"m"
+	bne SetNoMJmp
+	jsr NextSpaces
+	bcc SetM
+
+	ShowMsg(Msg_CR)
+	lda GetNumBSS_ModeNr
+	and #3
+	beq SetMShow1
+	cmp #2
+	beq SetMShow0
+	cmp #3
+	beq SetMShow2
+	ShowMsg(Msg_Mapping_Data)
+	.DB $2c
+SetMShow0:
+	ShowMsg(Msg_Mapping_Program)
+	.DB $2c
+SetMShow1:
+	ShowMsg(Msg_Mapping_None)
+	bra SetMShow3
+SetMShow2:
+	lda GetNumBSS_Pad2
+	jsr ComLib_DollarByteOut
+	bit GetNumBSS_ModeNr
+	bpl SetMShow3
+	lda #","
+	jsr ComLib_PrintChar
+	lda GetNumBSS_Pad1+1
+	ldx GetNumBSS_Pad1
+	jsr ComLib_DollarWordOut
+SetMShow3:
+	ShowMsg(Msg_CR)
+	clc
+	rts
+
+SetNoMJmp:
+	Jmp SetNoM				;Argh!
+
+SetM:
+	ldx #0
+	stx PrefsZp_Pad1
+	stx PrefsZp_Pad1+1
+	ldx #2
+SetM0:
+	cmp PrefsSetMBSSTab0,x
+	beq SetM1
+	dex
+	bpl SetM0
+	lda #3
+	sta PrefsZp_ModeNr
+	lda #0
+	jsr GetNum_GetHexNDig
+	bcs SetMErr
+	lda LongLibZp_Akku0
+	sta PrefsZp_Pad2
+	jsr Spaces
+	bcs SetM3
+	cmp #","
+	bne SetMErr
+	jsr NextSpaces
+	lda #1
+	jsr GetNum_GetHexNDig
+	bcs SetMErr
+	ldx #PrefsZp_Pad1
+	jsr LongLib_StoreWORD
+	lda #$83
+	sta PrefsZp_ModeNr
+	bne SetM3
+
+SetM1:
+	jsr Prefs_SetMappingMode
+	bra SetM4
+
+SetM3:
+	lda PrefsZp_ModeNr
+	sta GetNumBSS_ModeNr
+	lda PrefsZp_Pad1
+	sta GetNumBSS_Pad1
+	lda PrefsZp_Pad1+1
+	sta GetNumBSS_Pad1+1
+	lda PrefsZp_Pad2
+	sta GetNumBSS_Pad2
+SetM4:
+	ShowMsg(Msg_CR)
+	clc
+	rts
+
+
+SetMGetAdr:
+	beq SetMErr		;Nicht wirklich err, aber C ist hier beim Return egal -> Optimiert!
+	sta PrefsZp_Ptr0
+	sty PrefsZp_Y
+	ldy #0
+	sty PrefsZp_Ptr0+1
+	lda (PrefsZp_Ptr0),y
+	ldy PrefsZp_Y
+SetMErr:
+	sec
+	rts
+
+
++Prefs_SetMappingMode:
+	inx
+	stx GetNumBSS_ModeNr
+	txa
+	asl
+	adc GetNumBSS_ModeNr		; mal 3
+	tay
+	ldx #2
+SetMappingMode0:
+	lda PrefsSetMBSSTab1-1,y
+	jsr SetMGetAdr
+	sta GetNumBSS_Pad1,x
+	dey
+	dex
+	bpl SetMappingMode0
+	rts
+
+
+SetNoM:
+	.)	;** Set Mapping Mode **
+
+
+	.(	;** Set Palette **
+
+	cmp #"p"
+	bne SetNoP
+	jsr NextSpaces
+	bcc SetPal
+	ShowMsg(Msg_ShowPalette)
+	ldx #0
+ShowPalette:
+	lda Palette,x
+	jsr ComLib_HexNibbleOut
+	inx
+	cpx #Palette_len
+	bcs ExitOk
+	jsr ComLib_SpaceOut
+	jmp ShowPalette
+
+SetPal:
+	lda #0
+	sta PrefsZp_Pad1
+SetPal0:
+	jsr GetNum_GetHexLong
+	bcs SetPalErr
+	lda LongLibZp_Akku0+1
+	ora LongLibZp_Akku0+2
+	bne SetPalErr
+	lda LongLibZp_Akku0
+	cmp #$10
+	bcs SetPalErr
+	ldx PrefsZp_Pad1
+	sta PrefsBSS_PaletteZp,x
+	inc PrefsZp_Pad1
+	cpx #Palette_len-1
+	bcs SetPal1
+	jsr NextSpaces
+	bcc SetPal0
+SetPal1:
+	jsr NextSpaces
+	bcc SetPalErr
+	ldx #Palette_len-1
+SetPal2:
+	lda PrefsBSS_PaletteZp,x
+	sta Palette,x
+	dex
+	bpl SetPal2
+ExitOk:
+	ShowMsg(Msg_CR)
+	clc
+	rts
+
+
+SetPalErr:
+	ShowErr(Err_SetPalette)
+	sec
+	rts
+
+SetNoP:
+	.)	;** /Set Palette **
+
+
+	.(	;** Set Speeder **
+
+	cmp #"s"
+	bne SetNoS
+	jsr NextSpaces
+	bcc SetSpeeder
+	ShowMsg(Msg_ShowSpeeder)
+	lda #"n"
+	ldx Option_Speeder
+	bne ShowSpeeder0
+	lda #"f"
+	jsr ComLib_PrintRawChar
+ShowSpeeder0:
+	jsr ComLib_PrintRawChar
+	bra ExitOk
+
+SetSpeeder:
+	lda #0
+	jsr GetNum_GetHexNDig
+	bcs SetSpeederErr
+	lda GetNumZp_Val1
+	cmp #2
+	bcs SetSpeederErr
+	sta Option_Speeder
+ExitOk:
+	ShowMsg(Msg_CR)
+	clc
+	rts
+
+
+SetSpeederErr:
+	ShowErr(Err_SetSpeeder)
+	sec
+	rts
+
+SetNoS:
+	.)	;** /Set Speeder **
+
+	sec
+	rts
+
+
+
+	.)	/* Prefs */
+

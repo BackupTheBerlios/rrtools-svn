@@ -1,0 +1,1802 @@
+/***************************************************************************
+ *   Copyright (C) 2000 - 2006 by Christoph Thelen                         *
+ *   DocBacardi@the-dreams.de                                              *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, write to the                         *
+ *   Free Software Foundation, Inc.,                                       *
+ *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ ***************************************************************************/
+
+
+;--------------------------------------
+;
+;  GetNum for DreaMon
+;
+;--------------------------------------
+
+
+	.(	;*** GetNumber ***
+
+/*
+#define _DebugGetNum_
+*/
+
+;--------------------------------------
+;
+;  Routines:
+;
+;GetNum_GetAreaWith
+;GetNum_GetArea
+;GetNum_GetRange
+;GetNum_GetHexNumber
+;GetNum_GetHexNumberNDigits
+;GetNum_GetNumber
+;GetNum_GetNumberNDigits
+;
+;--------------------------------------
+
+@0GetNum_GetAreaWith:
+	jsr GetNum_GetArea
+	bcs GetAreaWithErr
+	jsr Spaces
+	bcs GetAreaWithErr0
+	jsr GetNum_Adress		;GetHexLong
+	bcs GetAreaWithErr1
+	ldx #RangeZp_With
+	jmp LongLib_StorePtr
+
+GetAreaWithErr0:
+	.ShowErr(Err_Area_NoWith)
+	.DB $2c
+GetAreaWithErr1:
+	.ShowErr(Err_Area_With)
+GetAreaWithErr:
+	rts
+
+@0GetNum_GetArea:
+	jsr NextSpaces
+	bcs GetAreaErr0
+	jsr GetNum_Adress		;GetHexLong
+	bcs GetAreaErr1
+	ldx #RangeZp_From
+	jsr LongLib_StorePtr
+	jsr Spaces
+	bcs GetAreaErr2
+	jsr GetNum_Adress		;GetHexLong
+	bcs GetAreaErr3
+	ldx #RangeZp_To
+	jsr LongLib_StorePtr
+	ldx #RangeZp_From
+	jsr LongLib_CmpLONGPtrWith
+	bcs GetAreaErr4
+	rts
+
+GetAreaErr0:
+	.ShowErr(Err_Area_NoFrom)
+	.DB $2c
+GetAreaErr1:
+	.ShowErr(Err_Area_From)
+	.DB $2c
+GetAreaErr2:
+	.ShowErr(Err_Area_NoTo)
+	.DB $2c
+GetAreaErr3:
+	.ShowErr(Err_Area_To)
+	.DB $2c
+GetAreaErr4:
+	.ShowErr(Err_Area_Upside)
+	rts
+
+;--------------------------------------
+
+@0GetNum_GetRange:
+	jsr GetRangeRts
+	cmp #$ff
+	bcs GetRange0
+	sta RangeZp_Flags
+GetRange0:
+	rts
+
+GetRangeRts:
+	jsr NextSpaces
+	bcc GetRangeRts1
+	ldx #Adress
+	jsr LongLib_LoadPtr
+	ldx #RangeZp_From
+	jsr LongLib_StorePtr
+	lda #0
+	rts
+GetRangeRts1:
+	cmp #'='
+	bne GetRangeRts2
+	jsr NextSpaces
+	bcs GetRangeRtsErr0
+	jsr GetNum_Adress		;GetHexLong
+	bcs GetRangeRtsErr1
+	jsr Spaces
+	bcc GetRangeRtsErr2
+	ldx #RangeZp_From
+	jsr LongLib_StorePtr
+	lda #RangeFlag_Up
+	rts
+GetRangeRts2:
+	jsr GetNum_Adress		;GetHexLong
+	bcs GetRangeRtsErr1
+	ldx #RangeZp_From
+	jsr LongLib_StorePtr
+	jsr Spaces
+	bcc GetRangeRts3
+	lda #RangeFlag_SingleLine
+	rts
+GetRangeRts3:
+	cmp #'='
+	bne GetRangeRts6
+	jsr NextSpaces
+	bcc GetRangeRts4
+	lda #0
+	rts
+GetRangeRts4:
+	jsr GetNum_Adress		;GetHexLong
+	bcs GetRangeRtsErr3
+	jsr Spaces
+	bcc GetRangeRtsErr4
+	ldx #RangeZp_To
+	jsr LongLib_StorePtr
+	ldx #RangeZp_From
+	jsr LongLib_CmpWithLONGPtr
+	lda #RangeFlag_Up|RangeFlag_EndAdr
+	bcc GetRangeRts5
+	lda #RangeFlag_EndAdr
+GetRangeRts5:
+	rts
+GetRangeRts6:
+	jsr GetRangeRts4
+	cmp #$ff
+	bcs GetRangeRts7
+	ora #RangeFlag_NonStop
+GetRangeRts7:
+	rts
+
+GetRangeRtsErr0:
+	.ShowErr(Err_Area_NoFrom)
+	.DB $2c
+GetRangeRtsErr1:
+	.ShowErr(Err_Area_From)
+	.DB $2c
+GetRangeRtsErr2:
+	.ShowErr(Err_Area_AFrom)
+	.DB $2c
+GetRangeRtsErr3:
+	.ShowErr(Err_Area_To)
+	.DB $2c
+GetRangeRtsErr4:
+	.ShowErr(Err_Area_ATo)
+	lda #$ff
+	rts
+
+;--------------------------------------
+
+@0GetNum_Adress:
+	jsr GetNum_GetHexLong
+	bcs GetNum_AdressErr
+	cmp #1
+	beq GetNum_Adress0
+	bcs GetNum_Adress1
+	lda GetNumBSS_Pad1
+	ldx GetNumBSS_Pad1+1
+	jsr LongLib_AddWORD
+	lda #0
+	sta LongLibZp_Akku0+2
+	beq GetNum_Adress1
+GetNum_Adress0:
+	lda GetNumBSS_Pad2
+	sta LongLibZp_Akku0+2
+GetNum_Adress1:
+	ldx #GetNumZp_Val1
+	jsr LongLib_StorePtr
+	lda #2
+	clc
+	rts
+
+GetNum_AdressErr:
+	sec
+	rts
+
+;--------------------------------------
+
+@0GetNum_GetDezLong:
+	lda #2
+	ldx #10>>1
+	bne GetNum_In0
+
+@0GetNum_GetHexLong:
+	lda #2
+@0GetNum_GetHexNDig:
+	ldx #16>>1
+GetNum_In0:
+	sta GetNumZp_MaxDigits
+	stx GetNumZp_DefaultSystem
+	jsr GetXNum
+	bcs GetNum_Err
+	tay
+	cmp GetNumZp_MaxDigits
+	beq GetNum_Ok
+	bcs GetNum_Err
+GetNum_Ok:
+
+	ldx #GetNumZp_Val1
+	jsr LongLib_LoadPtr
+	tya
+	clc
+	rts
+
+GetNum_Err:
+	sec
+	rts
+
+;--------------------------------------
+
+GetXNum:
+	lda #0
+	sta GetNumZp_ArgLen
+GetXNum_Loop:
+;Position retten, wenn an dieser Stelle Ende ist
+	ldx GetNumZp_ArgLen
+	lda CmdLinePos
+	sta GetNumBSS_PosBuf,x
+
+	jsr Spaces
+	bcs Ready
+
+	jsr GetOp
+	bcc Oversize
+	jsr GetNum
+	bcs Ready
+	pha
+	jsr GetNumNormalLen
+	sta GetNumZp_Val2
+	pla
+	cmp GetNumZp_Val2
+	bne Oversize
+	lda #$80
+Oversize:
+	ldx GetNumZp_ArgLen
+	sta GetNumBSS_OpBuf,x
+	lda GetNumZp_Val1
+	sta GetNumBSS_NumBuf0,x
+	lda GetNumZp_Val1+1
+	sta GetNumBSS_NumBuf1,x
+	lda GetNumZp_Val1+2
+	sta GetNumBSS_NumBuf2,x
+	lda GetNumZp_Val1+3
+	sta GetNumBSS_NumBuf3,x
+	inc GetNumZp_ArgLen
+	bne GetXNum_Loop
+
+Ready:
+	lda GetNumZp_ArgLen
+	bne KlammerTest
+GetXNum_Error:
+	;restore position
+	lda GetNumBSS_PosBuf
+	sta CmdLinePos
+	sec
+	rts
+
+
+KlammerTest:
+	ldx #0
+	ldy #0
+	lda #$ff
+	sta GetNumZp_LastOkPos
+Kla0:
+	tya
+	beq NoNumNum
+	lda GetNumBSS_OpBuf-1,y
+	bpl NoNumNum
+	lda GetNumBSS_OpBuf,y
+	bpl NoNumNum
+	bmi KlaEnd2
+NoNumNum:
+	lda GetNumBSS_OpBuf,y
+	cmp #MathOp_KlAuf
+	bne Kla1
+	inx
+	bcs Kla2	;Carry ist gesetzt, da oben nach dem 'cmp' mit 'bne' verzweigt wurde
+Kla1:
+	cmp #MathOp_KlZu
+	bne Kla2
+	dex
+	cpx #$ff
+	beq KlaEnd
+Kla2:
+	txa
+
+#ifdef _DebugGetNum_
+	sta $04f0,y
+#endif
+
+	bne Kla3
+	sty GetNumZp_LastOkPos
+Kla3:
+	iny
+	cpy GetNumZp_ArgLen
+	bcc Kla0
+KlaEnd:
+	ldy GetNumZp_LastOkPos
+	iny
+	beq GetXNum_Error
+KlaEnd2:
+	sty GetNumZp_ArgLen
+
+
+	lda GetNumBSS_PosBuf,y
+	sta CmdLinePos
+
+#ifdef _DebugGetNum_
+	sta $0518
+#endif
+
+;Find inner brackets
+
+FindBrackets:
+	lda GetNumZp_ArgLen
+	cmp #2
+	bcs FBra
+	lda GetNumBSS_OpBuf	; Letzes Element Num=Ok, Op=Error!
+	bpl MathError
+	lda GetNumBSS_NumBuf0
+	sta GetNumZp_Val1
+	lda GetNumBSS_NumBuf1
+	sta GetNumZp_Val1+1
+	lda GetNumBSS_NumBuf2
+	sta GetNumZp_Val1+2
+	lda GetNumBSS_NumBuf3
+	sta GetNumZp_Val1+3
+
+	jsr GetNumNormalLen
+	ora #$80
+	cmp GetNumBSS_OpBuf
+	bcs FindBrackets0
+	lda GetNumBSS_OpBuf
+FindBrackets0:
+	and #$7f
+	clc
+	rts
+
+
+FBra:
+	ldy #0
+FBra0:
+	tya
+	tax
+FBra1:
+	lda GetNumBSS_OpBuf,y
+	cmp #MathOp_KlZu
+	beq FBra2
+	iny
+	cmp #MathOp_KlAuf
+	beq FBra0
+	cpy GetNumZp_ArgLen
+	bcc FBra1
+FBra2:
+	stx GetNumZp_StartBra
+	sty GetNumZp_EndBra
+
+#ifdef _DebugGetNum_
+	stx $0519
+	sty $051a
+#endif
+
+Solve:
+	ldx #0
+	stx GetNumZp_Solves
+	ldx #MathOp_Anzahl-1
+Solve0:
+	ldy GetNumZp_StartBra
+Solve1:
+	txa
+	pha
+	jsr OpRtsTabJmp
+	pla
+	tax
+	bcs MathError
+	iny
+	cpy GetNumZp_EndBra
+	bcc Solve1
+;	dex
+	dex
+	bpl Solve0
+
+	lda GetNumZp_EndBra
+	sec
+	sbc GetNumZp_StartBra
+	cmp #2
+	bcc Solve2
+
+	lda GetNumZp_Solves
+	bne Solve
+MathError:
+	lda GetNumBSS_PosBuf
+	sta CmdLinePos
+	sec
+	rts
+
+Solve2:
+	ldy GetNumZp_StartBra
+	beq Solve3
+	dey
+	lda GetNumBSS_OpBuf+1,y
+	sta GetNumBSS_OpBuf,y
+	lda GetNumBSS_PosBuf+1,y	
+	sta GetNumBSS_PosBuf,y
+	lda GetNumBSS_NumBuf0+1,y
+	sta GetNumBSS_NumBuf0,y
+	lda GetNumBSS_NumBuf1+1,y
+	sta GetNumBSS_NumBuf1,y
+	lda GetNumBSS_NumBuf2+1,y
+	sta GetNumBSS_NumBuf2,y
+	lda GetNumBSS_NumBuf3+1,y
+	sta GetNumBSS_NumBuf3,y
+	
+	jsr DelTwo
+Solve3:
+	jmp FindBrackets
+	
+	
+
+
+OpRtsTabJmp:
+	lda OpRtsLo,x
+	sta GetNumBSS_OpJmp
+	lda OpRtsHi,x
+	sta GetNumBSS_OpJmp+1
+	jmp (GetNumBSS_OpJmp)
+
+OpRtsLo:
+	.DB <OpRts_Or
+	.DB <OpRts_Eor
+	.DB <OpRts_Not
+	.DB <OpRts_And
+
+	.DB <OpRts_ShiftL,	<OpRts_ShiftR
+
+	.DB <OpRts_Positiv,	<OpRts_Negativ
+	.DB <OpRts_Plus,	<OpRts_Minus
+	.DB <OpRts_Mult,	<OpRts_Division,	<OpRts_Modulo
+	.DB <OpRts_Lo,		<OpRts_Hi,		<OpRts_Bank
+
+OpRtsHi:
+	.DB >OpRts_Or
+	.DB >OpRts_Eor
+	.DB >OpRts_Not
+	.DB >OpRts_And
+
+	.DB >OpRts_ShiftL,	>OpRts_ShiftR
+
+	.DB >OpRts_Positiv,	>OpRts_Negativ
+	.DB >OpRts_Plus,	>OpRts_Minus
+	.DB >OpRts_Mult,	>OpRts_Division,	>OpRts_Modulo
+	.DB >OpRts_Lo,		>OpRts_Hi,		>OpRts_Bank
+
+
+
+CheckForDoubleOp:
+	tya
+	clc
+	adc #2
+	cmp GetNumZp_EndBra
+	bcs CheckForOp_No
+	lda GetNumBSS_OpBuf,y
+	bpl CheckForOp_No
+	lda GetNumBSS_OpBuf+2,y
+	bpl CheckForOp_No
+	txa
+	cmp GetNumBSS_OpBuf+1,y
+	bne CheckForOp_No
+	lda GetNumBSS_NumBuf0,y
+	sta GetNumZp_Val1
+	lda GetNumBSS_NumBuf1,y
+	sta GetNumZp_Val1+1
+	lda GetNumBSS_NumBuf2,y
+	sta GetNumZp_Val1+2
+	lda GetNumBSS_NumBuf3,y
+	sta GetNumZp_Val1+3
+	lda GetNumBSS_NumBuf0+2,y
+	sta GetNumZp_Val2
+	lda GetNumBSS_NumBuf1+2,y
+	sta GetNumZp_Val2+1
+	lda GetNumBSS_NumBuf2+2,y
+	sta GetNumZp_Val2+2
+	lda GetNumBSS_NumBuf3+2,y
+	sta GetNumZp_Val2+3
+	clc
+	rts
+CheckForOp_No:
+	sec
+	rts
+
+
+CheckForSingleOp:
+	tya
+	clc
+	adc #1
+	cmp GetNumZp_EndBra
+	bcs CheckForOp_No
+	lda GetNumBSS_OpBuf+1,y
+	bpl CheckForOp_No
+	txa
+	cmp GetNumBSS_OpBuf,y
+	bne CheckForOp_No
+	lda GetNumBSS_NumBuf0+1,y
+	sta GetNumZp_Val1
+	lda GetNumBSS_NumBuf1+1,y
+	sta GetNumZp_Val1+1
+	lda GetNumBSS_NumBuf2+1,y
+	sta GetNumZp_Val1+2
+	lda GetNumBSS_NumBuf3+1,y
+	sta GetNumZp_Val1+3
+	clc
+	rts
+
+DelTwo:
+	lda GetNumZp_Val1
+	sta GetNumBSS_NumBuf0,y
+	lda GetNumZp_Val1+1
+	sta GetNumBSS_NumBuf1,y
+	lda GetNumZp_Val1+2
+	sta GetNumBSS_NumBuf2,y
+	lda GetNumZp_Val1+3
+	sta GetNumBSS_NumBuf3,y
+
+;	lda GetNumBSS_OpBuf,y
+;	cmp GetNumBSS_OpBuf+2,y
+;	bcs DelTwo1
+;	lda GetNumBSS_OpBuf+2,y
+
+DelTwo1:
+	tya
+	tax
+DelTwo0:
+	inx
+	lda GetNumBSS_OpBuf+2,x	
+	sta GetNumBSS_OpBuf,x
+	lda GetNumBSS_PosBuf+2,x	
+	sta GetNumBSS_PosBuf,x
+	lda GetNumBSS_NumBuf0+2,x	
+	sta GetNumBSS_NumBuf0,x
+	lda GetNumBSS_NumBuf1+2,x	
+	sta GetNumBSS_NumBuf1,x
+	lda GetNumBSS_NumBuf2+2,x	
+	sta GetNumBSS_NumBuf2,x
+	lda GetNumBSS_NumBuf3+2,x	
+	sta GetNumBSS_NumBuf3,x
+
+	cpx GetNumZp_ArgLen		;Ja, nicht EndBra!
+	bcc DelTwo0
+	inc GetNumZp_Solves
+	dec GetNumZp_EndBra
+	dec GetNumZp_EndBra
+	dec GetNumZp_ArgLen
+	dec GetNumZp_ArgLen
+	rts
+
+DelOne:
+	lda GetNumZp_Val1
+	sta GetNumBSS_NumBuf0+1,y
+	lda GetNumZp_Val1+1
+	sta GetNumBSS_NumBuf1+1,y
+	lda GetNumZp_Val1+2
+	sta GetNumBSS_NumBuf2+1,y
+	lda GetNumZp_Val1+3
+	sta GetNumBSS_NumBuf3+1,y
+
+	tya
+	tax
+DelOne0:
+	lda GetNumBSS_OpBuf+1,x	
+	sta GetNumBSS_OpBuf,x
+	lda GetNumBSS_PosBuf+1,x	
+	sta GetNumBSS_PosBuf,x
+	lda GetNumBSS_NumBuf0+1,x	
+	sta GetNumBSS_NumBuf0,x
+	lda GetNumBSS_NumBuf1+1,x	
+	sta GetNumBSS_NumBuf1,x
+	lda GetNumBSS_NumBuf2+1,x	
+	sta GetNumBSS_NumBuf2,x
+	lda GetNumBSS_NumBuf3+1,x	
+	sta GetNumBSS_NumBuf3,x
+	inx
+	cpx GetNumZp_ArgLen		;Ja, nicht EndBra!
+	bcc DelOne0
+	inc GetNumZp_Solves
+	dec GetNumZp_EndBra
+	dec GetNumZp_ArgLen
+	rts
+
+;--------------------------------------
+; Math Routinen. Operand1 und 2 in Val1 und 2
+; Ergebnis in Val1
+; Zp in Val 3
+;--------------------------------------
+
+
+OpRts_Positiv:
+	ldx #MathOp_Plus
+	jsr CheckForSingleOp
+	bcs OpRts_Positiv_No
+	jsr DelOne
+	dey
+OpRts_Positiv_No:
+	clc
+	rts
+
+
+OpRts_Negativ:
+	ldx #MathOp_Minus
+	jsr CheckForSingleOp
+	bcs OpRts_Negativ_No
+	sec
+	lda #0
+	sbc GetNumZp_Val1
+	sta GetNumZp_Val1
+	lda #0
+	sbc GetNumZp_Val1+1
+	sta GetNumZp_Val1+1
+	lda #0
+	sbc GetNumZp_Val1+2
+	sta GetNumZp_Val1+2
+	lda #0
+	sbc GetNumZp_Val1+3
+	sta GetNumZp_Val1+3
+	jsr DelOne
+	dey
+OpRts_Negativ_No:
+	clc
+	rts
+
+
+OpRts_Plus:
+	ldx #MathOp_Plus
+	jsr CheckForDoubleOp
+	bcs OpRts_Plus_No
+	lda GetNumZp_Val1
+	adc GetNumZp_Val2
+	sta GetNumZp_Val1
+	lda GetNumZp_Val1+1
+	adc GetNumZp_Val2+1
+	sta GetNumZp_Val1+1
+	lda GetNumZp_Val1+2
+	adc GetNumZp_Val2+2
+	sta GetNumZp_Val1+2
+	lda GetNumZp_Val1+3
+	adc GetNumZp_Val2+3
+	sta GetNumZp_Val1+3
+	jsr DelTwo
+	dey
+OpRts_Plus_No:
+	clc
+	rts
+
+OpRts_Minus:
+	ldx #MathOp_Minus
+	jsr CheckForDoubleOp
+	bcs OpRts_Minus_No
+	sec
+	lda GetNumZp_Val1
+	sbc GetNumZp_Val2
+	sta GetNumZp_Val1
+	lda GetNumZp_Val1+1
+	sbc GetNumZp_Val2+1
+	sta GetNumZp_Val1+1
+	lda GetNumZp_Val1+2
+	sbc GetNumZp_Val2+2
+	sta GetNumZp_Val1+2
+	lda GetNumZp_Val1+3
+	sbc GetNumZp_Val2+3
+	sta GetNumZp_Val1+3
+	jsr DelTwo
+	dey
+OpRts_Minus_No:
+	clc
+	rts
+
+
+OpRts_Mult:
+	ldx #MathOp_Mult
+	jsr CheckForDoubleOp
+	bcs OpRts_Mult_No
+
+	lda #0
+	sta GetNumZp_Val3
+	sta GetNumZp_Val3+2
+	ldx #$20
+OpRts_Mult0:
+	lsr GetNumZp_Val3+3
+	ror GetNumZp_Val3+2
+	ror GetNumZp_Val3+1
+	ror GetNumZp_Val3
+	ror GetNumZp_Val1+3
+	ror GetNumZp_Val1+2
+	ror GetNumZp_Val1+1
+	ror GetNumZp_Val1
+	bcc OpRts_Mult1
+	clc
+	lda GetNumZp_Val3
+	adc GetNumZp_Val2
+	sta GetNumZp_Val3
+	lda GetNumZp_Val3+1
+	adc GetNumZp_Val2+1
+	sta GetNumZp_Val3+1
+	lda GetNumZp_Val3+2
+	adc GetNumZp_Val2+2
+	sta GetNumZp_Val3+2
+	lda GetNumZp_Val3+3
+	adc GetNumZp_Val2+3
+	sta GetNumZp_Val3+3
+OpRts_Mult1:
+	dex
+	bpl OpRts_Mult0
+	lda GetNumZp_Val3
+	ora GetNumZp_Val3+1
+	ora GetNumZp_Val3+2
+	ora GetNumZp_Val3+3
+	beq OpRts_Mult2
+	sec
+	rts
+
+OpRts_Mult2:
+	jsr DelTwo
+	dey
+	clc
+	rts
+	
+OpRts_Mult_No:
+	clc
+	rts
+
+
+OpRts_Division:
+	ldx #MathOp_Div
+	jsr CheckForDoubleOp
+	bcs OpRts_Div_No
+	jsr OpRts_Div
+	bcs OpRts_Div_Err
+	jsr DelTwo
+	dey
+OpRts_Div_No:
+	clc
+OpRts_Div_Err:
+	rts
+
+
+OpRts_Modulo:
+	ldx #MathOp_Modulo
+	jsr CheckForDoubleOp
+	bcs OpRts_Modulo_No
+	jsr OpRts_Div
+	bcs OpRts_Modulo_Err
+	lda GetNumZp_Val3
+	sta GetNumZp_Val1
+	lda GetNumZp_Val3+1
+	sta GetNumZp_Val1+1
+	lda GetNumZp_Val3+2
+	sta GetNumZp_Val1+2
+	lda GetNumZp_Val3+3
+	sta GetNumZp_Val1+3
+	jsr DelTwo
+	dey
+OpRts_Modulo_No:
+	clc
+OpRts_Modulo_Err:
+	rts
+
+OpRts_Div:
+	tya
+	pha
+	ldx #$1f
+	lda GetNumZp_Val2
+	ora GetNumZp_Val2+1
+	ora GetNumZp_Val2+2
+	ora GetNumZp_Val2+3
+	bne OpRts_DivOk
+	sec
+	rts
+OpRts_DivOk:
+	lda #0
+	sta GetNumZp_Val3
+	sta GetNumZp_Val3+1
+	sta GetNumZp_Val3+2
+	sta GetNumZp_Val3+3
+OpRts_Div0:
+	asl GetNumZp_Val1
+	rol GetNumZp_Val1+1
+	rol GetNumZp_Val1+2
+	rol GetNumZp_Val1+3
+	rol GetNumZp_Val3
+	rol GetNumZp_Val3+1
+	rol GetNumZp_Val3+2
+	rol GetNumZp_Val3+3
+
+	sec
+	lda GetNumZp_Val3
+	sbc GetNumZp_Val2
+	pha
+	lda GetNumZp_Val3+1
+	sbc GetNumZp_Val2+1
+	pha
+	lda GetNumZp_Val3+2
+	sbc GetNumZp_Val2+2
+	pha
+	lda GetNumZp_Val3+3
+	sbc GetNumZp_Val2+3
+	bcc OpRts_Div1
+	sta GetNumZp_Val3+3
+	pla
+	sta GetNumZp_Val3+2
+	pla
+	sta GetNumZp_Val3+1
+	pla
+	sta GetNumZp_Val3
+	inc GetNumZp_Val1
+	bne OpRts_Div2
+OpRts_Div1:
+	pla
+	pla
+	pla
+OpRts_Div2:
+	dex
+	bpl OpRts_Div0
+	pla
+	tay
+	clc
+	rts
+
+
+OpRts_ShiftL:
+	ldx #MathOp_ShiftL
+	jsr CheckForDoubleOp
+	bcs OpRts_ShiftL_No
+	lda GetNumZp_Val2+3
+	ora GetNumZp_Val2+2
+	ora GetNumZp_Val2+1
+	bne OpRts_ShiftL0
+	ldx GetNumZp_Val2
+	beq OpRts_ShiftL2
+	cpx #$21
+	bcc OpRts_ShiftL1
+OpRts_ShiftL0:
+	ldx #$21
+OpRts_ShiftL1:
+	asl GetNumZp_Val1
+	rol GetNumZp_Val1+1
+	rol GetNumZp_Val1+2
+	rol GetNumZp_Val1+3
+	dex
+	bne OpRts_ShiftL1
+OpRts_ShiftL2:
+	jsr DelTwo
+	dey
+OpRts_ShiftL_No:
+	clc
+	rts
+
+OpRts_ShiftR:
+	ldx #MathOp_ShiftR
+	jsr CheckForDoubleOp
+	bcs OpRts_ShiftR_No
+	lda GetNumZp_Val2+3
+	ora GetNumZp_Val2+2
+	ora GetNumZp_Val2+1
+	bne OpRts_ShiftR0
+	ldx GetNumZp_Val2
+	beq OpRts_ShiftR2
+	cpx #$21
+	bcc OpRts_ShiftR1
+OpRts_ShiftR0:
+	ldx #$21
+OpRts_ShiftR1:
+	lsr GetNumZp_Val1+3
+	ror GetNumZp_Val1+2
+	ror GetNumZp_Val1+1
+	ror GetNumZp_Val1
+	dex
+	bne OpRts_ShiftR1
+OpRts_ShiftR2:
+	jsr DelTwo
+	dey
+OpRts_ShiftR_No:
+	clc
+	rts
+
+
+OpRts_Lo:
+	ldx #MathOp_Lo
+	jsr CheckForSingleOp
+	bcs OpRts_Lo_No
+	lda #0
+	sta GetNumZp_Val1+1
+	sta GetNumZp_Val1+2
+	sta GetNumZp_Val1+3
+	jsr DelOne
+	dey
+OpRts_Lo_No:
+	clc
+	rts
+
+
+OpRts_Hi:
+	ldx #MathOp_Hi
+	jsr CheckForSingleOp
+	bcs OpRts_Hi_No
+	lda GetNumZp_Val1+1
+	sta GetNumZp_Val1
+	lda #0
+	sta GetNumZp_Val1+1
+	sta GetNumZp_Val1+2
+	sta GetNumZp_Val1+3
+	jsr DelOne
+	dey
+OpRts_Hi_No:
+	clc
+	rts
+
+
+OpRts_Bank:
+	ldx #MathOp_Bank
+	jsr CheckForSingleOp
+	bcs OpRts_Bank_No
+	lda GetNumZp_Val1+2
+	sta GetNumZp_Val1
+	lda #0
+	sta GetNumZp_Val1+1
+	sta GetNumZp_Val1+2
+	sta GetNumZp_Val1+3
+	jsr DelOne
+	dey
+OpRts_Bank_No:
+	clc
+	rts
+
+
+OpRts_Not:
+	ldx #MathOp_Not
+	jsr CheckForSingleOp
+	bcs OpRts_Not_No
+	lda GetNumZp_Val1
+	eor #$ff
+	sta GetNumZp_Val1
+	lda GetNumZp_Val1+1
+	eor #$ff
+	sta GetNumZp_Val1+1
+	lda GetNumZp_Val1+2
+	eor #$ff
+	sta GetNumZp_Val1+2
+	lda GetNumZp_Val1+3
+	eor #$ff
+	sta GetNumZp_Val1+3
+	jsr DelOne
+	dey
+OpRts_Not_No:
+	clc
+	rts
+
+
+OpRts_And:
+	ldx #MathOp_And
+	jsr CheckForDoubleOp
+	bcs OpRts_And_No
+	lda GetNumZp_Val1
+	and GetNumZp_Val2
+	sta GetNumZp_Val1
+	lda GetNumZp_Val1+1
+	and GetNumZp_Val2+1
+	sta GetNumZp_Val1+1
+	lda GetNumZp_Val1+2
+	and GetNumZp_Val2+2
+	sta GetNumZp_Val1+2
+	lda GetNumZp_Val1+3
+	and GetNumZp_Val2+3
+	sta GetNumZp_Val1+3
+	jsr DelTwo
+	dey
+OpRts_And_No:
+	clc
+	rts
+
+
+OpRts_Or:
+	ldx #MathOp_Or
+	jsr CheckForDoubleOp
+	bcs OpRts_Or_No
+	lda GetNumZp_Val1
+	ora GetNumZp_Val2
+	sta GetNumZp_Val1
+	lda GetNumZp_Val1+1
+	ora GetNumZp_Val2+1
+	sta GetNumZp_Val1+1
+	lda GetNumZp_Val1+2
+	ora GetNumZp_Val2+2
+	sta GetNumZp_Val1+2
+	lda GetNumZp_Val1+3
+	ora GetNumZp_Val2+3
+	sta GetNumZp_Val1+3
+	jsr DelTwo
+	dey
+OpRts_Or_No:
+	clc
+	rts
+
+
+OpRts_Eor:
+	ldx #MathOp_Eor
+	jsr CheckForDoubleOp
+	bcs OpRts_Eor_No
+	lda GetNumZp_Val1
+	eor GetNumZp_Val2
+	sta GetNumZp_Val1
+	lda GetNumZp_Val1+1
+	eor GetNumZp_Val2+1
+	sta GetNumZp_Val1+1
+	lda GetNumZp_Val1+2
+	eor GetNumZp_Val2+2
+	sta GetNumZp_Val1+2
+	lda GetNumZp_Val1+3
+	eor GetNumZp_Val2+3
+	sta GetNumZp_Val1+3
+	jsr DelTwo
+	dey
+OpRts_Eor_No:
+	clc
+	rts
+
+
+;--------------------------------------
+
+GetOp:
+	ldx #0
+	stx GetNumZp_OpCnt
+	ldy CmdLinePos
+L0:
+	lda MathBSS_OpTab,x
+L1:
+	cmp CmdLine,y
+	bne Skip
+	inx
+	iny
+	cpx #MathBSS_OpTabLen
+	bcs L3
+	lda MathBSS_OpTab,x
+	bpl L0
+L3:
+	sty CmdLinePos
+	lda GetNumZp_OpCnt
+	clc
+	rts
+
+Skip:
+	ldy CmdLinePos
+L2:
+	inx
+	cpx #MathBSS_OpTabLen
+	bcc L4
+	rts
+L4:
+	lda MathBSS_OpTab,x
+	bpl L2
+	inc GetNumZp_OpCnt
+	and #$7f
+	bpl L1
+
+;--------------------------------------
+
+@0GetLabName:
+	jsr Spaces
+	ldy CmdLinePos
+	sty LabelZp_NameStart
+GetLabName0:
+	ldx #LabelIllCharsEnd-LabelIllCharsStart-1
+GetLabName1:
+	cmp LabelIllCharsStart,x
+	beq GetLabName2
+	dex
+	bpl GetLabName1
+	jsr NextCmdChar
+	bcc GetLabName0
+GetLabName2:
+	lda CmdLinePos
+	sta LabelZp_NameEnd
+	clc				;-1
+	sbc LabelZp_NameStart
+;	beq GetLabNameErr
+	bcc GetLabNameErr
+;	sec
+;	sbc #1
+	cmp #64
+	bcs GetLabNameErr
+	sta LabelZp_NameLen
+;	clc
+	rts
+GetLabNameErr:
+	sec
+	rts
+
+
+GetLab:
+	jsr GetLabName
+	bcs FindLabErr
+@0FindLab:
+	ldx #StringBufZp_FKeysEnd
+	.LongJsr(L_LongLib_LoadWORD)
+;	ldx #StringBufZp_FKeysEnd
+;	jsr LongLib_LoadPtr
+FindLab0:
+	ldx #StringBufZp_LabelsEnd
+	.LongJsr(L_LongLib_CmpWithWORDPtr)
+;	jsr LongLib_CmpWithLONGPtr
+	bcc FindLab4
+FindLabErr:
+	rts
+
+FindLab4:
+	ldy #1
+	jsr GetCRTRam
+	lda CRTRamBSS_Buffer
+;	ldy #0
+;	lda (LongLibZp_Akku0),y
+	tax
+	asl
+	rol
+	rol
+	and #3
+	sta LabelZp_ValueLen
+	txa
+	and #$3f
+	sta GetNumZp_Val1
+	cmp LabelZp_NameLen
+	bne FindLab_Next
+
+	lda GetNumZp_Val1
+	clc
+	adc LabelZp_ValueLen
+	adc #3
+	tay
+	jsr GetCRTRam
+
+	ldx LabelZp_NameStart
+	ldy #1
+FindLab1:
+;	iny
+;	lda (LongLibZp_Akku0),y
+	lda CRTRamBSS_Buffer,y
+	cmp CmdLine,x
+	bne FindLab_Next
+	inx
+	iny
+	cpx LabelZp_NameEnd
+	bcc FindLab1
+
+	ldx #0
+FindLab2:
+	lda CRTRamBSS_Buffer,y
+;	lda (LongLibZp_Akku0),y
+	sta GetNumZp_Val1,x
+	iny
+	cpx LabelZp_ValueLen
+	beq FindLab3
+	inx
+	cpx #4
+	bcc FindLab2
+	rts
+; Carry Set=Error, da Label ungueltige Laenge hat (>4 Bytes)
+
+FindLab3:
+	lda LabelZp_ValueLen
+	ora #$80
+	clc
+	rts
+; Länge des Entrys in Y
+
+FindLab_Next:
+	lda GetNumZp_Val1
+	clc
+	adc LabelZp_ValueLen
+	adc #3
+	.LongJsr(L_LongLib_AddBYTE)
+	jmp FindLab0
+
+;--------------------------------------
+
+GetNum:
+	lda GetNumZp_DefaultSystem
+	sta GetNumZp_System
+
+	lda #0
+	sta GetNumZp_Val1
+	sta GetNumZp_Val1+1
+	sta GetNumZp_Val1+2
+	sta GetNumZp_Val1+3
+
+	lda #$ff
+	sta GetNumZp_Digits
+	jsr Spaces
+	bcs Error
+	cmp #$1c			/* Pfundzeichen */
+	bne GetNumNoLabel
+	jsr NextCmdChar
+	jmp GetLab
+GetNumNoLabel:
+	ldx #256>>1
+	cmp #$27			/* Screencode ''' */
+	beq FoundSys
+	ldx #16>>1
+	cmp #'$'			/* Hex */
+	beq FoundSys
+	ldx #10>>1
+	cmp #'!'			/* Dez */
+	beq FoundSys
+	ldx #8>>1
+	cmp #'&'			/* Oct */
+	beq FoundSys
+	ldx #2>>1
+	cmp #'%'			/* Bin */
+	bne DefaultSys
+FoundSys:
+	stx GetNumZp_System
+
+Loop:
+	jsr NextCmdChar
+	bcs Ende
+DefaultSys:
+	bit GetNumZp_System		;NumberSystem = Screencode?
+	bpl CheckHex			;Dann nicht in Hexnibble wandeln
+	cmp #$27			;'''
+	beq Ende2
+	bne CharOk
+CheckHex:
+	jsr GetNum_ToHex
+	bcs Ende
+	tax
+	lsr
+	cmp GetNumZp_System
+	bcs Ende
+	txa
+CharOk:
+	jsr Multiply
+	bcs Error			;Overflow
+	inc GetNumZp_Digits
+	bcc Loop
+Ende2:
+	jsr NextCmdChar
+Ende:
+	lda GetNumZp_Digits
+	bmi Error
+	jsr GetNumDigitsLen
+	clc
+	rts
+Error:
+	sec
+	rts
+
+
+Multiply:
+	pha
+	ldy #7
+	lda #0
+	sta GetNumZp_Val2
+	sta GetNumZp_Val2+1
+	sta GetNumZp_Val2+2
+	sta GetNumZp_Val2+3
+	ldx GetNumZp_System
+Multiply0:
+	asl GetNumZp_Val1
+	rol GetNumZp_Val1+1
+	rol GetNumZp_Val1+2
+	rol GetNumZp_Val1+3
+	txa
+	lsr
+	tax
+	bcc Multiply1
+	clc
+	lda GetNumZp_Val1
+	adc GetNumZp_Val2
+	sta GetNumZp_Val2
+	lda GetNumZp_Val1+1
+	adc GetNumZp_Val2+1
+	sta GetNumZp_Val2+1
+	lda GetNumZp_Val1+2
+	adc GetNumZp_Val2+2
+	sta GetNumZp_Val2+2
+	lda GetNumZp_Val1+3
+	adc GetNumZp_Val2+3
+	sta GetNumZp_Val2+3
+	bcs MultiplyOverFlow
+Multiply1:
+	dey
+	bpl Multiply0
+	pla
+	adc GetNumZp_Val2
+	sta GetNumZp_Val1
+	lda GetNumZp_Val2+1
+	adc #0
+	sta GetNumZp_Val1+1
+	lda GetNumZp_Val2+2
+	adc #0
+	sta GetNumZp_Val1+2
+	lda GetNumZp_Val2+3
+	adc #0
+	sta GetNumZp_Val1+3
+	bcs MultiplyOverFlow
+	rts
+MultiplyOverFlow:
+	sec
+	rts
+
+
+GetNumDigitsLen:
+	lda GetNumZp_Digits
+	ldx GetNumZp_System
+	bmi GetNumLen2		;Screencode
+	cpx #$10>>1
+	beq GetNumLen1		;Hex
+	cpx #8>>1
+	beq GetNumLen0		;Oct
+	cpx #2>>1		;Bin
+	bne GetNumNormalLen
+	lsr
+GetNumLen0:
+	lsr
+GetNumLen1:
+	lsr
+GetNumLen2:
+	ora #$80
+	rts
+	
+GetNumNormalLen:
+	ldx #3+1
+GetNumNormalLen0:
+	dex
+	beq GetNumNormalLen1
+	lda GetNumZp_Val1,x
+	beq GetNumNormalLen0
+GetNumNormalLen1:
+	txa
+	ora #$80
+	rts
+
+;--------------------------------------
+
+@0GetNum_ToHex:
+	.LongJsr(L_ComLib_ScrCode2Lower)
+	cmp #'a'
+	bcc ToHexErr
+	cmp #'f'+1
+	bcc ToHex0
+	cmp #'0'
+	bcc ToHexErr
+	cmp #'9'+1
+	bcs ToHexErr
+	adc #$c7
+	clc
+ToHex0:
+	adc #9
+	clc
+	rts
+ToHexErr:
+	sec
+	rts
+
+;--------------------------------------
+
+@0Label_Define:
+	jsr NextSpaces
+	bcs DefLabelErr_MissOp
+	jsr GetLabName
+        bcc DefLabel2
+	bne DefLabelErr_TooLong
+DefLabelErr_MissOp:
+	.ShowErr(Err_MissOp)
+	.DB $2c
+DefLabelErr_TooLong:
+	.ShowErr(Err_DefLabel_TooLong)
+	.DB $2c
+DefLabelErr_IllChar:
+	.ShowErr(Err_DefLabel_IllChar)
+	.DB $2c
+DefLabelErr_Numb:
+	.ShowErr(Err_Number)
+	.DB $2c
+DefLabelErr_NoMem:
+	.ShowErr(Err_DefLabel_NoMem)
+	sec
+	rts
+
+UndefLab:
+	jsr Label_Undefine
+	bcs UndefLab0
+	.ShowMsg(Msg_CR)
+UndefLab0:
+	rts
+
+DefLabel2:
+	jsr Spaces
+	cmp #'='
+	bne DefLabelErr_IllChar
+	.LongJsr(L_NextCmdChar)
+	bcs UndefLab
+	lda LabelZp_NameLen
+	cmp #64					;Maximale Labellaenge
+	bcs DefLabelErr_TooLong
+	ldx #3					;Save Values, so 'LabX=LabY+1' works
+DefLabel5:
+	lda LabelZp_NameStart,x
+	sta Label_Save,x
+	dex
+	bpl DefLabel5
+	lda #3
+	jsr GetNum_GetHexNDig
+	bcs DefLabelErr_Numb
+	sta Label_Save+3
+	ldx #3
+DefLabel6:
+	lda GetNumZp_Val1,x
+	sta Label_Val,x
+	dex
+	bpl DefLabel6
+	jsr DefLabel_Rst
+	jsr Label_Undefine
+	jsr DefLabel_Rst
+	ldx #StringBufZp_LabelsEnd
+	.LongJsr(L_LongLib_LoadWORD)
+	ldx #CRTRamZp_SrcAdr
+	.LongJsr(L_LongLib_StoreWORD)
+	lda LabelZp_ValueLen
+	adc #3					;Len/Typ, Name, Value
+	adc LabelZp_NameLen
+	.LongJsr(L_LongLib_AddBYTE)
+	ldx #StringBufZp_TempEnd
+	.LongJsr(L_LongLib_CmpWithWORDPtr)
+	bcs DefLabelErr_NoMem
+	ldx #StringBufZp_LabelsEnd
+	.LongJsr(L_LongLib_StoreWORD)
+	.ShowMsg(Msg_CR)
+	lda LabelZp_ValueLen
+	lsr
+	ror
+	ror
+	ora LabelZp_NameLen
+	sta CRTRamBSS_Buffer
+;	ldy #0
+;	sta (StringBufZp_LabelsEnd),y
+	ldx LabelZp_NameStart
+	ldy #1
+;	iny
+DefLabel3:
+	lda CmdLine,x
+	sta CRTRamBSS_Buffer,y
+;	sta (StringBufZp_LabelsEnd),y
+	iny
+	inx
+	cpx LabelZp_NameEnd
+	bcc DefLabel3
+	ldx #$ff
+DefLabel4:
+	inx
+	lda Label_Val,x
+	sta CRTRamBSS_Buffer,y
+;	sta (StringBufZp_LabelsEnd),y
+	iny
+	cpx LabelZp_ValueLen
+	bcc DefLabel4
+	ldx #CRTRamZp_SrcAdr
+	.LongJsr(L_LongLib_LoadWORD)
+	jsr PutCRTRam
+	clc
+	rts
+
+
+DefLabel_Rst:
+	ldx #3
+DefLabel_Rst0:
+	lda Label_Save,x
+	sta LabelZp_NameStart,x
+	dex
+	bpl DefLabel_Rst0
+	rts
+
+
+@0Label_Undefine:
+	jsr FindLab
+	bcs Label_Undef3
+
+	sty LabelZp_MoveLen0
+	ldx #LabelZp_MovePtr0
+	.LongJsr(L_LongLib_StoreWORD)
+	tya
+	.LongJsr(L_LongLib_AddBYTE)
+	ldx #LabelZp_MovePtr1
+	.LongJsr(L_LongLib_StoreWORD)
+
+Label_Undef0:
+	sec
+	lda StringBufZp_LabelsEnd
+	sbc LabelZp_MovePtr1
+	tay
+	lda StringBufZp_LabelsEnd+1
+	sbc LabelZp_MovePtr1+1
+	bne Label_Undef1
+	tya
+	bne Label_Undef2
+	beq Label_Undef3	;bra
+Label_Undef1:
+	ldy #0
+Label_Undef2:
+	sty LabelZp_MoveLen1
+	ldx #LabelZp_MovePtr1
+	.LongJsr(L_LongLib_LoadWORD)
+	jsr GetCRTRam
+	ldx #LabelZp_MovePtr0
+	.LongJsr(L_LongLib_LoadWORD)
+	ldy LabelZp_MoveLen1
+	jsr PutCRTRam
+	inc LabelZp_MovePtr0
+	inc LabelZp_MovePtr1
+	ldy LabelZp_MoveLen1
+	beq Label_Undef0
+
+	ldx #StringBufZp_LabelsEnd
+	.LongJsr(L_LongLib_LoadWORD)
+	lda LabelZp_MoveLen0
+	.LongJsr(L_LongLib_WORDSubBYTE)
+	.LongJsr(L_LongLib_StoreWORD)
+
+Label_Undef3:
+	clc
+	rts
+
+
+/*
+	sty LabelZp_ValueLen
+	ldx #StringBufZp_LabelsEnd
+Label_Undef0:
+	ldy LabelZp_ValueLen
+	lda (LongLibZp_Akku0),y
+	ldy #0
+	sta (LongLibZp_Akku0),y
+	jsr LongLib_Inc
+	jsr LongLib_CmpWithLONGPtr
+	bcc Label_Undef0
+	jsr LongLib_LoadPtr
+	tya
+	jsr LongLib_SubBYTE
+	jsr LongLib_StorePtr
+Label_Undef1:
+	clc
+	rts
+*/
+
+;--------------------------------------
+
+EvalNumberErr:
+	rts
+@0GetNum_EvalNumber:
+	jsr NextSpaces
+	bcs EvalNumberErr
+	lda #3
+	jsr GetNum_GetHexNDig
+	bcs EvalNumberErr
+	sta GetNumZp_Digits
+	jsr Spaces
+	bcc EvalNumberErr
+	.ShowMsg(Msg_CR)
+	lda Palette+Palette_SysTxt
+	.LongJsr(L_ComLib_SetCol)
+	.LongJsr(L_ComLib_DollarOut)
+	ldx GetNumZp_Digits
+EvalNumber0:
+        lda GetNumZp_Val1,x
+	.LongJsr(L_ComLib_ByteOut)
+	dex
+	bpl EvalNumber0
+	ldy #2
+	.LongJsr(L_ComLib_SpacesOut)
+	lda #'!'
+	.LongJsr(L_ComLib_PrintChar)
+	ldx #3
+EvalNumber12:
+	lda GetNumZp_Val1,x
+	sta GetNumZp_Val2,x
+	dex
+	bpl EvalNumber12	
+	ldx #8
+	ldy #0
+	sty GetNumZp_Val3
+EvalNumber1:
+	ldy #0
+EvalNumber2:
+	lda GetNumZp_Val2
+	cmp EvalNumberTab0,x
+	lda GetNumZp_Val2+1
+	sbc EvalNumberTab1,x
+	lda GetNumZp_Val2+2
+	sbc EvalNumberTab2,x
+	lda GetNumZp_Val2+3
+	sbc EvalNumberTab3,x
+	bcc EvalNumber3
+	lda GetNumZp_Val2
+	sbc EvalNumberTab0,x
+	sta GetNumZp_Val2
+	lda GetNumZp_Val2+1
+	sbc EvalNumberTab1,x
+	sta GetNumZp_Val2+1
+	lda GetNumZp_Val2+2
+	sbc EvalNumberTab2,x
+	sta GetNumZp_Val2+2
+	lda GetNumZp_Val2+3
+	sbc EvalNumberTab3,x
+	sta GetNumZp_Val2+3
+	iny
+	bne EvalNumber2
+EvalNumber3:
+	tya
+	bne EvalNumber4
+	ldy GetNumZp_Val3
+	beq EvalNumber5
+EvalNumber4:
+	ora #$30
+	sta GetNumZp_Val3
+	.LongJsr(L_ComLib_PrintRawChar)
+EvalNumber5:
+	dex
+	bpl EvalNumber1
+	lda GetNumZp_Val2
+	ora #$30
+	.LongJsr(L_ComLib_PrintRawChar)
+	ldy #2
+	.LongJsr(L_ComLib_SpacesOut)
+	lda #$22
+	.LongJsr(L_ComLib_PrintRawChar)
+	ldx GetNumZp_Digits
+EvalNumber6:
+	lda GetNumZp_Val1,x
+	.LongJsr(L_ComLib_PrintRawChar)
+	dex
+	bpl EvalNumber6
+	lda #$22
+	.LongJsr(L_ComLib_PrintRawChar)
+	ldy #2
+	.LongJsr(L_ComLib_SpacesOut)
+	lda GetNumZp_Digits
+	clc
+	adc #1
+	asl
+	asl
+	asl
+	adc GetNumZp_Digits
+	adc ComLibZp_CursorXPos
+        bcs EvalNumber7
+	cmp ComLibZp_CursorMaxXPos
+	bcc EvalNumber8
+EvalNumber7:
+	.LongJsr(L_ComLib_FillRestline)
+	.ShowMsg(Msg_CR)
+EvalNumber8:
+	lda #'%'
+	.LongJsr(L_ComLib_PrintRawChar)
+	lda GetNumZp_Digits
+	clc
+	adc #1
+	asl
+	asl
+	asl
+	tay
+	dey
+EvalNumber9:
+	lda GetNumZp_Digits
+	sta GetNumZp_Val3
+	ldx #0
+EvalNumber10:
+	rol GetNumZp_Val1,x
+	inx
+	dec GetNumZp_Val3
+	bpl EvalNumber10
+        lda #'0'
+	adc #0
+	.LongJsr(L_ComLib_PrintRawChar)
+	tya
+	and #7
+	bne EvalNumber11
+	.LongJsr(L_ComLib_SpaceOut)
+EvalNumber11:
+	dey
+	bpl EvalNumber9
+	lda ComLibZp_CursorXPos
+	beq EvalNumber13
+	.LongJsr(L_ComLib_FillRestline)
+EvalNumber13:
+	.ShowMsg(Msg_CR)
+	clc
+	rts
+
+;--------------------------------------
+
+MathBSS_OpTab:
+	.SCR '+'
+	.SCR '-'|$80
+	.SCR '*'|$80
+	.SCR '/'|$80
+	.SCR '<'|$80,"<"
+	.SCR '>'|$80,">"
+	.SCR '<'|$80
+	.SCR '>'|$80
+	.SCR $1e|$80			;Pfeil nach oben
+	.SCR '@'|$80,"n"
+	.SCR '@'|$80,"a"
+	.SCR '@'|$80,"o"
+	.SCR '@'|$80,"e"
+	.SCR 'm'|$80,"od"
+	.SCR '('|$80
+	.SCR ')'|$80
+MathBSS_OpTabEnd:
+
+MathBSS_OpTabLen=MathBSS_OpTabEnd-MathBSS_OpTab
+
+
+MathOp_Anzahl	= 16
+;Anzahl der Operations. Eigentlich ohne Klammern, aber 'Plus' und 'Minus'
+;kommen auch als Vorzeichen vor, also 'Anzahl -2 +2'
+
+;--------------------------------------
+
+LabelIllCharsStart:
+	.SCR "+-*/<>",$1e,"()"		;Operations
+	.SCR "!$%&",$22			;Num Formats
+	.SCR "=, ",$1c
+LabelIllCharsEnd:
+
+;--------------------------------------
+
+EvalNumberTab0:
+	.DB $0a, $64, $e8, $10, $a0, $40, $80, $00, $00
+EvalNumberTab1:
+	.DB $00, $00, $03, $27, $86, $42, $96, $e1, $ca
+EvalNumberTab2:
+	.DB $00, $00, $00, $00, $01, $0f, $98, $f5, $9a
+EvalNumberTab3:
+	.DB $00, $00, $00, $00, $00, $00, $00, $05, $3b
+
+;--------------------------------------
+
+	.)	;*** GetNum ***
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
