@@ -182,6 +182,8 @@ private:
 	bool isDragSource;
 	wxArrayString usedTempFiles;
 	int itemUnderCursor;
+
+	void ShowVersionInfo(void);
 };
 
 /*!

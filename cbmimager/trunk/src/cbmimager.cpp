@@ -255,6 +255,9 @@ void CBMImager::CreateControls()
 	wxLogMessage(_("Welcome to CBMImager V 0.1"));
 	wxLogMessage(_("(w) 2006 Uncle Tom/DRM + Doc Bacardi/DRM."));
 
+	// show some details on OS version and compiler
+	ShowVersionInfo();
+
 	m_FileList->SetCBMCharset(cbmRomCharset, CBM_ROMCHARSET_LENGTH);
 
 	// Process CommandLine Arguments
@@ -267,6 +270,215 @@ void CBMImager::CreateControls()
 		OpenImage(imageName);
 	}
 }
+
+
+void CBMImager::ShowVersionInfo(void)
+{
+	wxString strMsg;
+	wxString strOS;
+
+
+	// show wxWidgets version
+	strMsg = wxTRANSLATE("Using ");
+	strMsg.Append(wxVERSION_STRING);
+#ifdef UNICODE
+	strMsg.Append(wxT(", Unicode enabled"));
+#endif
+	wxLogMessage(strMsg);
+
+	// show OS
+	strMsg = wxTRANSLATE("Running on ");
+
+// NOTE: append this to strOS to see multiple hits (like __LINUX__ and __UNIX__)
+
+// just a combination of other defines?
+//#ifdef __APPLE__
+//	strOS.Append(wxT("any Mac OS version"));
+//#endif
+
+#ifdef __AIX__
+	strOS.Append(wxT("AIX"));
+#endif
+
+#ifdef __BSD__
+	strOS.Append(wxT("Any *BSD system"));
+#endif
+
+#ifdef __CYGWIN__
+	strOS.Append(wxT("Cygwin: Unix on Win32"));
+#endif
+
+#ifdef __DARWIN__
+	strOS.Append(wxT("Mac OS X using the BSD Unix C library (as opposed to using the Metrowerks MSL C/C++ library) 
+#endif
+
+#ifdef __DATA_GENERAL__
+	strOS.Append(wxT("DG-UX"));
+#endif
+
+#ifdef __DOS_GENERAL__
+	strOS.Append(wxT("DOS"));
+#endif
+
+#ifdef __FREEBSD__
+	strOS.Append(wxT("FreeBSD"));
+#endif
+
+#ifdef __HPUX__
+	strOS.Append(wxT("HP-UX (Unix)"));
+#endif
+
+#ifdef __GNU__
+	strOS.Append(wxT("GNU Hurd"));
+#endif
+
+#ifdef __LINUX__
+	strOS.Append(wxT("Linux"));
+#endif
+
+#ifdef __MACH__
+	strOS.Append(wxT("Mach-O Architecture (Mac OS X only builds)"));
+#endif
+
+#ifdef __OSF__
+	strOS.Append(wxT("OSF/1"));
+#endif
+
+#ifdef __PALMOS__
+	strOS.Append(wxT("PalmOS"));
+#endif
+
+#ifdef __SGI__
+	strOS.Append(wxT("IRIX"));
+#endif
+
+#ifdef __SOLARIS__
+	strOS.Append(wxT("Solaris"));
+#endif
+
+// just a combination of other defines?
+//#ifdef __SUN__
+//	strOS.Append(wxT("Any Sun"));
+//#endif
+
+#ifdef __SUNOS__
+	strOS.Append(wxT("Sun OS"));
+#endif
+
+#ifdef __SVR4__
+	strOS.Append(wxT("SystemV R4"));
+#endif
+
+#ifdef __SYSV__
+	strOS.Append(wxT("SystemV generic"));
+#endif
+
+#ifdef __ULTRIX__
+	strOS.Append(wxT("Ultrix"));
+#endif
+
+// this seems to be a combination of linux and unix_like
+//#ifdef __UNIX__
+//	strOS.Append(wxT("any Unix"));
+//#endif
+
+// only take this general entry for other OSes than linux
+#if defined(__UNIX_LIKE__) && !defined(__LINUX__)
+	strOS.Append(wxT("Unix, BeOS or VMS"));
+#endif
+
+#ifdef __VMS__
+	strOS.Append(wxT("VMS"));
+#endif
+
+#ifdef __WINDOWS__
+	strOS.Append(wxT("any Windows"));
+#endif
+
+	if( strOS.IsEmpty()==true )
+	{
+		strOS = wxT("unknown OS");
+	}
+
+	strMsg.Append(strOS);
+	wxLogMessage(strMsg);
+
+
+	// show the compiler
+#ifdef __BORLANDC__
+	// The value of the macro corresponds to the compiler version: 500 is 5.0.
+	strMsg.Printf(wxTRANSLATE("Compiler: Borland C++ v%d.%02d"), __BORLANDC__/100, __BORLANDC__%100);
+	wxLogMessage(strMsg);
+#endif
+
+#ifdef __DJGPP__
+	strMsg.Printf(wxTRANSLATE("Compiler: DJGPP"));
+	wxLogMessage(strMsg);
+#endif
+
+#ifdef __DIGITALMARS__
+	strMsg.Printf(wxTRANSLATE("Compiler: Digital Mars"));
+	wxLogMessage(strMsg);
+#endif
+
+#ifdef __GNUG__
+	strMsg.Printf(wxTRANSLATE("Compiler: Gnu C++ v%d.%d"), __GNUC__, __GNUC_MINOR__);
+	wxLogMessage(strMsg);
+#endif
+
+#ifdef __GNUWIN32__
+	strMsg.Printf(wxTRANSLATE("Compiler: Gnu-Win32 v%d.%d"), __GNUC__, __GNUC_MINOR__);
+	wxLogMessage(strMsg);
+#endif
+
+#ifdef __MINGW32__
+	strMsg.Printf(wxTRANSLATE("Compiler: MinGW v%d.%d"), __GNUC__, __GNUC_MINOR__);
+	wxLogMessage(strMsg);
+#endif
+
+#ifdef __MWERKS__
+	strMsg.Printf(wxTRANSLATE("Compiler: CodeWarrior MetroWerks"));
+	wxLogMessage(strMsg);
+#endif
+
+#ifdef __SUNCC__
+	strMsg.Printf(wxTRANSLATE("Compiler: Sun CC"));
+	wxLogMessage(strMsg);
+#endif
+
+#ifdef __SYMANTECC__
+	strMsg.Printf(wxTRANSLATE("Compiler: Symantec C++"));
+	wxLogMessage(strMsg);
+#endif
+
+#ifdef __VISAGECPP__
+	strMsg.Printf(wxTRANSLATE("Compiler: IBM Visual Age (OS/2)"));
+	wxLogMessage(strMsg);
+#endif
+
+#ifdef __VISUALC__
+	// The value of this macro corresponds to the compiler version: 1020 for 4.2 (the first supported version), 1100 for 5.0, 1200 for 6.0 and so on 
+	strMsg.Printf(wxTRANSLATE("Compiler: Microsoft Visual C++ v%d.%02d"), __VISUALC__/100 - 6, __VISUALC__%100);
+	wxLogMessage(strMsg);
+#endif
+
+#ifdef __XLC__
+	strMsg.Printf(wxTRANSLATE("Compiler: AIX compiler"));
+	wxLogMessage(strMsg);
+#endif
+
+#ifdef __WATCOMC__
+	// The value of this macro corresponds to the compiler version, 1100 is 11.0 and 1200 is OpenWatcom.
+	strMsg.Printf(wxTRANSLATE("Compiler: Watcom C++ v%d.%02d"), __WATCOMC__/100, __WATCOMC__%100);
+	wxLogMessage(strMsg);
+#endif
+
+#ifdef _WIN32_WCE
+	strMsg.Printf(wxTRANSLATE("Compiler: Windows CE"));
+	wxLogMessage(strMsg);
+#endif
+}
+
 
 /*!
  * Should we show tooltips?
