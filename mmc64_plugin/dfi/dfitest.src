@@ -11,6 +11,14 @@
 
 ;--------------------------------------
 
+	.segment "zp"
+
+	* = $57
+
+exo_zp_area:			.DSB 7
+
+;--------------------------------------
+
 	.segment "code"
 
 	* = $0801
@@ -33,18 +41,43 @@ BasicEnd:
 
 ;--------------------------------------
 
-dfi_fs_bank0_start:
-	.binclude "bank0.bin"
-dfi_fs_bank1_start:
-	.binclude "bank1.bin"
+dfi_fs_banks_start:
+	.binclude "banks.exo"
+dfi_fs_banks_end:
 
-#include "bank01.lab"
+#include "banks.lab"
+
+;--------------------------------------
+
+get_crunched_byte:
+    .(
+	inc selfMod0+1
+	bne selfMod0
+	inc selfMod0+2
+selfMod0:
+	lda dfi_fs_banks_start-1
+	rts
+    .)
+
+#include "exodecrunch.src"
 
 ;--------------------------------------
 
 BasicJumpIn:
 	sei
 
+	; switch to ram
+	lda #$34
+	sta 1
+
+	; decrunch all banks
+	jsr decrunch
+
+	; back to normal
+	lda #$35
+	sta 1
+
+	; switch to c64 mode
 	lda #$22
 	sta $de00
 	ldx #0
@@ -52,18 +85,6 @@ delay0:
 	nop
 	inx
 	bne delay0
-
-	; copy the main code to $8000
-	ldx #$20
-copyMainCode:
-	lda dfi_fs_bank0_start,y
-	sta $8000,y
-	iny
-	bne copyMainCode
-	inc copyMainCode+2
-	inc copyMainCode+5
-	dex
-	bne copyMainCode
 
 	jsr BANK0_DfiFs_REU_Init
 
@@ -74,84 +95,80 @@ installCopyCode:
 	sta copy_code_start,x
 	dex
 	bpl installCopyCode
+
+	; copy bank 0
+	lda #>$8000
+	ldy #$80|$00|$23
 	jsr copy_code_start
 
+	; copy bank 1
+	lda #>$a000
+	ldy #$80|$08|$23
+	jsr copy_code_start
+
+	lda #$37
+	sta 1
+
 	; patch the load/save/open/get vectors
-	lda #<DfiFs_Open
-	sta $031a
-	lda #>DfiFs_Open
-	sta $031b
-
-	lda #<DfiFs_Close
-	sta $031c
-	lda #>DfiFs_Close
-	sta $031d
-
-	lda #<DfiFs_ChangeKernalInput
-	sta $031e
-	lda #>DfiFs_ChangeKernalInput
-	sta $031f
-
-	lda #<DfiFs_ChangeKernalOutput
-	sta $0320
-	lda #>DfiFs_ChangeKernalOutput
-	sta $0321
-
-	lda #<DfiFs_ClearChannels
-	sta $0322
-	lda #>DfiFs_ClearChannels
-	sta $0323
-
-	lda #<DfiFs_CharIn
-	sta $0324
-	lda #>DfiFs_CharIn
-	sta $0325
-
-	lda #<DfiFs_CharOut
-	sta $0326
-	lda #>DfiFs_CharOut
-	sta $0327
-
-	lda #<DfiFs_GetIn
-	sta $032a
-	lda #>DfiFs_GetIn
-	sta $032b
-
-	lda #<DfiFs_Load
-	sta $0330
-	lda #>DfiFs_Load
-	sta $0331
-
-	lda #<DfiFs_Save
-	sta $0332
-	lda #>DfiFs_Save
-	sta $0333
+	ldx #vectors_end-vectors_start-1
+installVectors:
+	lda vectors_start,x
+	sta $031a,x
+	dex
+	bpl installVectors
 
 	cli
 	rts
 
 
+vectors_start:
+	.DW DfiFs_Open			; $031a
+	.DW DfiFs_Close			; $031c
+	.DW DfiFs_ChangeKernalInput	; $031e
+	.DW DfiFs_ChangeKernalOutput	; $0320
+	.DW DfiFs_ClearChannels		; $0322
+	.DW DfiFs_CharIn		; $0324
+	.DW DfiFs_CharOut		; $0326
+	.DW $f6ed			; $0328
+	.DW DfiFs_GetIn			; $032a
+	.DW $f32f			; $032c
+	.DW $fe66			; $032e
+	.DW DfiFs_Load			; $0330
+	.DW DfiFs_Save			; $0332
+vectors_end:
+
+
+
 copy_code_start_psy:
 	.PSEUDOPC $0340
 copy_code_start:
-	; always transfer a full page
+	sta copyDfi_selfModSrc+2
+	sty copyDfi_selfModBank+1
+
+	lda #$80
+	sta copyDfi_selfModDst+2
+
 	ldx #$20
 
 copyDfiFsCode0:
+	dec 1		; $34
 	ldy #0
-copyDfiFsCode1:
-	lda $8000,y
+copyDfi_selfModSrc:
+	lda $ff00,y
 	sta $0400,y
 	iny
-	bne copyDfiFsCode1
+	bne copyDfi_selfModSrc
+	inc 1		; $35
 
-	; switch to bank 0, ram
-	ldy #$80|$00|$23
+	; switch to bank x, ram
+copyDfi_selfModBank:
+	ldy #$ff
 	jsr switchToBank
 
 	ldy #0
 copyDfiFsCode2:
 	lda $0400,y
+copyDfi_selfModDst:
 	sta $8000,y
 	iny
 	bne copyDfiFsCode2
@@ -159,31 +176,8 @@ copyDfiFsCode2:
 	ldy #$22
 	jsr switchToBank
 
-	ldy #0
-copyDfiFsCode3:
-	lda dfi_fs_bank1_start,y
-	sta $0400,y
-	iny
-	bne copyDfiFsCode3
-
-	; switch to bank 1, ram
-	ldy #$80|$08|$23
-	jsr switchToBank
-
-	ldy #0
-copyDfiFsCode4:
-	lda $0400,y
-	sta $8000,y
-	iny
-	bne copyDfiFsCode4
-
-	ldy #$22
-	jsr switchToBank
-
-	inc copyDfiFsCode1+2
-	inc copyDfiFsCode2+5
-	inc copyDfiFsCode3+2
-	inc copyDfiFsCode4+5
+	inc copyDfi_selfModSrc+2
+	inc copyDfi_selfModDst+2
 	dex
 	bne copyDfiFsCode0
 	rts

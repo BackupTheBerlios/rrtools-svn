@@ -5,31 +5,33 @@
 ;--------------------------------------
 
 #segdef "zp", $26-$71
-#segdef "data", $6e00-$7c00
-#segdef "code", $1000-$6e00
-#segdef "dirbuffer", $0c00-$1000
+#segdef "data", $6800-$7c00
+#segdef "code", $3000-$6800
+#segdef "dirbuffer", $0c00-$3000
 
 #outfile @, startadr, sort, $00, "code"
 
 ; Memory Map notes:
 ;
 ; (1) codestart to data end must not exceed $3000 bytes,
-;     it is mapped to $d000 - $ffff
-; (2) reinit of kernel destroys $fd30, try to avoid this
-;     area or save it before calling 'MMC64Plugin_InitKernel'
-; (3) $8000-$a000 must stay free for the kernal code in kernal mode
-;     the code is first copied there, then the patches are applied
+;     it is mapped to $d000 - $ffff during file load in dload mode.
+;     that's no problem in kernal mode, but there is the decrunch buffer
+; (2) in kernal mode the rr contents must be depacked,
+;     $8000-$0000 is reserved for this. the code is first decrunched
+;     there, then the patches are applied
 ;     and finally it is transfered into the rr ram
+; (3) reinit of kernel destroys $fd30, try to avoid this
+;     area or save it before calling 'MMC64Plugin_InitKernel'
 ;--------------------------------------
 
 	.segment "zp"
 	* = $26
 
 	.segment "data"
-	* = $6e00
+	* = $6800
 
 	.segment "code"
-	* = $1000
+	* = $3000
 
 ; the loaded prg must be moved in this area or the plugin will be overwritten
 Load_Move_End = $7c00
@@ -98,13 +100,11 @@ dfi_fs_params			.DSB DfiFs_MMC64_ParamOffset_len
 ;--------------------------------------
 
 #print "dfifs start:", *
-dfi_fs_bank0_start:
-	.binclude "bank0.bin"
-dfi_fs_bank1_start:
-	.binclude "bank1.bin"
+dfi_fs_banks_start:
+	.binclude "banks.exo"
 #print "dfifs end:", *
 
-#include "bank01.lab"
+#include "banks.lab"
 
 installKernelPatch:
     .(
@@ -122,7 +122,7 @@ delay0:
 	; copy the main code to $8000
 	ldx #$20
 copyMainCode:
-	lda dfi_fs_bank0_start,y
+	lda dfi_fs_banks_start,y
 	sta $8000,y
 	iny
 	bne copyMainCode
@@ -261,7 +261,7 @@ copyDfiFsCode2:
 
 	ldy #0
 copyDfiFsCode3:
-	lda dfi_fs_bank1_start,y
+	lda dfi_fs_banks_start+$2000,y
 	sta $0400,y
 	iny
 	bne copyDfiFsCode3
@@ -1024,9 +1024,9 @@ Load_Move_Start = * & $ff00
 
 #print "Load_Move_Start", Load_Move_Start
 
-;#if (Load_Move-End-Load_Move_Start)>$3000
-;#error "Load_Move area too large, can't buffer in $d000-$ffff", Load_Move-End-Load_Move_Start
-;#endif
+#if (Load_Move_End-Load_Move_Start)>$3000
+#error "Load_Move area too large, can't buffer in $d000-$ffff", Load_Move_End-Load_Move_Start
+#endif
 
 	.segment "code"
 

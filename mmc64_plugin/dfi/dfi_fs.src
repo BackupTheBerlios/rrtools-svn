@@ -12,8 +12,7 @@
 #segdef "bankjsr_lo", $9f00-$9f80, fillup, force, $00
 #segdef "bankjsr_hi", $9f80-$a000, fillup, force, $00
 
-#outfile "bank0.bin", $00, "bankjsr", "bankjsr_bank", "bank0", "switcher", "bankjsr_lo", "bankjsr_hi"
-#outfile "bank1.bin", $00, "bankjsr", "bankjsr_bank", "bank1", "switcher", "bankjsr_lo", "bankjsr_hi"
+#outfile @, startadr, $00, "bankjsr", "bankjsr_bank", "bank0", "switcher", "bankjsr_lo", "bankjsr_hi", "bankjsr", "bankjsr_bank", "bank1", "switcher", "bankjsr_lo", "bankjsr_hi"
 
 ;--------------------------------------
 

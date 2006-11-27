@@ -2,6 +2,8 @@
 
 DA = dreamass
 
+EXO = exomizer
+
 # directory for backup
 export ArcDir = /home/baccy/BackUp/
 
@@ -49,18 +51,21 @@ SOURCES =	actions.src \
 		$(DLOAD_SRC)/dload/mmcparam.src
 
 
-bank0.bin bank1.bin bank01.lab: $(DFI_FS_SRC)
-	$(DA) -v -d bank01.html -l bank01.lab $<
+banks.bin banks.lab: $(DFI_FS_SRC)
+	$(DA) -v -d banks.html -l banks.lab -o banks.bin $<
 
-$(TARGET).bin: $(TARGET).src $(SOURCES) bank0.bin bank1.bin bank01.lab
+banks.exo: banks.bin
+	$(EXO) -r -o $@ $<
+
+$(TARGET).bin: $(TARGET).src $(SOURCES) banks.exo banks.lab
 	$(DA) -I$(MMC64_PLUGIN_SRC) -I$(MYLENE_SRC) -I$(DLOAD_SRC) -v -d $(TARGET).html -l $(TARGET).lab -o $@ $(TARGET).src
 
-dfitest.prg: dfitest.src bank0.bin bank1.bin bank01.lab
+dfitest.prg: dfitest.src banks.exo banks.lab
 	$(DA) -v -d dfitest.html -l dfitest.lab -o $@ $<
 
 .PHONY: sim
 
-dfitest.d64: dfitest.prg
+dfitest.d64: dfitest.prg banks.bin
 	rm -f $@
 	cbmconvert -nD4 $@ $^
 
@@ -98,7 +103,7 @@ install:
 #--------------------------------------
 
 clean:
-	$(RM) $(TARGET).bin
+	$(RM) $(TARGET).bin banks.bin banks.exo banks.html banks.lab
 
 #--------------------------------------
 

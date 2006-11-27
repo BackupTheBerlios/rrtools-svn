@@ -10,7 +10,7 @@
 	.segment "dirbuffer"
 	* = $0c00
 EntryMem_Start:
-	.DSB $1000-$0c00
+	.DSB $3000-$0c00
 EntryMem_End:
 
 ;--------------------------------------
