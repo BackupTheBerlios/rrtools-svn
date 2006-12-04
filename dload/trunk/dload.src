@@ -102,6 +102,9 @@ parameterOk:
 	ldy #1
 	jsr copyNPatchLd
 
+	; lock irq to enable c64 speeder code at $0300
+	sei
+
 	; copy mmc code
 	ldx #0
 copyLdMMC64:
@@ -323,6 +326,9 @@ Sys6:
 	dey
 	bne Sys6
 	jsr File_UnListen
+
+	; lock irq to speed up transfer and enable c64 speeder code at $0300
+	sei
 
 	ldy DLoadZp_DevType
 	cpy #IFFDevTyp_FD
