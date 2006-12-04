@@ -110,6 +110,7 @@ FastLoadInstallOk:
 	sei
 	lda #$7f
 	sta $dc0d
+	lda $dc0d
 	lda #$35
 	sta 1
 	lda #$1b
