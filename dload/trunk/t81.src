@@ -106,9 +106,9 @@ LdMkTab3:
 
 
 restart:
-	ldx #2		; motor off
-	lda #$8a
-	jsr $FF54
+	lda $4000	; switch motor off (aka 'jsr $cbba')
+	ora #4
+	sta $4000
 	lda #0
 	sta $26		; dos motor off flag
 	lda #8
