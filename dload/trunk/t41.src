@@ -10,12 +10,12 @@ T41LdS:
     .(  ;*** T41 ***
 
 LdZp            = $06
-LdWFlag         = $07
+LdWFlag         = $07   ;WarmUp-Flag
 LdTrys          = $08
 LdTrk           = $09
 LdSec           = $0a
 LdATrk          = $0b
-LdPengu         = $0c
+LdPFlag         = $0c   ;WriteProtection-Flag
 
 
 LdXTmp          = $8b
@@ -73,20 +73,17 @@ LdErr:
 Ld2:
 	jmp ($FFFC)
 @0T41_LdrStart:
-	lda #8          ; must be right after LdrStart
-	sta LdDp        ; otherwise handshaking for LdDGet might fail!
+	lda #8          ;must be right after LdrStart
+	sta LdDp        ;otherwise handshaking for LdDGet might fail!
 	lda $1C00
 	and #$F3
-	sta $1C00
-	and #$10        ;New
-	sta LdPengu     ;New
-;       lda #0          ;New
-	lda #$10        ;hauptsache <>0
-	sta LdWFlag
-
+	sta $1C00       ;Motor and Led off
+	and #$10
+	sta LdPFlag
 	lda #1
+	sta LdWFlag
 WaitHand:
-	bit LdDp
+	bit LdDp        ;a=1
 	bne WaitHand
 LdGL0:
 	lda #0
@@ -110,14 +107,14 @@ LdErrP:
 	sta LdSec
 	lda $1c00
 	and #$10               ;Protection
-	eor LdPengu            ;Changed? -> Akku == $10
+	eor LdPFlag            ;Changed? -> Akku == $10
 	ora LdWFlag            ;Protection Changed or Motor Warmup?
 	beq LdGl1              ;LdWFlag Rumdrehen
 	lda $1c00
 	ora #$0c
 	sta $1c00
 	and #$10               ;Get Protection
-	sta LdPengu
+	sta LdPFlag
 	lda #0                 ;LdWFlag Rumdrehen
 	sta LdWFlag
 	lda $1c0c

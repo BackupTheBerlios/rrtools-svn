@@ -105,9 +105,9 @@ LdMkTab3:
 	dey
 	bne LdMkTab4
 
+restart:
 #ifdef LdFlag_LedFlash
 	Led:
-	restart:
 		lda #8
 		sta LdDp
 	Led0:
@@ -142,7 +142,6 @@ LdMkTab3:
 		bmi Led0
 	Led4:
 #else
-	restart:
 		lda #8
 		sta LdDp
 		lda #1
