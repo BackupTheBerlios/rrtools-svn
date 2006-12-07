@@ -106,13 +106,13 @@ LdMkTab3:
 
 
 restart:
-	lda $4000	; switch motor off (aka 'jsr $cbba')
-	ora #4
-	sta $4000
+	lda #8          ; must be right after restart
+	sta LdDp        ; otherwise handshaking for LdDGet might fail!
+        ldx #2          ; switch motor off
+        lda #$8a        ; must be jobcode, as 1581 and FD handle
+        jsr $ff54       ; motor-issues quite differently!
 	lda #0
 	sta $26		; dos motor off flag
-	lda #8
-	sta LdDp
 	jsr idlLoop
 continue:
 	lda #0

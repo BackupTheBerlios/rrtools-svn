@@ -73,6 +73,8 @@ LdErr:
 Ld2:
 	jmp ($FFFC)
 @0T41_LdrStart:
+	lda #8          ; must be right after LdrStart
+	sta LdDp        ; otherwise handshaking for LdDGet might fail!
 	lda $1C00
 	and #$F3
 	sta $1C00
@@ -82,8 +84,6 @@ Ld2:
 	lda #$10        ;hauptsache <>0
 	sta LdWFlag
 
-	lda #8
-	sta LdDp
 	lda #1
 WaitHand:
 	bit LdDp

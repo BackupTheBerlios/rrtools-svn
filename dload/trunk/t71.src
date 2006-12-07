@@ -54,6 +54,8 @@ LdReset:
 	jmp ($FFFC)
 
 Restart:
+	lda #8          ; must be right after Restart
+	sta LdDp        ; otherwise handshaking for LdDGet might fail!
         lda $1c00
         and #$f3
         sta $1c00       ;Motor and Led off
@@ -62,8 +64,6 @@ Restart:
 	lda #$10	;hauptsache <>0
 	sta LdWFlag	;New
 
-	lda #8
-	sta LdDp
 	lda #1
 WaitHand:
 	bit LdDp
