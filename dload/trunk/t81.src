@@ -112,8 +112,65 @@ restart:
         lda #$8a        ; must be jobcode, as 1581 and FD handle
         jsr $ff54       ; motor-issues quite differently!
 	lda #0
-	sta $26		; dos motor off flag
-	jsr idlLoop
+	sta $26		; dos motor off flag (1581 only, seems to not harm FD)
+#ifdef LdFlag_LedFlash
+
+	Led:
+		ldy #$80
+	Led0:
+		lda $4000
+		and #$BF
+		ora #$20
+		sta $4000
+		lda #1
+		ldx #$2F
+	Led1:
+		bit LdDp
+		bne Led6
+		dex
+	Led2:
+		cpx #0
+		bne Led1
+		lda $4000
+		eor #$60
+		sta $4000
+		lda #1
+	Led3:
+		bit LdDp
+		bne Led6
+		dex
+		bpl Led3
+		dey
+		bne Led0
+		ldx Led2+1
+LedDir          = *+1
+		lda #0
+		bne Led4
+		inx
+		cpx #$2F
+		bcc Led5
+	Led4:
+		dex
+		stx LedDir
+	Led5:
+		stx Led2+1
+		jmp Led
+	Led6:
+
+#else
+
+		lda $4000
+		and #$BF
+                ora #$20
+		sta $4000
+
+		lda #1
+	atnw:
+		bit LdDp
+		beq atnw
+
+#endif
+
 continue:
 	lda #0
 	sta LdDp
@@ -135,7 +192,7 @@ Ld1:
 	cpx $022c               ; will be patched for FD by DLoad.src
                                 ;(cpx $0051)
 	bcs LdErr
-	;cmp $75, cmp $52 (can be 0 -> no bcs )
+	;cmp $75, cmp $52 (can be 0 -> bcs does not apply)
 	;bcs LdErr
 
 	stx LdTrk
@@ -171,72 +228,6 @@ LdErr:
 	jsr LdBSend
 LdrStartP:
 	bpl continue			; bra
-
-;--------------------------------------
-
-idlLoop:
-#ifdef LdFlag_LedFlash
-
-	Led:
-		ldy #$80
-	Led0:
-		lda $4000
-		and #$BF
-		ora #$20
-		sta $4000
-		lda #1
-		ldx #$2F
-	Led1:
-		bit LdDp
-		bne Led6
-		dex
-	Led2:
-		cpx #0
-		bne Led1
-		lda $4000
-		eor #$60
-		sta $4000
-		lda #1
-	Led3:
-		bit LdDp
-		bne Led6
-		dex
-		bpl Led3
-		dey
-		bne Led0
-		ldx Led2+1
-		lda LedDir
-		bne Led4
-		inx
-		cpx #$2F
-		bcc Led5
-	Led4:
-		dex
-		stx LedDir
-	Led5:
-		stx Led2+1
-		jmp Led
-
-	Led6:
-		rts
-
-	LedDir:
-		.DB 0
-
-#else
-
-		lda $4000
-		and #$BF
-                ora #$20
-		sta $4000
-
-		lda #1
-	atnw:
-		bit LdDp
-		beq atnw
-		rts
-
-#endif
 
 ;--------------------------------------
 
