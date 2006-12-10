@@ -1,0 +1,886 @@
+
+
+;--------------------------------------
+; some values passed by the MMC64 bios
+; to the plugin
+
+MMCBios_FirstDataSector		= $cf80		; 3 bytes
+MMCBios_FATStartSector		= $cf83		; 3 bytes
+MMCBios_SecPerCluster		= $cf86		; 1 byte
+MMCBios_FileSize		= $cf87		; 4 bytes
+MMCBios_ClusLo			= $cf8b		; 2 bytes
+
+;--------------------------------------
+; the MMC64 registers and some bit defs
+
+MMC64_Data			= $df10
+
+MMC64_Ctrl			= $df11
+MMC64_Ctrl_ExtRomActive		= $01
+MMC64_Ctrl_nCS			= $02
+MMC64_Ctrl_Clk8Mhz		= $04
+MMC64_Ctrl_ClockportDF20	= $08
+MMC64_Ctrl_FlashMode		= $10
+MMC64_Ctrl_DisableExtRom	= $20
+MMC64_Ctrl_ReadMode		= $40
+MMC64_Ctrl_DisableMMC		= $80
+
+MMC64_Status			= $df12
+MMC64_Status_Busy		= $01
+MMC64_Status_Game		= $02
+MMC64_Status_Exrom		= $04
+MMC64_Status_CardAway		= $08
+MMC64_Status_WriteProtect	= $10
+MMC64_Status_FlashMode		= $20
+
+MMC64_Id			= $df13
+
+;--------------------------------------
+
+MMC_IdleByte = $ff
+
+; normal mode
+;MMCBaseMode = MMC64_Ctrl_ExtRomActive|MMC64_Ctrl_DisableExtRom
+
+; debugging mode
+MMCBaseMode = MMC64_Ctrl_ExtRomActive|MMC64_Ctrl_ClockportDF20
+
+;--------------------------------------
+
+	.segment "data"
+
+	.align $200
+MMC64Plugin_SectorBuffer	.DSB $200
+MMC64Plugin_FatBuffer		.DSB $200
+MMC64Plugin_ZeroPageSave	.DSB $100
+
+;--------------------------------------
+
+	.segment "zp"
+
+MMC64Plugin_BufferPtr		.DW 0
+
+
+	.segment "data"
+
+MMC64Plugin_FATBuffer_SectorNr	.DSB 3
+
+MMC64Plugin_ClusterBitShift	.DB 0
+MMC64Plugin_Cluster		.DW 0
+MMC64Plugin_Sector		.DSB 3
+MMC64Plugin_FileSize		.DSB 4
+MMC64Plugin_GetByteZp_X		.DB 0
+MMC64Plugin_GetByteZp_Y		.DB 0
+MMC64Plugin_ClusterSecCnt	.DB 1
+MMC64Plugin_Cmd			.DSB 6
+MMC64Plugin_FilePos		.DSB 4
+MMC64Plugin_SeekPos		.DSB 4
+MMC64Plugin_SeekByteOffset	.DW 0
+MMC64Plugin_SeekSectorOffset	.DB 0
+MMC64Plugin_SeekZp		.DSB 3
+MMC64Plugin_SeekCmpZp		.DSB 3
+
+;--------------------------------------
+
+	.segment "code"
+
+;--------------------------------------
+; MMC64Plugin_Init
+;
+; Initialize the control register, save
+; the zeropage and init the plugin
+; variables. This function should be called
+; right at the start of a plugin.
+;
+; Parameter:
+;   -
+;
+; Return:
+;   -
+;
+
+MMC64Plugin_Init:
+    .(
+	; disable external rom, deselect card, 8MHz mode
+	lda #MMCBaseMode|MMC64_Ctrl_nCS|MMC64_Ctrl_Clk8Mhz
+	sta MMC64_Ctrl
+
+	; save zeropage
+	ldx #2
+saveZp:
+	lda 0,x
+	sta MMC64Plugin_ZeroPageSave,x
+	inx
+	bne saveZp
+
+	; send 80 bits of '0' to init the spi lines
+	ldx #10
+clearBus:
+	lda #MMC_IdleByte
+	sta MMC64_Data
+	dex
+	bpl clearBus
+
+	lda #0
+	sta MMC64Plugin_FATBuffer_SectorNr
+	sta MMC64Plugin_FATBuffer_SectorNr+1
+	sta MMC64Plugin_FATBuffer_SectorNr+2
+
+	lda MMCBios_SecPerCluster
+	ldx #$ff
+shiftLoop:
+	inx
+	lsr
+	bne shiftLoop
+	stx MMC64Plugin_ClusterBitShift
+	rts
+    .)
+
+;--------------------------------------
+; MMC64Plugin_Exit
+;
+; Restore the zeropage and the control register,
+; returns to the filemanager.
+;
+; Parameter:
+;   -
+;
+; Return:
+;   This function does not return!
+;
+
+MMC64Plugin_Exit:
+    .(
+	sei
+	lda #$7f
+	sta $dc0d
+	sta $dd0d
+	lda $dc0d
+	lda $dd0d
+
+	; restore zeropage
+	ldx #2
+restoreZp:
+	lda MMC64Plugin_ZeroPageSave,x
+	sta 0,x
+	inx
+	bne restoreZp
+
+	lda #0
+	sta MMC64_Ctrl
+	lda #$e7
+	sta 1
+	rts
+    .)
+
+
+;--------------------------------------
+; MMC64Plugin_InitKernel
+;
+; Initialize the system for use with Kernel and
+; Basic rom routines.
+;
+; Parameter:
+;   -
+;
+; Return:
+;   -
+;
+
+MMC64Plugin_InitKernel:
+    .(
+	lda #0
+	sta $d01a
+	lda $d019
+	sta $d019
+
+	lda #$7f
+	sta $dc0d
+	sta $dd0d
+	lda $dc0d
+	lda $dd0d
+
+	lda #$37
+	sta 1
+	lda #0
+	ldx #2
+clrZp:
+	sta 0,x
+	inx
+	bne clrZp
+clr23:
+	sta $0200,x
+	sta $0300,x
+	inx
+	bne clr23
+
+	jsr $fda3	; init I/O
+	ldx #$3c
+	ldy #$03
+	stx $b2
+	sty $b3
+	lda #0
+	sta $0283
+	sta $c1
+	lda #$a0
+	sta $0284
+	sta $c2
+	lda #$08
+	sta $0282
+	lda #$04
+	sta $0288
+
+	jsr $fd15	; set kernel vectors
+	jsr $ff5b	; init screen
+
+	jsr $e453	; init vectors
+
+	jsr $ffcc
+	lda #0
+	sta $13
+	ldx #$19
+	stx $16
+	lda #$00
+	sta $3e
+	sta $10
+
+	lda #$4c
+	sta $54
+	sta $0310
+	lda #$48
+	ldy #$b2
+	sta $0311
+	sty $0312
+	lda #$91
+	ldy #$b3
+	sta $05
+	sty $06
+	lda #$aa
+	ldy #$b1
+	sta $03
+	sty $04
+	ldx #$1c
+copyChrGet:
+	lda $e3a2,X
+	sta $73,X
+	dex
+	bpl copyChrGet
+	lda #$03
+	sta $53
+	lda #$00
+	sta $68
+	sta $13
+	sta $18
+	ldx #$19
+	stx $16
+	sec
+	jsr $ff9c
+	stx $2B
+	sty $2C
+	sec
+	jsr $ff99
+	stx $37
+	sty $38
+	stx $33
+	sty $34
+	ldy #$00
+	tya
+	sta ($2b),y
+	inc $2b
+	bne nextBas
+	inc $2c
+nextBas:
+	rts
+    .)
+
+
+;--------------------------------------
+; MMC64Plugin_OpenFile
+;
+; Open the file selected in the filebrowser.
+;
+; Parameter:
+;   MMCBios_FileSize: Filesize in bytes
+;   MMCBios_ClusLo:   Start cluster of the file
+;
+; Return:
+;   Carry: clear = ok
+;          set   = read error
+;
+
+MMC64Plugin_OpenFile:
+    .(
+	; init filesize and position
+	ldx #3
+copyFileSize:
+	lda MMCBios_FileSize,x
+	sta MMC64Plugin_FileSize,x
+	lda #0
+	sta MMC64Plugin_FilePos,x
+	dex
+	bpl copyFileSize
+
+	; init first cluster
+	lda MMCBios_ClusLo
+	sta MMC64Plugin_Cluster
+	lda MMCBios_ClusLo+1
+	sta MMC64Plugin_Cluster+1
+
+	; init first sector
+	jsr MMC64Plugin_GetFirstSectorOfCluster
+
+	; init sector counter
+	lda MMCBios_SecPerCluster
+	sta MMC64Plugin_ClusterSecCnt
+
+	; init buffer counter
+	lda #<(MMC64Plugin_SectorBuffer-1)
+	sta MMC64Plugin_BufferPtr
+	lda #>(MMC64Plugin_SectorBuffer-1)
+	sta MMC64Plugin_BufferPtr+1
+
+	jmp MMC64Plugin_ReadSector
+    .)
+
+;--------------------------------------
+; MMC64Plugin_GetByte
+;
+; Reads one byte from the file opened with
+; MMC64Plugin_OpenFile.
+;
+; Parameter:
+;   -
+;
+; Return:
+;   Carry: clear = ok
+;          set   = end of file / read error (see akku for details)
+;   A:     databyte if ok (carry clear),
+;          $00 if end of file reached (carry set)
+;          $ff if a read error occured (carry set)
+;
+
+MMC64Plugin_GetByte:
+    .(
+	stx MMC64Plugin_GetByteZp_X
+	sty MMC64Plugin_GetByteZp_Y
+
+	lda MMC64Plugin_FilePos
+	cmp MMC64Plugin_FileSize
+	lda MMC64Plugin_FilePos+1
+	sbc MMC64Plugin_FileSize+1
+	lda MMC64Plugin_FilePos+2
+	sbc MMC64Plugin_FileSize+2
+	lda MMC64Plugin_FilePos+3
+	sbc MMC64Plugin_FileSize+3
+	bcc getByteSizeOk
+	; end of file
+	lda #0
+	sec
+	rts
+
+getByteSizeOk:
+	inc MMC64Plugin_FilePos
+	bne filePosInc0
+	inc MMC64Plugin_FilePos+1
+	bne filePosInc0
+	inc MMC64Plugin_FilePos+2
+	bne filePosInc0
+	inc MMC64Plugin_FilePos+3
+filePosInc0:
+
+	inc MMC64Plugin_BufferPtr
+	bne getByte0
+	inc MMC64Plugin_BufferPtr+1
+	lda MMC64Plugin_BufferPtr+1
+	cmp #>(MMC64Plugin_SectorBuffer+$0200)
+	bcc getByte0
+
+	inc MMC64Plugin_Sector
+	bne getByte2
+	inc MMC64Plugin_Sector+1
+	bne getByte2
+	inc MMC64Plugin_Sector+2
+getByte2:
+
+	dec MMC64Plugin_ClusterSecCnt
+	bne getByte1
+
+	jsr MMC64Plugin_GetNextCluster
+	bcs error
+	jsr MMC64Plugin_GetFirstSectorOfCluster
+
+	lda MMCBios_SecPerCluster
+	sta MMC64Plugin_ClusterSecCnt
+getByte1:
+
+	jsr MMC64Plugin_ReadSector
+	bcs error
+
+	lda #<MMC64Plugin_SectorBuffer
+	sta MMC64Plugin_BufferPtr
+	lda #>MMC64Plugin_SectorBuffer
+	sta MMC64Plugin_BufferPtr+1
+
+getByte0:
+	ldy #0
+	lda (MMC64Plugin_BufferPtr),y
+
+	ldx MMC64Plugin_GetByteZp_X
+	ldy MMC64Plugin_GetByteZp_Y
+	clc
+	rts
+
+error:
+	lda #1
+	sec
+	rts
+    .)
+
+
+;--------------------------------------
+; MMC64Plugin_Seek
+;
+; Seek to an absolute offset, specified in
+; Bytes. This is a 32 bit number stored at
+; MMC64Plugin_SeekPos.
+;
+; Parameter:
+;   MMC64Plugin_SeekPos: offset in bytes
+;
+; Return:
+;   Carry: clear = ok
+;          set   = read error
+;
+
+MMC64Plugin_Seek:
+    .(
+	; seek pos ok?
+	lda MMC64Plugin_SeekPos
+	cmp MMC64Plugin_FileSize
+	lda MMC64Plugin_SeekPos+1
+	sbc MMC64Plugin_FileSize+1
+	lda MMC64Plugin_SeekPos+2
+	sbc MMC64Plugin_FileSize+2
+	lda MMC64Plugin_SeekPos+3
+	sbc MMC64Plugin_FileSize+3
+	bcc skipOk
+	rts
+
+skipOk:
+	; seek pos = current pos ?
+	lda MMC64Plugin_SeekPos
+	cmp MMC64Plugin_FilePos
+	bne mustSeek
+	lda MMC64Plugin_SeekPos+1
+	cmp MMC64Plugin_FilePos+1
+	bne mustSeek
+	lda MMC64Plugin_SeekPos+2
+	cmp MMC64Plugin_FilePos+2
+	bne mustSeek
+	lda MMC64Plugin_SeekPos+3
+	cmp MMC64Plugin_FilePos+3
+	bne mustSeek
+	clc
+	rts
+mustSeek:
+
+	; get byte offset (assume 512 byte sectors)
+	lda MMC64Plugin_SeekPos
+	sta MMC64Plugin_SeekByteOffset
+	lda MMC64Plugin_SeekPos+1
+	and #1
+	sta MMC64Plugin_SeekByteOffset+1
+
+	; get number of sectors to skip
+	lda MMC64Plugin_SeekPos+3
+	lsr
+	sta MMC64Plugin_SeekZp+2
+	lda MMC64Plugin_SeekPos+2
+	ror
+	sta MMC64Plugin_SeekZp+1
+	lda MMC64Plugin_SeekPos+1
+	ror
+	sta MMC64Plugin_SeekZp
+
+	; get sector offset in cluster
+	ldx MMCBios_SecPerCluster
+	dex
+	txa
+	and MMC64Plugin_SeekZp
+	sta MMC64Plugin_SeekSectorOffset
+	
+	; get number of clusters
+	ldx MMC64Plugin_ClusterBitShift
+	beq noShiftSeek
+shiftSeek:
+	lsr MMC64Plugin_SeekZp+2
+	ror MMC64Plugin_SeekZp+1
+	ror MMC64Plugin_SeekZp
+	dex
+	bne shiftSeek
+noShiftSeek:
+
+	; number of clusters must be 16 bit
+	lda MMC64Plugin_SeekZp+2
+	bne error
+
+	; get number of cluster skips for current file position
+	lda MMC64Plugin_FilePos+3
+	sta MMC64Plugin_SeekCmpZp+2
+	lda MMC64Plugin_FilePos+2
+	sta MMC64Plugin_SeekCmpZp+1
+	lda MMC64Plugin_FilePos+1
+	sta MMC64Plugin_SeekCmpZp
+	ldx MMC64Plugin_ClusterBitShift
+shiftFilePos:
+	lsr MMC64Plugin_SeekCmpZp+2
+	ror MMC64Plugin_SeekCmpZp+1
+	ror MMC64Plugin_SeekCmpZp
+	dex
+	bpl shiftFilePos
+/*
+	; compare both cluster skips
+	lda MMC64Plugin_SeekZp
+	cmp MMC64Plugin_SeekCmpZp
+	bne newCluster
+	lda MMC64Plugin_SeekZp+1
+	cmp MMC64Plugin_SeekCmpZp+1
+	bne newCluster
+	lda MMC64Plugin_SeekZp+2
+	cmp MMC64Plugin_SeekCmpZp+2
+	beq clusterSkip_end
+*/
+	; seek to a different cluster
+newCluster:
+	; start at the beginning of the file
+	lda MMCBios_ClusLo
+	sta MMC64Plugin_Cluster
+	lda MMCBios_ClusLo+1
+	sta MMC64Plugin_Cluster+1
+
+	; loop over all clusters to skip
+clusterSkip:
+	lda MMC64Plugin_SeekZp
+	bne clusterSkip0
+	lda MMC64Plugin_SeekZp+1
+	beq clusterSkip_end
+	dec MMC64Plugin_SeekZp+1
+clusterSkip0:
+	dec MMC64Plugin_SeekZp
+
+	jsr MMC64Plugin_GetNextCluster
+	bcc clusterSkip
+error:
+	sec
+	rts
+
+	; cluster skip done
+clusterSkip_end:
+	; get first sector of cluster
+	jsr MMC64Plugin_GetFirstSectorOfCluster
+
+	; add sector offset
+	lda MMC64Plugin_Sector
+	clc
+	adc MMC64Plugin_SeekSectorOffset
+	sta MMC64Plugin_Sector
+	bcc sectorOffs0
+	inc MMC64Plugin_Sector+1
+	bne sectorOffs0
+	inc MMC64Plugin_Sector+2
+sectorOffs0:
+
+	; read the sector
+	jsr MMC64Plugin_ReadSector
+	bcs error
+
+	; init sector counter
+	lda MMCBios_SecPerCluster
+	sec
+	sbc MMC64Plugin_SeekSectorOffset
+	sta MMC64Plugin_ClusterSecCnt
+
+	; init buffer counter
+	lda #<(MMC64Plugin_SectorBuffer-1)
+	clc
+	adc MMC64Plugin_SeekByteOffset
+	sta MMC64Plugin_BufferPtr
+	lda #>(MMC64Plugin_SectorBuffer-1)
+	adc MMC64Plugin_SeekByteOffset+1
+	sta MMC64Plugin_BufferPtr+1
+
+	; set seek position as new file position
+	ldx #3
+copySeekPos:
+	lda MMC64Plugin_SeekPos,x
+	sta MMC64Plugin_FilePos,x
+	dex
+	bpl copySeekPos
+
+	clc
+	rts
+    .)
+
+
+;--------------------------------------
+; MMC64Plugin_GetNextCluster
+;
+; Read the next cluster from the FAT table.
+;
+; Parameter:
+;   MMC64Plugin_Cluster: old cluster number
+;
+; Return:
+;   Carry: clear = ok
+;          set   = read error
+;   MMC64Plugin_Cluster: new cluster number
+;
+
+MMC64Plugin_GetNextCluster:
+    .(
+	; FAT Offset = Cluster*2
+	lda MMC64Plugin_Cluster
+	asl
+	sta MMC64Plugin_BufferPtr
+	lda #(>MMC64Plugin_FatBuffer)/2
+	rol
+	sta MMC64Plugin_BufferPtr+1
+
+	lda MMC64Plugin_Cluster+1
+	clc
+	adc MMCBios_FATStartSector
+	sta MMC64Plugin_Sector
+	tax
+	lda MMCBios_FATStartSector+1
+	adc #0
+	sta MMC64Plugin_Sector+1
+	tay
+	lda MMCBios_FATStartSector+2
+	adc #0
+	sta MMC64Plugin_Sector+2
+
+	cmp MMC64Plugin_FATBuffer_SectorNr+2
+	bne readFat
+	cpy MMC64Plugin_FATBuffer_SectorNr+1
+	bne readFat
+	cpx MMC64Plugin_FATBuffer_SectorNr
+	beq getFatEntry
+
+readFat:
+	sta MMC64Plugin_FATBuffer_SectorNr+2
+	sty MMC64Plugin_FATBuffer_SectorNr+1
+	stx MMC64Plugin_FATBuffer_SectorNr
+
+	jsr MMC64Plugin_ReadSector
+	bcs error
+
+	; copy fat
+	ldy #0
+copyFat:
+	lda MMC64Plugin_SectorBuffer,y
+	sta MMC64Plugin_FatBuffer,y
+	lda MMC64Plugin_SectorBuffer+$0100,y
+	sta MMC64Plugin_FatBuffer+$0100,y
+	iny
+	bne copyFat
+
+getFatEntry:
+	ldy #0
+	lda (MMC64Plugin_BufferPtr),y
+	sta MMC64Plugin_Cluster
+	iny
+	lda (MMC64Plugin_BufferPtr),y
+	sta MMC64Plugin_Cluster+1
+	clc
+error:
+	rts
+    .)
+
+;--------------------------------------
+; MMC64Plugin_GetFirstSectorOfCluster
+;
+; Get the number of the first sector for
+; a given cluster.
+; FirstSectorOfCluster = (Cluster-2)*SectorsPerCluster + FirstDataSector
+;
+; Parameter:
+;   MMC64Plugin_Cluster: cluster number
+;
+; Return:
+;   MMC64Plugin_Sector:  number of the first sector in the cluster
+;
+
+MMC64Plugin_GetFirstSectorOfCluster:
+    .(
+	; ClusterZp -= 2
+	sec
+	lda MMC64Plugin_Cluster
+	sbc #2
+	sta MMC64Plugin_Sector
+	lda MMC64Plugin_Cluster+1
+	sbc #0
+	sta MMC64Plugin_Sector+1
+	lda #0
+	sta MMC64Plugin_Sector+2
+
+	ldx MMC64Plugin_ClusterBitShift
+	beq noShiftSector
+shiftSector:
+	asl MMC64Plugin_Sector
+	rol MMC64Plugin_Sector+1
+	rol MMC64Plugin_Sector+2
+	dex
+	bne shiftSector
+noShiftSector:
+
+	clc
+	lda MMC64Plugin_Sector
+	adc MMCBios_FirstDataSector
+	sta MMC64Plugin_Sector
+	lda MMC64Plugin_Sector+1
+	adc MMCBios_FirstDataSector+1
+	sta MMC64Plugin_Sector+1
+	lda MMC64Plugin_Sector+2
+	adc MMCBios_FirstDataSector+2
+	sta MMC64Plugin_Sector+2
+	rts
+    .)
+
+;--------------------------------------
+; MMC64Plugin_ReadSector
+;
+; Read a sector to the buffer.
+;
+; Parameter:
+;   MMC64Plugin_Sector: number of the sector to read
+;
+; Return:
+;   Carry:                     clear = ok
+;                              set   = read error
+;   MMC64Plugin_SectorBuffer : sector data (only valid if carry is clear!)
+;
+
+MMC64Plugin_ReadSector:
+    .(
+	lda #($40|$11)
+	sta MMC64Plugin_Cmd
+	lda #0
+	sta MMC64Plugin_Cmd+4	; address lsb
+	lda #$ff
+	sta MMC64Plugin_Cmd+5	; cmd crc (not used, but must be $ff for some stupid cards)
+	lda MMC64Plugin_Sector
+	asl
+	sta MMC64Plugin_Cmd+3
+	lda MMC64Plugin_Sector+1
+	rol
+	sta MMC64Plugin_Cmd+2
+	lda MMC64Plugin_Sector+2
+	rol
+	sta MMC64Plugin_Cmd+1
+
+	; init bus
+	lda #MMC_IdleByte
+	sta MMC64_Data
+
+	; select card
+	lda #MMCBaseMode|MMC64_Ctrl_Clk8Mhz
+	sta MMC64_Ctrl
+
+	; send command
+	jsr MMC64Plugin_SendCommand
+
+	; get response for command
+	jsr MMC64Plugin_WaitForReply
+	bne error
+
+	; wait for start of data
+	jsr MMC64Plugin_WaitForReply
+	cmp #$fe
+	bne error
+
+	; switch to read mode
+	lda #MMCBaseMode|MMC64_Ctrl_Clk8Mhz|MMC64_Ctrl_ReadMode
+	sta MMC64_Ctrl
+	lda MMC64_Data
+
+	ldy #0
+get0:
+	lda MMC64_Data
+	sta MMC64Plugin_SectorBuffer,y
+	iny
+	bne get0
+get1:
+	lda MMC64_Data
+	sta MMC64Plugin_SectorBuffer+$0100,y
+	iny
+	bne get1
+
+	; ignore crc16
+	lda MMC64_Data
+	lda MMC64_Data
+
+	lda #MMCBaseMode|MMC64_Ctrl_nCS|MMC64_Ctrl_Clk8Mhz
+	sta MMC64_Ctrl
+
+	clc
+	rts
+
+error:
+	sec
+	rts
+    .)
+
+;--------------------------------------
+; MMC64Plugin_SendCommand
+;
+; Send a command to the MMC.
+;
+; Parameter:
+;   MMC64Plugin_Cmd: 6 byte MMC command
+;
+; Return:
+;   -
+;
+
+MMC64Plugin_SendCommand:
+    .(
+	ldx #0
+sendCommand0:
+	lda MMC64Plugin_Cmd,x
+	sta MMC64_Data
+	inx
+	cpx #6
+	bcc sendCommand0
+	rts
+    .)
+
+;--------------------------------------
+; MMC64Plugin_WaitForReply
+;
+; Wait for a response from the MMC.
+;
+; Parameter:
+;   -
+;
+; Return:
+;   Akku: Response byte
+;
+
+MMC64Plugin_WaitForReply:
+    .(
+	ldx #0
+wait:
+	lda #MMC_IdleByte
+	sta MMC64_Data
+	lda MMC64_Data
+	cmp #MMC_IdleByte
+	bne gotReply
+	inx
+	bne wait
+gotReply:
+	and #$ff			; set flags according to data byte
+	rts
+    .)
+
+;--------------------------------------
+

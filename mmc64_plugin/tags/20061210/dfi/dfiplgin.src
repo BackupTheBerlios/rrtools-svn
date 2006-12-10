@@ -1,0 +1,2062 @@
+;--------------------------------------
+; DFI Plugin for MMC64
+;
+; by Doc Bacardi/DRM
+;--------------------------------------
+
+#segdef "zp", $26-$8a
+#segdef "data", $6800-$7c00
+#segdef "code", $3000-$6800
+#segdef "dirbuffer", $0c00-$3000
+
+#outfile @, startadr, sort, $00, "code"
+
+; Memory Map notes:
+;
+; (1) codestart to data end must not exceed $3000 bytes,
+;     it is mapped to $d000 - $ffff during file load in dload mode.
+;     that's no problem in kernal mode, but there is the decrunch buffer
+; (2) in kernal mode the rr contents must be depacked,
+;     $8000-$0000 is reserved for this. the code is first decrunched
+;     there, then the patches are applied
+;     and finally it is transfered into the rr ram
+; (3) reinit of kernel destroys $fd30, try to avoid this
+;     area or save it before calling 'MMC64Plugin_InitKernel'
+;--------------------------------------
+
+	.segment "zp"
+	* = $26
+
+	.segment "data"
+	* = $6800
+
+	.segment "code"
+	* = $3000
+
+; the loaded prg must be moved in this area or the plugin will be overwritten
+Load_Move_End = $7c00
+
+;--------------------------------------
+
+#include "dload/mmcparam.src"
+#include "dfi_fs_mmc64_parameters.src"
+
+;--------------------------------------
+
+ToggleEGDelay = $00
+
+;--------------------------------------
+
+	.segment "zp"
+
+
+LoadPtr				.DW 0
+HexdumpPtr			.DW 0
+exo_zp_area:			.DSB 7
+
+	.segment "data"
+
+DebugMode			.DB 0
+FirstDataBlock			.DSB 3
+BootPrgBlock			.DW 0
+BlockLength			.DB 0
+crc_value			.DW 0
+unmappedPage			.DB 0
+
+scanFileZp			.DSB 3
+scanFile_ClusterCmp		.DW 0
+scanFile_WriteRoutine		.DW 0
+scanFile_MaxMem			.DW 0
+
+scanFile_BufModeAvailable	.DB 0
+scanFile_CntModeAvailable	.DB 0
+
+fileStartAdr			.DW 0
+fileEndAdr			.DW 0
+
+dfi_rootDir			.DW 0
+dfi_fileDir			.DW 0
+Dfi_MaxTracks			.DSB 4
+
+mmc64_param_device		.DB 0
+mmc64_param_version		.DB 0
+mmc64_param_ptr			.DW 0
+mmc64_param_data		.DSB MMC64Param_size
+
+flag_retroReplay_present	.DB 0
+
+magic_buffer			.DSB $18
+
+dfi_fs_params			.DSB DfiFs_MMC64_ParamOffset_len
+
+DfiFs_KernalParameters_ClusterTableSize		.DW 0
+
+;--------------------------------------
+; start with code which does not run after booting the file.
+; no need to save this area
+
+	.segment "code"
+
+	; the plugin is executed at it's load address
+	jmp startPlugin
+
+;--------------------------------------
+
+#print "dfifs start:", *
+dfi_fs_banks_start:
+	.binclude "banks.exo"
+#print "dfifs end:", *
+
+#include "banks.lab"
+
+KernalMode_ClusterBufferSize = DfiFs_ClusterTable_End - DfiFs_ClusterTable_Start
+
+;--------------------------------------
+
+get_crunched_byte:
+    .(
+	inc selfMod0+1
+	bne selfMod0
+	inc selfMod0+2
+selfMod0:
+	lda dfi_fs_banks_start-1
+	rts
+    .)
+
+#include "exodecrunch.src"
+
+;--------------------------------------
+
+
+installKernelPatch:
+    .(
+	sei
+
+	; copy parameter to struct
+	; NOTE: the parameters must be copied before the data is depacked. the bios
+	; parameters will be overwritten by the depacked data.
+	lda MMC64Plugin_ClusterBitShift
+	sta dfi_fs_params+DfiFs_MMC64_ParamOffset_ClusterBitShift
+
+	; this is for 512 sectors only!
+	lda MMCBios_SecPerCluster
+	asl
+	sec
+	sbc #1
+	sta dfi_fs_params+DfiFs_MMC64_ParamOffset_ClusterMask
+
+	ldx #3
+copyFileSize:
+	lda MMC64Plugin_FileSize,x
+	sta dfi_fs_params+DfiFs_MMC64_ParamOffset_FileSize,x
+	dex
+	bpl copyFileSize
+
+	ldx #2
+copyDataSector:
+	lda MMCBios_FirstDataSector,x
+	sta dfi_fs_params+DfiFs_MMC64_ParamOffset_FirstDataSector,x
+	dex
+	bpl copyDataSector
+
+	lda MMCBios_ClusLo
+	sta dfi_fs_params+DfiFs_MMC64_ParamOffset_ClusLo
+	lda MMCBios_ClusLo+1
+	sta dfi_fs_params+DfiFs_MMC64_ParamOffset_ClusLo+1
+	lda mmc64_param_device
+	sta dfi_fs_params+DfiFs_MMC64_ParamOffset_Device
+
+
+	; switch to ram
+	lda #$34
+	sta 1
+
+	; decrunch all banks
+	jsr decrunch
+
+	; copy cluster table
+	ldy #0
+	ldx #0
+copyClusterTable:
+	lda EntryMem_Start,y
+	; the clustertable is in bank 2, this means 2 * $2000 bytes offset from the 'real address'
+	sta DfiFs_ClusterTable_Start+$4000,y
+	iny
+	bne copyClusterTable0
+	inc copyClusterTable+2
+	inc copyClusterTable+5
+	inx
+copyClusterTable0:
+	cpy DfiFs_KernalParameters_ClusterTableSize
+	txa
+	sbc DfiFs_KernalParameters_ClusterTableSize+1
+	bcc copyClusterTable
+
+	; set cluster table size
+	lda DfiFs_KernalParameters_ClusterTableSize
+	sta DfiFs_ClusterTable_Size+$4000
+	lda DfiFs_KernalParameters_ClusterTableSize+1
+	sta DfiFs_ClusterTable_Size+$4000+1
+
+	; back to normal
+	lda #$37
+	sta 1
+
+	; switch to c64 mode
+	lda #$22
+	sta $de00
+	ldx #0
+delay0:
+	nop
+	inx
+	bne delay0
+
+	lda #<dfi_fs_params
+	ldy #>dfi_fs_params
+	jsr BANK0_DfiFs_MMC64_Init
+
+	; install copy code
+	ldx #copy_code_len-1
+installCopyCode:
+	lda copy_code_start_psy,x
+	sta copy_code_start,x
+	dex
+	bpl installCopyCode
+
+	; copy bank 0
+	lda #>$8000
+	ldy #$80|$00|$23
+	jsr copy_code_start
+
+	; copy bank 1
+	lda #>$a000
+	ldy #$80|$08|$23
+	jsr copy_code_start
+
+	; copy bank 2
+	lda #>$c000
+	ldy #$80|$10|$23
+	jsr copy_code_start
+
+	; reinit back Basic env
+	jsr MMC64Plugin_InitKernel
+
+	; patch the load/save/open/get vectors
+	ldx #vectors_end-vectors_start-1
+installVectors:
+	lda vectors_start,x
+	sta $031a,x
+	dex
+	bpl installVectors
+
+	ldx #$ff
+	txs
+	cli
+	jmp $e39a
+
+
+vectors_start:
+	.DW DfiFs_Open			; $031a
+	.DW DfiFs_Close			; $031c
+	.DW DfiFs_ChangeKernalInput	; $031e
+	.DW DfiFs_ChangeKernalOutput	; $0320
+	.DW DfiFs_ClearChannels		; $0322
+	.DW DfiFs_CharIn		; $0324
+	.DW DfiFs_CharOut		; $0326
+	.DW $f6ed			; $0328
+	.DW DfiFs_GetIn			; $032a
+	.DW $f32f			; $032c
+	.DW $fe66			; $032e
+	.DW DfiFs_Load			; $0330
+	.DW DfiFs_Save			; $0332
+vectors_end:
+
+
+
+copy_code_start_psy:
+	.PSEUDOPC $0340
+copy_code_start:
+	sta copyDfi_selfModSrc+2
+	sty copyDfi_selfModBank+1
+
+	lda #$80
+	sta copyDfi_selfModDst+2
+
+	ldx #$20
+
+copyDfiFsCode0:
+	lda #$e4
+	sta 1
+	ldy #0
+copyDfi_selfModSrc:
+	lda $ff00,y
+	sta $0400,y
+	iny
+	bne copyDfi_selfModSrc
+	lda #$e7
+	sta 1
+
+	; switch to bank x, ram
+copyDfi_selfModBank:
+	ldy #$ff
+	jsr switchToBank
+
+	ldy #0
+copyDfiFsCode2:
+	lda $0400,y
+copyDfi_selfModDst:
+	sta $8000,y
+	iny
+	bne copyDfiFsCode2
+
+	ldy #$22
+	jsr switchToBank
+
+	inc copyDfi_selfModSrc+2
+	inc copyDfi_selfModDst+2
+	dex
+	bne copyDfiFsCode0
+	rts
+
+switchToBank:
+	tya
+	sta $de00
+	eor $de00
+	and #$98
+	bne switchToBank
+	rts
+
+	.REALPC
+copy_code_len = * - copy_code_start_psy
+
+    .)
+
+;--------------------------------------
+
+scanFile:
+    .(
+	; assume the file is continuous and buffer is available
+	lda #1
+	sta scanFile_BufModeAvailable
+	sta scanFile_CntModeAvailable
+
+	; get number of sectors
+	lda MMC64Plugin_FileSize
+	cmp #1
+	lda MMC64Plugin_FileSize+1
+	sbc #0
+	sta scanFileZp
+	lda MMC64Plugin_FileSize+2
+	sbc #0
+	sta scanFileZp+1
+	lda MMC64Plugin_FileSize+3
+	sbc #0
+	sta scanFileZp+2
+
+	; get number of clusters for the file
+	ldx MMC64Plugin_ClusterBitShift
+shiftSector:
+	lsr scanFileZp+2
+	ror scanFileZp+1
+	ror scanFileZp
+	dex
+	bpl shiftSector
+
+	; ckeck number of clusters
+	lda scanFileZp
+	cmp scanFile_MaxMem
+	lda scanFileZp+1
+	sbc scanFile_MaxMem+1
+	lda scanFileZp+2
+	sbc #0
+	bcc ramSizeOk
+	; no clusterbuffer possible
+	lda #<Msg_NoClusterBuffer
+	ldy #>Msg_NoClusterBuffer
+	jsr $ab1e
+
+	lda #0
+	sta scanFile_BufModeAvailable
+	lda #<scanJmpR_dummy
+	sta scanFile_WriteRoutine
+	lda #>scanJmpR_dummy
+	sta scanFile_WriteRoutine+1
+
+ramSizeOk:
+	lda #<Msg_Scanning
+	ldy #>Msg_Scanning
+	jsr $ab1e
+
+	; seek to $00000000
+	lda #0
+	sta MMC64Plugin_SeekPos
+	sta MMC64Plugin_SeekPos+1
+	sta MMC64Plugin_SeekPos+2
+	sta MMC64Plugin_SeekPos+3
+	jsr MMC64Plugin_Seek
+	bcs scanError
+
+	lda MMC64Plugin_Cluster
+	ldy MMC64Plugin_Cluster+1
+scanLoop:
+	sta scanFile_ClusterCmp
+	sty scanFile_ClusterCmp+1
+
+	jsr scanJmpR
+
+	; that's too much output for the normal mode
+	lda DebugMode
+	beq noDebugMode
+	lda MMC64Plugin_Cluster+1
+	ldy MMC64Plugin_Cluster
+	jsr hexWordOut
+	lda #' '
+	jsr $ffd2
+noDebugMode:
+
+	; more clusters left?
+	lda scanFileZp
+	bne decClusters
+	ora scanFileZp+1
+	beq noMoreClusters
+	dec scanFileZp+1
+decClusters:
+	dec scanFileZp
+
+	jsr MMC64Plugin_GetNextCluster
+	bcs scanError
+
+	inc scanFile_ClusterCmp
+	bne nextCluster
+	inc scanFile_ClusterCmp+1
+nextCluster:
+
+	lda MMC64Plugin_Cluster
+	ldy MMC64Plugin_Cluster+1
+	cmp scanFile_ClusterCmp
+	bne fileIsFragmented
+	cpy scanFile_ClusterCmp+1
+	beq scanLoop
+fileIsFragmented:
+	; can't use continuous loader
+	ldx #0
+	stx scanFile_CntModeAvailable
+	beq scanLoop	; bra
+
+
+scanError:
+	lda #<Err_Scan
+	ldy #>Err_Scan
+	jsr $ab1e
+	sec
+	rts
+
+
+noMoreClusters:
+	ldx #3
+seekCfg:
+	; restore filepos to 0
+	lda #$ff
+	sta MMC64Plugin_FilePos,x
+	lda #0
+	sta MMC64Plugin_SeekPos,x
+	dex
+	bpl seekCfg
+	jsr MMC64Plugin_Seek
+	bcs scanError
+
+	lda #<Msg_ScanOk
+	ldy #>Msg_ScanOk
+	jsr $ab1e
+	lda #0
+	clc
+	rts
+
+scanJmpR:
+	jmp (scanFile_WriteRoutine)
+scanJmpR_dummy:
+	rts
+
+    .)
+
+;--------------------------------------
+
+romCheck:
+    .(
+	; init the results
+	ldy #0
+	sty flag_retroReplay_present
+
+	; detect retro replay style hardware, other modules might crash :(
+	jsr detectRetroReplay
+	bcs noRR
+	jmp initRetroReplay
+
+noRR:
+	; no known cart found, look for rom at $8000
+	jsr check
+	beq ram8000
+	; rom at 8000
+	lda #<Err_UnknownRom
+	ldy #>Err_UnknownRom
+	jsr $ab1e
+
+	jsr Ask_ContinueAnyway
+	bne ram8000
+
+	ldx #160
+	lda #<$8000
+	ldy #>$8000
+	jsr dumpMemory
+	jsr debugStep
+;romCheckError:
+	sec
+	rts
+
+ram8000:
+	clc
+	rts
+
+check:
+	lda $8000
+	eor #$ff
+	sta $8000
+	cmp $8000
+	rts
+    .)
+
+
+detectRetroReplay:
+    .(
+	sei
+
+	; configure rr
+	sta $de01
+	eor $de01
+	and #%01000010
+	bne detectRR_miss
+
+	; copy switcher code
+	ldx #detectRR_switcher_len-1
+copySwitcherCode:
+	lda detectRR_switcher_psy,x
+	sta detectRR_switcher_start,x
+	dex
+	bpl copySwitcherCode
+
+	; write values to all banks, c64 val is special
+	ldx #detectRR_bankTabRw_len-1
+detectRR0:
+	ldy detectRR_bankTabRw,x
+	jsr detectRR_switcherWrite
+	dex
+	bpl detectRR0
+
+	; read values back
+	ldx #detectRR_bankTabRo_len-1
+detectRR1:
+	ldy detectRR_bankTabRo,x
+	jsr detectRR_switcherRead
+	bne detectRR_miss
+	dex
+	bpl detectRR1
+
+	cli
+	clc
+	rts
+
+detectRR_miss:
+	; no retro replay
+	cli
+	sec
+	rts
+
+
+detectRR_bankTabRo:
+	.DB %00100010
+	.DB %00100000
+	.DB %00101000
+	.DB %00110000
+	.DB %00111000
+detectRR_bankTabRo_len = * - detectRR_bankTabRo
+
+detectRR_bankTabRw:
+	.DB %00100010
+	.DB %00100011
+	.DB %00101011
+	.DB %00110011
+ 	.DB %00111011
+detectRR_bankTabRw_len = * - detectRR_bankTabRw
+
+
+detectRR_switcher_psy:
+	.PSEUDOPC $0340
+detectRR_switcher_start:
+
+detectRR_switcherRead:
+	jsr detectRR_switcher
+	txa
+	ora #$a0
+	eor $8000
+	pha
+	ldy #$22
+	jsr detectRR_switcher
+	pla
+	rts
+
+detectRR_switcherWrite:
+	jsr detectRR_switcher
+	txa
+	ora #$a0
+	sta $8000
+	ldy #$22
+detectRR_switcher:
+	sty $de00
+	ldy #0
+detectRR_switcher_delay:
+	nop
+	iny
+	bne detectRR_switcher_delay
+	rts
+	.REALPC
+detectRR_switcher_len = * - detectRR_switcher_psy
+
+    .)
+
+
+initRetroReplay:
+    .(
+	; scan file and write map to rr ram
+	; rr can access 4*$fe bytes at $df00. max sizes are:
+	;
+	; Sec per cluster | bytes per cluster | max image size
+	;-----------------+-------------------+------------------
+	; $01             | $0200             | $0003f800 (~256K)
+	; $02             | $0400             | $0007f000 (~512K)
+	; $04             | $0800             | $000fe000 (~1M)
+	; $08             | $1000             | $001fc000 (~2M)
+	; $10             | $2000             | $003f8000 (~4M)
+	; $20             | $4000             | $007f0000 (~8M)
+	;-----------------+-------------------+------------------
+
+	lda #1
+	sta flag_retroReplay_present
+
+	lda #<((4*$fe+1)/2)
+	sta scanFile_MaxMem
+	lda #>((4*$fe+1)/2)
+	sta scanFile_MaxMem+1
+	lda #<rrRamWrite
+	sta scanFile_WriteRoutine
+	lda #>rrRamWrite
+	sta scanFile_WriteRoutine+1
+
+	lda #<Msg_RomRR
+	ldy #>Msg_RomRR
+	jsr $ab1e
+
+	clc
+	rts
+
+
+rrRamWrite:
+	pha
+selfmodBank:
+	ldx #0
+	lda bankTab,x
+	sta $de00
+
+	ldx #ToggleEGDelay
+bankswitch0:
+	inx
+	bne bankswitch0
+	; x is 0 now
+
+	pla
+writeBytes:
+selfmodIdx:
+	ldx #0
+	sta $de02,x
+	inx
+	tya
+	sta $de02,x
+	inx
+	cpx #$fe
+	bcc noBankChange
+	inc selfmodBank+1
+	ldx #0
+noBankChange:
+	stx selfmodIdx+1
+
+	lda #$22
+	sta $de00
+
+	ldx #ToggleEGDelay
+bankswitch1:
+	inx
+	bne bankswitch1
+
+	rts
+
+bankTab:
+	.DB %00100010
+	.DB %00101010
+	.DB %00110010
+	.DB %00111010
+    .)
+
+
+;--------------------------------------
+
+openImage:
+    .(
+	; check archive magic
+	ldy #0
+readMagic:
+	jsr MMC64Plugin_GetByte
+	bcs psy_read_error
+	sta magic_buffer,y
+	iny
+	cpy #$18
+	bcc readMagic
+
+	ldy #0
+checkMagic:
+	lda magic_buffer,y
+	cmp DFI_Magic,y
+	bne dfi_magic_error
+	iny
+	cpy #$18
+	bcc checkMagic
+
+	; skip version
+	ldx #3
+skipHeader0:
+	jsr MMC64Plugin_GetByte
+psy_read_error:
+	bcs read_error
+	dex
+	bpl skipHeader0
+
+	; get image tracks
+	ldx #0
+getTracks:
+	jsr MMC64Plugin_GetByte
+	bcs read_error
+	sta Dfi_MaxTracks,x
+	inx
+	cpx #4
+	bcc getTracks
+
+	; show image tracks
+	lda #<Msg_ImageTracks
+	ldy #>Msg_ImageTracks
+	jsr $ab1e
+	ldx #3
+showTracks:
+	lda Dfi_MaxTracks,x
+	jsr hexOut
+	dex
+	bpl showTracks
+	lda #13
+	jsr $ffd2
+
+	; check for valid trackcount
+	lda Dfi_MaxTracks+1
+	ora Dfi_MaxTracks+2
+	ora Dfi_MaxTracks+3
+	bne tracksError
+	lda Dfi_MaxTracks
+	beq tracksError
+
+	; check filesize, does all tracks fit in?
+	lda MMC64Plugin_FileSize
+	cmp #0
+	lda MMC64Plugin_FileSize+1
+	sbc #0
+	lda MMC64Plugin_FileSize+2
+	sbc Dfi_MaxTracks
+	lda MMC64Plugin_FileSize+3
+	sbc #0
+	bcc fileSizeError
+
+	; get rootdir track / sector
+	jsr MMC64Plugin_GetByte
+	bcs read_error
+	sta dfi_rootDir
+	jsr MMC64Plugin_GetByte
+	bcs read_error
+	sta dfi_rootDir+1
+
+	; TODO: get the rest of the header
+
+	clc
+	rts
+
+dfi_magic_error:
+	lda #<Err_Magic
+	ldy #>Err_Magic
+	jsr $ab1e
+
+	; dump magic bytes
+	lda DebugMode
+	beq noDebug
+	ldx #$18
+	lda #<magic_buffer
+	ldy #>magic_buffer
+	jsr dumpMemory
+	jsr debugStep
+noDebug:
+
+	sec
+	rts
+
+read_error:
+	lda #<Err_Read
+	ldy #>Err_Read
+	jsr $ab1e
+	sec
+	rts
+
+tracksError:
+	lda #<Err_TrackNumer
+	ldy #>Err_TrackNumer
+	jsr $ab1e
+	sec
+	rts
+
+fileSizeError:
+	lda #<Err_TracksExceedFile
+	ldy #>Err_TracksExceedFile
+	jsr $ab1e
+	sec
+	rts
+
+DFI_Magic:
+	.DB $00, $44, $52, $45, $41, $4d, $4c, $4f
+	.DB $41, $44, $20, $46, $49, $4c, $45, $20
+	.DB $41, $52, $43, $48, $49, $56, $45, $00
+
+    .)
+
+;--------------------------------------
+
+selectFile:
+    .(
+	; start filebrowser
+	jsr Mylene
+	bcc selectionOk
+	tay
+	beq nothing_selected
+	bne read_error
+
+selectionOk:
+	; selected entry is in Entry_EBuf
+
+	; get track/sector
+	lda Entry_EBuf+DirE_UserData
+	sta BootPrgBlock+1
+	lda Entry_EBuf+DirE_UserData+1
+	sta BootPrgBlock
+
+	; read dir header
+	lda #0
+	sta MMC64Plugin_SeekPos+3
+	ldx mylene_dfi_current_dir_trk
+	beq seek_error
+	dex
+	stx MMC64Plugin_SeekPos+2
+	lda mylene_dfi_current_dir_sec
+	sta MMC64Plugin_SeekPos+1
+	lda #0
+	sta MMC64Plugin_SeekPos
+	jsr MMC64Plugin_Seek
+	bcs seek_error
+
+	; get track/sector of the first dir sector
+	jsr MMC64Plugin_GetByte
+	bcs read_error
+	sta dfi_fileDir
+	jsr MMC64Plugin_GetByte
+	bcs read_error
+	sta dfi_fileDir+1
+
+	; show filename
+	lda #<Msg_Booting
+	ldy #>Msg_Booting
+	jsr $ab1e
+	ldx #0
+showFilename:
+	lda Entry_EBuf+DirE_Name,x
+	jsr $ffd2
+	inx
+	cpx #18
+	bcc showFilename
+	lda #13
+	jsr $ffd2
+
+	; ok
+	clc
+	rts
+
+nothing_selected:
+	sec
+	rts
+
+read_error:
+	lda #<Err_Read
+	ldy #>Err_Read
+	jsr $ab1e
+	sec
+	rts
+
+seek_error:
+	lda #<Err_Seek
+	ldy #>Err_Seek
+	jsr $ab1e
+	sec
+	rts
+    .)
+
+;--------------------------------------
+
+selectPluginMode:
+    .(
+	; yes -> kernal mode is possible
+	lda #<Msg_SelectPluginMode_Header
+	ldy #>Msg_SelectPluginMode_Header
+	jsr $ab1e
+
+getKey:
+	jsr $ffe4
+	cmp #'k'
+	beq selectMode
+	cmp #'d'
+	beq selectMode
+	cmp #3	; stop key
+	bne getKey
+	sec
+	rts
+
+selectMode:
+	jsr $ffd2
+	sec
+	sbc #'d'
+	tax
+	lda #13
+	jsr $ffd2
+	txa
+	clc
+	rts
+    .)
+
+;--------------------------------------
+
+selectLoaderMode:
+    .(
+	lda DebugMode
+	bne debugMode
+
+	; no debug mode, auto select
+
+	lda #<Msg_SelectLoaderMode_Header
+	ldy #>Msg_SelectLoaderMode_Header
+	jsr $ab1e
+
+	; first priority is the continuous mode as it's the shortest code
+	lda scanFile_CntModeAvailable
+	beq noCntMode
+	lda #<Msg_SelectLoaderMode_Cnt
+	ldy #>Msg_SelectLoaderMode_Cnt
+	ldx #DLoad_MMC64Cnt_DeviceAddress
+	bne setDevice	; bra
+
+	; second priority is the retro replay mode
+noCntMode:
+	lda scanFile_BufModeAvailable
+	beq noBufMode
+	lda #<Msg_SelectLoaderMode_Buf
+	ldy #>Msg_SelectLoaderMode_Buf
+	ldx #DLoad_MMC64RR_DeviceAddress
+	bne setDevice	; bra
+
+noBufMode:
+	; default mode is without any buffer and thus the slowest
+	lda #<Msg_SelectLoaderMode_Plain
+	ldy #>Msg_SelectLoaderMode_Plain
+	ldx #DLoad_MMC64_DeviceAddress
+
+setDevice:
+	stx mmc64_param_device
+	jsr $ab1e
+	clc
+	rts
+
+
+
+debugMode:
+	; let the user select from the possible options
+	lda #<Msg_SelectLoaderMode
+	ldy #>Msg_SelectLoaderMode
+	jsr $ab1e
+
+	lda #<Msg_SelectLoaderMode_CntAvail
+	ldy #>Msg_SelectLoaderMode_CntAvail
+	ldx scanFile_CntModeAvailable
+	bne noCntModePrint
+	lda #<Msg_SelectLoaderMode_CntNotAvail
+	ldy #>Msg_SelectLoaderMode_CntNotAvail
+noCntModePrint:
+	jsr $ab1e
+
+	lda #<Msg_SelectLoaderMode_BufAvail
+	ldy #>Msg_SelectLoaderMode_BufAvail
+	ldx scanFile_BufModeAvailable
+	bne noBufModePrint
+	lda #<Msg_SelectLoaderMode_BufNotAvail
+	ldy #>Msg_SelectLoaderMode_BufNotAvail
+noBufModePrint:
+	jsr $ab1e
+
+	; plain is always available
+	lda #<Msg_SelectLoaderMode_PlainAvail
+	ldy #>Msg_SelectLoaderMode_PlainAvail
+	jsr $ab1e
+
+	lda #<Msg_SelectLoaderMode_Prompt
+	ldy #>Msg_SelectLoaderMode_Prompt
+	jsr $ab1e
+
+
+getInput:
+	jsr $ffe4
+	beq getInput
+
+	cmp #'1'
+	bne noCntSelect
+	; is cnt mode available
+	ldx scanFile_CntModeAvailable
+	beq getInput
+	ldx #DLoad_MMC64Cnt_DeviceAddress
+	bne setDeviceDbg	; bra
+
+noCntSelect:
+	cmp #'2'
+	bne noBufSelect
+	; is buf mode available
+	ldx scanFile_BufModeAvailable
+	beq getInput
+	ldx #DLoad_MMC64RR_DeviceAddress
+	bne setDeviceDbg	; bra
+
+noBufSelect:
+	cmp #'3'
+	bne noPlainMode
+	ldx #DLoad_MMC64_DeviceAddress
+	bne setDeviceDbg	; bra
+
+noPlainMode:
+	cmp #3	; stop key
+	bne getInput
+	lda #13
+	jsr $ffd2
+	sec
+	rts
+
+setDeviceDbg:
+	jsr $ffd2
+	lda #13
+	jsr $ffd2
+	stx mmc64_param_device
+	clc
+	rts
+    .)
+
+;--------------------------------------
+
+Mylene_Start = *
+#include "browser.src"
+#print "Mylene Size:", *-Mylene_Start
+
+;--------------------------------------
+
+Load_Move_Start = * & $ff00
+
+#print "Load_Move_Start", Load_Move_Start
+
+#if (Load_Move_End-Load_Move_Start)>$3000
+#error "Load_Move area too large, can't buffer in $d000-$ffff", Load_Move_End-Load_Move_Start
+#endif
+
+	.segment "code"
+
+startPlugin:
+	sei
+	lda #$35
+	sta 1
+
+	; init the plugin variables
+	jsr MMC64Plugin_Init
+
+	; bring back Basic env
+	jsr MMC64Plugin_InitKernel
+	cli
+
+	; is right-shift down -> enter debug mode
+	jsr getRightShift
+	sta DebugMode
+
+	lda #<Msg_Hello
+	ldy #>Msg_Hello
+	jsr $ab1e
+
+	lda DebugMode
+	beq noDebug0
+	lda #<Msg_HelloDebug
+	ldy #>Msg_HelloDebug
+	jsr $ab1e
+noDebug0:
+
+	; dump bios parameter at $cf80
+	lda DebugMode
+	beq noDebug1
+	lda #<Msg_BiosParams
+	ldy #>Msg_BiosParams
+	jsr $ab1e
+	ldx #13
+	lda #<$cf80
+	ldy #>$cf80
+	jsr dumpMemory
+	jsr debugStep
+noDebug1:
+
+	; set default address
+	lda #DLoad_MMC64_DeviceAddress		; MMC Device
+	sta mmc64_param_device
+
+	lda #<Msg_OpenFile
+	ldy #>Msg_OpenFile
+	jsr $ab1e
+	jsr debugStep
+	jsr MMC64Plugin_OpenFile
+	bcc openOk
+	lda #<Err_Read
+	ldy #>Err_Read
+	jsr $ab1e
+	jmp quitPlugin
+openOk:
+	; check filesize, must not exceed 16M
+	lda MMC64Plugin_FileSize
+	cmp #1
+	lda MMC64Plugin_FileSize+1
+	sbc #0
+	lda MMC64Plugin_FileSize+2
+	sbc #0
+	lda MMC64Plugin_FileSize+3
+	sbc #1
+	bcc fileSizeOk
+	lda #<Err_FileSize
+	ldy #>Err_FileSize
+	jsr $ab1e
+	jmp quitPlugin
+fileSizeOk:
+
+	; select kernal or dload mode
+	jsr selectPluginMode
+	bcs quitPlugin
+	tax
+	bne pluginMode_kernal
+
+	lda #0
+	sta scanFile_MaxMem
+	sta scanFile_MaxMem+1
+
+	; configure rr: reu mem map, no freeze, allow banking
+	lda #%01000110
+	jsr romCheck
+	bcs quitPlugin
+
+	; scan the image
+	jsr scanFile
+	bcs quitPlugin
+
+	; open the image
+	jsr openImage
+	bcs quitPlugin
+
+	; select loader mode
+	jsr selectLoaderMode
+	bcs quitPlugin
+
+	; show the filebrowser
+	jsr selectFile
+	bcs quitPlugin
+
+	; boot the file
+	jsr bootFile
+	bcs quitPlugin
+	jmp runFile
+
+quitPlugin:
+	lda #<Msg_Exit
+	ldy #>Msg_Exit
+	jsr $ab1e
+	jsr debugStep
+
+	; go back to MMC64 browser
+	jmp MMC64Plugin_Exit
+
+
+pluginMode_kernal:
+	; configure rr: reu mem map, no freeze, do not allow banking
+	lda #%01000100
+	jsr romCheck
+	bcs quitPlugin
+
+	; retro replay present?
+	lda flag_retroReplay_present
+	bne kernal_cart_found
+
+	lda #<Err_Kernal_NoCart
+	ldy #>Err_Kernal_NoCart
+	jsr $ab1e
+	jsr debugStep
+
+	lda DebugMode
+	beq noDebug3
+
+	jsr Ask_ContinueAnyway
+	bne kernal_cart_found
+noDebug3:
+	jmp quitPlugin
+
+kernal_cart_found:
+	; set size of available memory
+	lda #<(KernalMode_ClusterBufferSize/2)
+	sta scanFile_MaxMem
+	lda #>(KernalMode_ClusterBufferSize/2)
+	sta scanFile_MaxMem+1
+	; set write routine
+	lda #<KernalMode_WriteCluster
+	sta scanFile_WriteRoutine
+	lda #>KernalMode_WriteCluster
+	sta scanFile_WriteRoutine+1
+
+	; set start of mem
+	lda #<EntryMem_Start
+	sta LoadPtr
+	lda #>EntryMem_Start
+	sta LoadPtr+1
+
+	; scan the image
+	jsr scanFile
+	bcs quitPlugin
+
+	; did the cluster table fit into the buffer?
+	lda scanFile_BufModeAvailable
+	beq fileTooLarge
+
+	; get the size of the cluster table
+	sec
+	lda LoadPtr
+	sbc #<EntryMem_Start
+	sta DfiFs_KernalParameters_ClusterTableSize
+	lda LoadPtr+1
+	sbc #>EntryMem_Start
+	sta DfiFs_KernalParameters_ClusterTableSize+1
+
+	; pluginMode_kernel
+	jmp installKernelPatch
+
+fileTooLarge:
+	lda #<Err_Kernal_ClusterBufferFull
+	ldy #>Err_Kernal_ClusterBufferFull
+	jsr $ab1e
+	jsr debugStep
+	jmp quitPlugin
+
+KernalMode_WriteCluster:
+	pha
+	tya
+	ldy #1
+	sta (LoadPtr),y
+	dey
+	pla
+	sta (LoadPtr),y
+	lda LoadPtr
+	clc
+	adc #2
+	sta LoadPtr
+	bcc KernalMode_WriteCluster0
+	inc LoadPtr+1
+KernalMode_WriteCluster0:
+	rts
+
+;--------------------------------------
+
+runFile:
+    .(
+	jsr MMC64_SelectParameters
+
+	; dump parameter block
+	lda DebugMode
+	beq noDebug2
+	lda #<Msg_DfiParams
+	ldy #>Msg_DfiParams
+	jsr $ab1e
+	ldx #MMC64Param_size
+	lda #<mmc64_param_data
+	ldy #>mmc64_param_data
+	jsr dumpMemory
+noDebug2:
+
+	lda #<Msg_EnterApplication
+	ldy #>Msg_EnterApplication
+	jsr $ab1e
+	jsr debugStep
+
+	; reinit system
+	sei
+	jsr MMC64Plugin_InitKernel
+
+	lda mmc64_param_device
+	sta $ba
+	lda mmc64_param_version
+	sta $b7
+	lda mmc64_param_ptr
+	sta $bb
+	lda mmc64_param_ptr+1
+	sta $bc
+	ldy #MMC64Param_size-1
+copyParameters:
+	lda mmc64_param_data,y
+	sta ($bb),y
+	dey
+	bpl copyParameters
+
+	; set file end
+	lda fileEndAdr
+	sta $ae
+	sta $2d
+	lda fileEndAdr+1
+	sta $af
+	sta $2e
+
+	; swap the map area and run the file
+	ldx #SwapAndRun_len
+copySwapAndRun:
+	lda SwapAndRun_Psy,x
+	sta SwapAndRun,x
+	dex
+	bpl copySwapAndRun
+
+	sei
+	lda #$e8
+	sta 1
+	ldx #>(Load_Move_End-Load_Move_Start-$0100)
+	ldy #0
+	jmp SwapAndRun
+
+SwapAndRun_Psy:
+    .PSEUDOPC($03c0)
+SwapAndRun:
+	lda $d000,y
+	sta Load_Move_Start,y
+	iny
+	bne SwapAndRun
+	inc SwapAndRun+2
+	inc SwapAndRun+5
+	dex
+	bpl SwapAndRun
+
+	lda #$e7
+	sta 1
+	cli
+	jsr $a659
+	jmp $a7ae
+
+#if *>=$0400
+#error "SwapAndRun too long, it will destroy the screen!"
+#endif
+    .REALPC
+SwapAndRun_len = * - SwapAndRun_Psy
+
+    .)
+
+;--------------------------------------
+
+; X: number of bytes
+; A: startadr lo
+; Y: startadr hi
+dumpMemory:
+    .(
+	sta HexdumpPtr
+	sty HexdumpPtr+1
+	ldy #0
+dumpLoop:
+	tya
+	and #7
+	bne noStartOfLine
+	tya
+	clc
+	adc HexdumpPtr
+	sta HexdumpPtr
+	bcc noInc
+	inc HexdumpPtr+1
+noInc: 
+	lda #$0d
+	jsr $ffd2
+	lda HexdumpPtr+1
+	ldy HexdumpPtr
+	jsr hexWordOut
+	lda #':'
+	jsr $ffd2
+	lda #' '
+	jsr $ffd2
+	ldy #0
+noStartOfLine:
+	lda #' '
+	jsr $ffd2
+	lda (HexdumpPtr),y
+	jsr hexOut
+	iny
+	dex
+	bne dumpLoop
+	lda #13
+	jmp $ffd2
+    .)
+
+
+hexWordOut:
+	jsr hexOut
+	tya
+hexOut:
+	pha
+	lsr
+	lsr
+	lsr
+	lsr
+	jsr hexOut0
+	pla
+	and #$0f
+hexOut0:
+	ora #$30
+	cmp #$3a
+	bcc hexOut1
+	adc #6
+hexOut1:
+	jmp $ffd2
+
+
+getRightShift:
+    .(
+	sei
+	lda #$bf
+	sta $dc00
+deflKey:
+	lda $dc01
+	cmp $dc01
+	bne deflKey
+	eor #$10
+	and #$10
+	lsr
+	lsr
+	lsr
+	lsr
+	cli
+	rts
+    .)
+
+
+debugStep:
+    .(
+	pha
+	lda DebugMode
+	beq noDebugMode
+waitForSpace:
+	inc $d020
+	jsr $ffe4
+	dec $d020
+	cmp #' '
+	bne waitForSpace
+noDebugMode:
+	pla
+	rts
+    .)
+
+;--------------------------------------
+
+
+getMapping:
+    .(
+	cmp #>Load_Move_Start
+	bcc noMap
+	cmp #>Load_Move_End
+	bcs noMap
+	; move to $d000
+	adc #>($d000-Load_Move_Start)
+noMap:
+	rts
+    .)
+
+
+getCrc:
+    .(
+	sei
+	lda #$e8
+	sta 1
+
+	lda fileStartAdr
+	sta LoadPtr
+	lda fileStartAdr+1
+	sta unmappedPage
+	jsr getMapping
+	sta LoadPtr+1
+
+	ldy #0
+	sty crc_value
+	sty crc_value+1
+
+updateCrc16:
+	; crc  = (unsigned char)(crc >> 8) | (crc << 8);
+	ldx crc_value
+	lda crc_value+1
+	stx crc_value+1
+;	sta crc_value
+
+	; crc ^= ser_data;
+;	lda crc_value
+	eor (LoadPtr),y
+	sta crc_value
+
+	; crc ^= (unsigned char)(crc & 0xff) >> 4;
+;	lda crc_value
+	lsr
+	lsr
+	lsr
+	lsr
+	eor crc_value
+	sta crc_value
+
+	; crc ^= (crc << 8) << 4;
+;	lda crc_value
+	asl
+	asl
+	asl
+	asl
+	eor crc_value+1
+	sta crc_value+1
+
+	; crc ^= ((crc & 0xff) << 4) << 1;
+	lda crc_value
+	lsr
+	lsr
+	lsr
+	eor crc_value+1
+	sta crc_value+1
+	lda crc_value
+	asl
+	asl
+	asl
+	asl
+	asl
+	eor crc_value
+	sta crc_value
+
+	inc LoadPtr
+	bne crcNext
+	inc unmappedPage
+	lda unmappedPage
+	jsr getMapping
+	sta LoadPtr+1
+crcNext:
+	lda LoadPtr
+	cmp fileEndAdr
+	lda unmappedPage
+	sbc fileEndAdr+1
+	bcc updateCrc16
+
+	lda #$e7
+	sta 1
+	cli
+	rts
+    .)
+
+;--------------------------------------
+
+bootFile:
+    .(
+	; seek to the file start
+	lda #0
+	sta MMC64Plugin_SeekPos+3
+	ldx BootPrgBlock+1
+	beq seek_error
+	dex
+	stx MMC64Plugin_SeekPos+2
+	lda BootPrgBlock
+	sta MMC64Plugin_SeekPos+1
+	lda #0
+	sta MMC64Plugin_SeekPos
+	jsr MMC64Plugin_Seek
+	bcs seek_error
+
+	; get link trk/sec
+	jsr MMC64Plugin_GetByte
+	bcs read_error
+	sta BootPrgBlock+1
+	jsr MMC64Plugin_GetByte
+	bcs read_error
+	sta BootPrgBlock
+
+	; get start pointer
+	jsr MMC64Plugin_GetByte
+	bcs read_error
+	sta LoadPtr
+	sta fileStartAdr
+	jsr MMC64Plugin_GetByte
+	bcs read_error
+	sta fileStartAdr+1
+	sta unmappedPage
+	; get mapped pointer
+	jsr getMapping
+	sta LoadPtr+1
+
+	; show file start
+	lda #<Msg_BootStartAdr
+	ldy #>Msg_BootStartAdr
+	jsr $ab1e
+	ldy LoadPtr
+	lda unmappedPage
+	jsr hexWordOut
+	lda #13
+	jsr $ffd2
+
+	ldx #2
+	bne loadBlock
+
+
+seek_error:
+	lda #<Err_Seek
+	ldy #>Err_Seek
+	jsr $ab1e
+	sec
+	rts
+
+read_error:
+	lda #<Err_Read
+	ldy #>Err_Read
+	jsr $ab1e
+	sec
+	rts
+
+bootfile_too_long:
+	lda #<Err_BootfileTooLong
+	ldy #>Err_BootfileTooLong
+	jsr $ab1e
+	sec
+	rts
+
+
+loadBlock:
+	; get block length
+	ldy BootPrgBlock
+	lda BootPrgBlock+1
+	beq getBlockLen0
+	ldy #$ff
+getBlockLen0:
+	dey
+	sty BlockLength
+
+	ldy #0
+copyBlock:
+	jsr MMC64Plugin_GetByte
+	bcs read_error
+	sei
+	inc 1
+	sta (LoadPtr),y
+	dec 1
+	cli
+	inc LoadPtr
+	bne copyBlock0
+
+	; enter next page, mapping needed?
+	inc unmappedPage
+
+	lda #'.'
+	jsr $ffd2
+
+	; does the prg exceed $d000? -> too long
+	lda unmappedPage
+	cmp #$d0
+	bcs bootfile_too_long
+	jsr getMapping
+	sta LoadPtr+1
+
+copyBlock0:
+	inx
+	cpx BlockLength
+	bcc copyBlock
+
+	lda BootPrgBlock+1
+	beq finish
+
+	; seek to next block
+	lda #0
+	sta MMC64Plugin_SeekPos+3
+	ldx BootPrgBlock+1
+	dex
+	stx MMC64Plugin_SeekPos+2
+	lda BootPrgBlock
+	sta MMC64Plugin_SeekPos+1
+	lda #0
+	sta MMC64Plugin_SeekPos
+	jsr MMC64Plugin_Seek
+	bcs seek_error2
+
+	; get link trk/sec
+	jsr MMC64Plugin_GetByte
+	bcs read_error2
+	sta BootPrgBlock+1
+	jsr MMC64Plugin_GetByte
+	bcs read_error2
+	sta BootPrgBlock
+
+	ldx #0
+	beq loadBlock	; bra
+
+finish:
+	lda LoadPtr
+	sta fileEndAdr
+	lda unmappedPage
+	sta fileEndAdr+1
+
+	lda #<Msg_BootDone
+	ldy #>Msg_BootDone
+	jsr $ab1e
+	ldy LoadPtr
+	lda unmappedPage
+	jsr hexWordOut
+	lda #13
+	jsr $ffd2
+
+	jsr getCrc
+	lda #<Msg_Crc
+	ldy #>Msg_Crc
+	jsr $ab1e
+	ldy crc_value
+	lda crc_value+1
+	jsr hexWordOut
+	lda #13
+	jsr $ffd2
+
+	; ok
+	clc
+	rts
+
+
+seek_error2:
+	lda #<Err_Seek
+	ldy #>Err_Seek
+	jsr $ab1e
+	sec
+	rts
+
+read_error2:
+	lda #<Err_Read
+	ldy #>Err_Read
+	jsr $ab1e
+	sec
+	rts
+
+    .)
+
+;--------------------------------------
+
+MMC64Plugin_Start = *
+#include "mmc64_plugin/mmc64_plugin.src"
+#print "MMC64 Plugin Size:", *-MMC64Plugin_Start
+
+;--------------------------------------
+; some strings for debugging
+
+	;     0         1         2         3
+	;     0123456789012345678901234567890123456789
+Msg_Hello:
+	.PET 147
+	.PET "dfi booter v0.1 by doc bacardi/drm", 13, 0
+
+Msg_HelloDebug:
+	.PET "debug mode enabled", 13, 0
+
+Msg_BiosParams:
+	.PET 13
+	.PET "bios parameter:", 0
+
+Msg_OpenFile:
+	.PET "opening image...", 13, 0
+
+Msg_DfiParams:
+	.PET 13
+	.PET "generated dfi parameter:", 0
+
+Msg_EnterApplication:
+	.PET "enter application...", 13, 0
+
+Msg_Exit:
+	.PET "exit to mmc64 browser", 13, 0
+
+Msg_Booting:
+	.PET "booting file ", 0
+
+Msg_BootStartAdr:
+	.PET "start address: ", 0
+
+Msg_BootDone:
+	.PET 13
+	.PET "end address:   ", 0
+
+Msg_Crc:
+	.PET "file crc: ", 0
+
+Msg_Rom8000:
+	.PET "rom at $8000, detecting...", 13, 0
+
+Msg_RomRR:
+	.PET "retro replay found and initialized.", 13, 0
+
+Msg_NoClusterBuffer:
+	.PET "clusterbuffer disabled, not enough ram.", 13, 0
+
+Msg_Scanning:
+	.PET "scanning file...", 13, 0
+
+Msg_ScanOk:
+	.PET "scan done.", 13, 0
+
+Msg_SelectLoaderMode:
+	.PET "available loader modes:", 13, 0
+Msg_SelectLoaderMode_CntAvail:
+	.PET "1: continuous mode", 13, 0
+Msg_SelectLoaderMode_CntNotAvail:
+	.PET "   continuous mode not available", 13, 0
+Msg_SelectLoaderMode_BufAvail:
+	.PET "2: buffered mode", 13, 0
+Msg_SelectLoaderMode_BufNotAvail:
+	.PET "   buffered mode not available", 13, 0
+Msg_SelectLoaderMode_PlainAvail:
+	.PET "3: plain mode", 13, 0
+Msg_SelectLoaderMode_Prompt:
+	.PET "please select >", 0
+
+Msg_SelectLoaderMode_Header:
+	.PET "selected loader mode: ", 0
+Msg_SelectLoaderMode_Cnt:
+	.PET "continuous", 13, 0
+Msg_SelectLoaderMode_Buf:
+	.PET "buffered", 13, 0
+Msg_SelectLoaderMode_Plain:
+	.PET "plain", 13, 0
+
+Msg_ImageTracks:
+	.PET "number of tracks: ", 0
+
+Msg_SelectPluginMode_Header:
+	.PET "use kernal extension or dreamload?", 13
+	.PET "please select (k/d) >", 0
+
+Msg_ContinueAnyway:
+	.PET "continue anyway? (y/n)", 13, 0
+
+Err_FileSize:
+	.PET "file exceeds 16mb!", 13, 0
+
+Err_Seek:
+	.PET "seek error!", 13, 0
+
+Err_Read:
+	.PET "read error!", 13, 0
+
+Err_Magic:
+	.PET "magic not found, too scared to continue!", 13, 0
+
+Err_BootfileTooLong:
+	.PET "bootfile too long, the data would", 13
+	.PET "overwrite the plugin!", 13, 0
+
+Err_UnknownRom:
+	.PET "unknown rom, can't map out!", 13, 0
+
+Err_Scan:
+	.PET "failed to scan the file!", 13, 0
+
+Err_Kernal_NoCart:
+	.PET "the kernal extension needs an action", 13
+	.PET "replay style cart. none found! sorry...", 13, 0
+
+Err_TrackNumer:
+	.PET "illegal number of tracks!", 13, 0
+
+Err_TracksExceedFile:
+	.PET "the number of tracks exceeds the", 13
+	.PET "filesize!", 13, 0
+
+Err_Kernal_ClusterBufferFull:
+	.PET "file too large for this cluster size!", 13, 0
+
+;--------------------------------------
+
+	.SETPET
+
+Ask_ContinueAnyway:
+    .(
+	lda #<Msg_ContinueAnyway
+	ldy #>Msg_ContinueAnyway
+	jsr $ab1e
+getKey:
+	jsr $ffe4
+	cmp #'y'
+	beq key
+	cmp #'n'
+	bne getKey
+key:
+	sbc #'n'
+	rts
+    .)
+
+
+MMC64_SelectParameters:
+    .(
+	; default mode
+	ldx #1
+	lda DebugMode
+	beq setParameters
+
+	lda #<Msg_ParPos
+	ldy #>Msg_ParPos
+	jsr $ab1e
+
+getPos:
+	jsr $ffe4
+	cmp #'0'
+	bcc getPos
+	cmp #'5'
+	bcs getPos
+	sec
+	sbc #'0'
+	tax
+
+setParameters:
+	lda PosTabLo,x				; Lo Parameter Block
+	sta mmc64_param_ptr
+	lda PosTabHi,x				; Hi Parameter Block
+	sta mmc64_param_ptr+1
+
+	jmp MMC64_SetBBParameters
+
+Msg_ParPos:
+	.PET "available parameter positions:", 13
+	.PET "0: 0200", 13
+	.PET "1: 0293", 13
+	.PET "2: 02a7", 13
+	.PET "3: 03e0", 13
+	.PET "4: cfe0", 13
+	.PET "position? (0-4)", 0
+
+PosTabLo:
+	.DB <$0200
+	.DB <$0293
+	.DB <$02a7
+	.DB <$03e0
+	.DB <$cfe0
+PosTabHi:
+	.DB >$0200
+	.DB >$0293
+	.DB >$02a7
+	.DB >$03e0
+	.DB >$cfe0
+    .)
+
+
+MMC64_SetBBParameters:
+    .(
+	lda #DLoad_MMC64_ParameterVersion	; MMC Parameter Version
+	sta mmc64_param_version
+
+	; this is for 512 sectors only!
+	lda MMCBios_SecPerCluster
+	ldx #0
+shiftLoop:
+	inx
+	lsr
+	bne shiftLoop
+	stx mmc64_param_data+MMC64Param_BlockClusterShift
+
+	; this is for 512 sectors only!
+	lda MMCBios_SecPerCluster
+	asl
+	sec
+	sbc #1
+	sta mmc64_param_data+MMC64Param_ClusterMask
+
+	lda MMCBios_FATStartSector
+	asl
+	sta mmc64_param_data+MMC64Param_FATStartSector
+	lda MMCBios_FATStartSector+1
+	rol
+	sta mmc64_param_data+MMC64Param_FATStartSector+1
+	lda MMCBios_FATStartSector+2
+	rol
+	sta mmc64_param_data+MMC64Param_FATStartSector+2
+
+	lda MMCBios_FirstDataSector
+	clc
+	sbc mmc64_param_data+MMC64Param_ClusterMask
+	sta mmc64_param_data+MMC64Param_FirstDataBlock
+	lda MMCBios_FirstDataSector+1
+	sbc #0
+	sta mmc64_param_data+MMC64Param_FirstDataBlock+1
+	lda MMCBios_FirstDataSector+2
+	sbc #0
+	sta mmc64_param_data+MMC64Param_FirstDataBlock+2
+
+	asl mmc64_param_data+MMC64Param_FirstDataBlock
+	rol mmc64_param_data+MMC64Param_FirstDataBlock+1
+	rol mmc64_param_data+MMC64Param_FirstDataBlock+2
+
+	; current dir
+	lda dfi_fileDir
+	sta mmc64_param_data+MMC64Param_DirTrack
+	lda dfi_fileDir+1
+	sta mmc64_param_data+MMC64Param_DirSec
+
+	; init first cluster
+	lda MMCBios_ClusLo
+	sta mmc64_param_data+MMC64Param_FirstCluster
+	lda MMCBios_ClusLo+1
+	sta mmc64_param_data+MMC64Param_FirstCluster+1
+
+	; set cluster to first one of the file
+	lda MMCBios_ClusLo
+	sta MMC64Plugin_Cluster
+	lda MMCBios_ClusLo+1
+	sta MMC64Plugin_Cluster+1
+
+	; get first sector of the cluster
+	jsr MMC64Plugin_GetFirstSectorOfCluster
+
+	lda MMC64Plugin_Sector
+	asl
+	sta mmc64_param_data+MMC64Param_FirstClusterBlock
+	lda MMC64Plugin_Sector+1
+	rol
+	sta mmc64_param_data+MMC64Param_FirstClusterBlock+1
+	lda MMC64Plugin_Sector+2
+	rol
+	sta mmc64_param_data+MMC64Param_FirstClusterBlock+2
+
+	rts
+    .)
+
+;--------------------------------------
+
+

@@ -1,0 +1,196 @@
+;--------------------------------------
+; DFI tester for REU
+;
+; by Doc Bacardi/DRM
+;--------------------------------------
+
+#segdef "zp", $57-$71
+#segdef "code", $0801-$a000
+
+#outfile @, startadr, sort, $00, "code"
+
+;--------------------------------------
+
+	.segment "zp"
+
+	* = $57
+
+exo_zp_area:			.DSB 7
+
+;--------------------------------------
+
+	.segment "code"
+
+	* = $0801
+
+    .(          ; BasicStart
+	.DW BasicEnd, 2006
+	.DB $9e
+
+	.DB '0'|((BasicJumpIn-(BasicJumpIn/100000)*100000)/10000)
+	.DB '0'|((BasicJumpIn-(BasicJumpIn/10000)*10000)/1000)
+	.DB '0'|((BasicJumpIn-(BasicJumpIn/1000)*1000)/100)
+	.DB '0'|((BasicJumpIn-(BasicJumpIn/100)*100)/10)
+	.DB '0'|(BasicJumpIn-(BasicJumpIn/10)*10)
+
+;	.PET " baccy/drm"
+	.DB 0
+BasicEnd:
+	.DW 0
+    .)          ; BasicStart
+
+;--------------------------------------
+
+dfi_fs_banks_start:
+	.binclude "banks.exo"
+dfi_fs_banks_end:
+
+#include "banks.lab"
+
+;--------------------------------------
+
+get_crunched_byte:
+    .(
+	inc selfMod0+1
+	bne selfMod0
+	inc selfMod0+2
+selfMod0:
+	lda dfi_fs_banks_start-1
+	rts
+    .)
+
+#include "exodecrunch.src"
+
+;--------------------------------------
+
+BasicJumpIn:
+	sei
+
+	; switch to ram
+	lda #$34
+	sta 1
+
+	; decrunch all banks
+	jsr decrunch
+
+	; back to normal
+	lda #$35
+	sta 1
+
+	; switch to c64 mode
+	lda #$22
+	sta $de00
+	ldx #0
+delay0:
+	nop
+	inx
+	bne delay0
+
+	jsr BANK0_DfiFs_REU_Init
+
+	; install copy code
+	ldx #copy_code_len-1
+installCopyCode:
+	lda copy_code_start_psy,x
+	sta copy_code_start,x
+	dex
+	bpl installCopyCode
+
+	; copy bank 0
+	lda #>$8000
+	ldy #$80|$00|$23
+	jsr copy_code_start
+
+	; copy bank 1
+	lda #>$a000
+	ldy #$80|$08|$23
+	jsr copy_code_start
+
+	lda #$37
+	sta 1
+
+	; patch the load/save/open/get vectors
+	ldx #vectors_end-vectors_start-1
+installVectors:
+	lda vectors_start,x
+	sta $031a,x
+	dex
+	bpl installVectors
+
+	cli
+	rts
+
+
+vectors_start:
+	.DW DfiFs_Open			; $031a
+	.DW DfiFs_Close			; $031c
+	.DW DfiFs_ChangeKernalInput	; $031e
+	.DW DfiFs_ChangeKernalOutput	; $0320
+	.DW DfiFs_ClearChannels		; $0322
+	.DW DfiFs_CharIn		; $0324
+	.DW DfiFs_CharOut		; $0326
+	.DW $f6ed			; $0328
+	.DW DfiFs_GetIn			; $032a
+	.DW $f32f			; $032c
+	.DW $fe66			; $032e
+	.DW DfiFs_Load			; $0330
+	.DW DfiFs_Save			; $0332
+vectors_end:
+
+
+
+copy_code_start_psy:
+	.PSEUDOPC $0340
+copy_code_start:
+	sta copyDfi_selfModSrc+2
+	sty copyDfi_selfModBank+1
+
+	lda #$80
+	sta copyDfi_selfModDst+2
+
+	ldx #$20
+
+copyDfiFsCode0:
+	dec 1		; $34
+	ldy #0
+copyDfi_selfModSrc:
+	lda $ff00,y
+	sta $0400,y
+	iny
+	bne copyDfi_selfModSrc
+	inc 1		; $35
+
+	; switch to bank x, ram
+copyDfi_selfModBank:
+	ldy #$ff
+	jsr switchToBank
+
+	ldy #0
+copyDfiFsCode2:
+	lda $0400,y
+copyDfi_selfModDst:
+	sta $8000,y
+	iny
+	bne copyDfiFsCode2
+
+	ldy #$22
+	jsr switchToBank
+
+	inc copyDfi_selfModSrc+2
+	inc copyDfi_selfModDst+2
+	dex
+	bne copyDfiFsCode0
+	rts
+
+switchToBank:
+	tya
+	sta $de00
+	eor $de00
+	and #$98
+	bne switchToBank
+	rts
+
+	.REALPC
+copy_code_len = * - copy_code_start_psy
+
+;--------------------------------------

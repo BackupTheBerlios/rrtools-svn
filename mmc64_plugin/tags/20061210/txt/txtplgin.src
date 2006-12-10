@@ -1,0 +1,105 @@
+;--------------------------------------
+; Text viewer plugin for MMC64
+;
+; by Doc Bacardi/DRM
+; based on some binaries by Oliver Achten
+;--------------------------------------
+
+#segdef "zp", $02-$0100
+#segdef "data", $7000-$8000
+#segdef "code", $c000-$cf00
+
+#outfile @, startadr, sort, $00, "code"
+
+;--------------------------------------
+
+	.segment "zp"
+	* = $02
+
+	.segment "data"
+	* = $7000
+
+	.segment "code"
+	* = $c000
+
+;--------------------------------------
+
+KoalaFilesize = $2713
+
+;--------------------------------------
+
+	.segment "zp"
+
+LoadPtr				.DW 0
+
+;--------------------------------------
+
+	.segment "code"
+
+	sei
+	lda #$35
+	sta 1
+
+	; init the plugin variables
+	jsr MMC64Plugin_Init
+
+	; bring back Basic env
+	jsr MMC64Plugin_InitKernel
+
+	lda #6
+	sta $d020
+	sta $d021
+
+	lda #147
+	jsr $ffd2
+
+	; read file and just spit it out to ffd2
+	; yes, that's ugly, and that's the plan! :>
+	jsr MMC64Plugin_OpenFile
+bah:
+	jsr MMC64Plugin_GetByte
+	bcs somethingHappened
+	jsr $ffd2
+	jmp bah
+
+somethingHappened:
+	; check for error/eof
+	tax
+	beq eof
+
+	; error!
+	lda #<Msg_ReadError
+	ldy #>Msg_ReadError
+	jsr $ab1e
+
+eof:
+	; wait for space / firebutton
+waitSpace:
+	lda $d020
+	eor #8
+	sta $d020
+
+	lda $dc00
+	and $dc01
+	and #$10
+	bne waitSpace
+
+	; turn screen off
+	lda #$ff
+	sta $d011
+
+	; go back to MMC64 browser
+	jmp MMC64Plugin_Exit
+
+;--------------------------------------
+
+Msg_ReadError:
+	.PET 13, "oops, read error!", 13, 0
+
+;--------------------------------------
+
+#include "mmc64_plugin/mmc64_plugin.src"
+
+;--------------------------------------
+
+

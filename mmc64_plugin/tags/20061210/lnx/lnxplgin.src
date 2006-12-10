@@ -1,0 +1,754 @@
+;--------------------------------------
+; Lynx extractor plugin for MMC64
+;
+; by Doc Bacardi/DRM
+;--------------------------------------
+
+#segdef "zp", $02-$0100
+#segdef "data", $4000-$8000
+#segdef "code", $c000-$cf00
+
+#outfile @, startadr, sort, $00, "code"
+
+;--------------------------------------
+
+	.segment "zp"
+	* = $02
+
+	.segment "data"
+	* = $4000
+
+	.segment "code"
+	* = $c000
+
+;--------------------------------------
+
+	.segment "zp"
+
+lnxDirsize			.DW 0
+lnxDirentries			.DW 0
+
+lnxUngetFlag			.DB 0
+lnxUngetChar			.DB 0
+lnxNum				.DW 0
+
+lnxDirEntryPtr			.DW 0
+lnxDirEntryCnt			.DB 1
+
+lnxGetCnt			.DW 0
+
+lnxNumLen			.DB 0
+
+dezOutNum			.DW 0
+dezOutZeroFlag			.DB 0
+dezOutPos			.DB 0
+dezOutPtr			.DW 0
+
+;--------------------------------------
+
+	.segment "data"
+
+lnxDirBuffer_len = $1800
+lnxDirBuffer			.DSB lnxDirBuffer_len
+lnxMaxDirsize = lnxDirBuffer_len / 20
+
+lnxBlockBuffer			.DSB $100
+
+lnxNumBuf			.DSB 6
+
+lnxFile_Blocks			.DW 0
+lnxFile_Typ			.DB 0
+lnxFile_LastBlockSize		.DB 0
+
+lnxLastFile_SkipBytes		.DB 0
+
+;--------------------------------------
+
+	.segment "code"
+
+	sei
+
+	; init the plugin variables
+	jsr MMC64Plugin_Init
+
+	; bring back Basic env
+	jsr MMC64Plugin_InitKernel
+
+	; init
+	lda #0
+	sta lnxUngetFlag
+	sta lnxGetCnt
+	sta lnxGetCnt+1
+
+	jsr lnx_parse
+	bcs error_blink
+
+	; go back to MMC64 browser
+;	jmp MMC64Plugin_Exit
+stop:
+	lda $d020
+	eor #8
+	sta $d020
+	jmp stop
+
+error_blink:
+	inc $d020
+	jmp error_blink
+
+;--------------------------------------
+
+lnx_parse:
+    .(
+	jsr MMC64Plugin_OpenFile
+
+	jsr lnx_parse_header
+	bcs error
+
+	jsr lnx_readDir
+	bcs error
+
+	jsr lnx_writeFiles
+	bcs error
+
+	clc
+	rts
+
+error:
+	sec
+	rts
+    .)
+
+;--------------------------------------
+
+lnx_writeFiles:
+    .(
+	lda #<lnxDirBuffer
+	sta lnxDirEntryPtr
+	lda #>lnxDirBuffer
+	sta lnxDirEntryPtr+1
+
+	lda lnxDirentries
+	sta lnxDirEntryCnt
+
+	lda #0
+	sta lnxLastFile_SkipBytes
+
+writeFiles:
+	ldx lnxLastFile_SkipBytes
+	beq skipBytesEnd
+skipBytes:
+	jsr MMC64Plugin_GetByte
+	bcs error
+	dex
+	bne skipBytes
+skipBytesEnd:
+
+	jsr lnx_writeOneFile
+	bcs error
+
+	; next dir entry
+	clc
+	lda lnxDirEntryPtr
+	adc #$14
+	sta lnxDirEntryPtr
+	bcc next0
+	inc lnxDirEntryPtr+1
+next0:
+
+	dec lnxDirEntryCnt
+	bne writeFiles
+
+	clc
+	rts
+
+error:
+	sec
+	rts
+    .)
+
+
+lnx_writeOneFile:
+    .(
+	jsr lnx_showFileName
+
+	; open dst file
+	lda #2
+	ldx #8
+	ldy #$61
+	jsr $ffba
+	lda #16
+	ldx lnxDirEntryPtr
+	ldy lnxDirEntryPtr+1
+	jsr $ffbd
+
+	jsr $f3d5	; open file
+	lda $ba
+	jsr $ed0c	; listen
+	lda $b9
+	jsr $edb9	; sec listen
+
+	lda $90
+	bne error
+
+	ldy #$13
+	ldx #3
+copyParams:
+	lda (lnxDirEntryPtr),y
+	sta lnxFile_Blocks,x
+	dey
+	dex
+	bpl copyParams
+
+	lda lnxFile_Blocks
+	ora lnxFile_Blocks+1
+	beq emptyFile
+
+copyData:
+	jsr lnx_showBlocks
+
+	; complete block left?
+	lda lnxFile_Blocks
+	bne decBlocks
+	dec lnxFile_Blocks+1
+decBlocks:
+	dec lnxFile_Blocks
+
+	lda lnxFile_Blocks
+	ora lnxFile_Blocks+1
+	beq lastBlock
+
+	ldx #$fe
+	jsr lnx_readBlock
+	bcs error
+
+	ldy #0
+writeData:
+	lda lnxBlockBuffer,y
+	jsr $eddd
+	iny
+	cpy #$fe
+	bcc writeData
+	bcs copyData
+
+lastBlock:
+	ldx lnxFile_LastBlockSize
+	jsr lnx_readBlock
+	bcs error
+
+	ldy #0
+writeLastBlock:
+	lda lnxBlockBuffer,y
+	jsr $eddd
+	iny
+	cpy lnxFile_LastBlockSize
+	bne writeLastBlock
+
+	sec
+	lda #$fe
+	sbc lnxFile_LastBlockSize
+	sta lnxLastFile_SkipBytes
+
+emptyFile:
+	; close output file
+	jsr $f63f		; close
+	clc
+	rts
+
+
+error:
+	sec
+	rts
+    .)
+
+lnx_readBlock:
+    .(
+	ldy #0
+read0:
+	jsr MMC64Plugin_GetByte
+	bcs error
+	sta lnxBlockBuffer,y
+	iny
+	dex
+	bne read0
+
+	clc
+error:
+	rts
+    .)
+
+lnx_showFileName:
+    .(
+	ldy #$0f
+show0:
+	lda (lnxDirEntryPtr),y
+	cmp #$41
+	bcc noAlpha
+	cmp #$5a
+	bcs noAlpha
+	and #$3f
+noAlpha:
+	sta $0400,y
+	dey
+	bpl show0
+	rts
+    .)
+
+
+lnx_showBlocks:
+    .(
+	lda lnxFile_Blocks
+	sta dezOutNum
+	lda lnxFile_Blocks+1
+	sta dezOutNum+1
+
+	lda #<$0412
+	sta dezOutPtr
+	lda #>$0412
+	sta dezOutPtr+1
+	lda #0
+	sta dezOutPos
+
+	jsr dezOut
+
+	ldy dezOutPos
+	lda #' '
+fillup:
+	cpy #4
+	bcs fillup0
+	sta (dezOutPtr),y
+	iny
+	bne fillup	; bra
+fillup0:
+
+	rts
+    .)
+
+
+dezOut:
+    .(
+	ldx #3
+	lda #0
+	sta dezOutZeroFlag
+dezOut0:
+	ldy #'0'
+	lda dezOutNum
+dezOut1:
+	sec
+	sbc dezTabLo,x
+	pha
+	lda dezOutNum+1
+	sbc dezTabHi,x
+	bcc dezOut2
+	sta dezOutNum+1
+	pla
+	sta dezOutNum
+	iny
+	bne dezOut1
+dezOut2:
+	pla
+	lda dezOutZeroFlag
+	bne dezOut3
+	cpy #'0'
+	beq dezOut4
+dezOut3:
+	tya
+	ldy dezOutPos
+	sta (dezOutPtr),y
+	sta dezOutZeroFlag
+	inc dezOutPos
+dezOut4:
+	dex
+	bpl dezOut0
+	lda dezOutNum
+	ora #$30
+	ldy dezOutPos
+	sta (dezOutPtr),y
+	inc dezOutPos
+	rts
+
+dezTabLo:
+	.DB <10
+	.DB <100
+	.DB <1000
+	.DB <10000
+dezTabHi:
+	.DB >10
+	.DB >100
+	.DB >1000
+	.DB >10000
+
+    .)
+
+;--------------------------------------
+
+lnx_readDir:
+    .(
+	lda #<lnxDirBuffer
+	sta lnxDirEntryPtr
+	lda #>lnxDirBuffer
+	sta lnxDirEntryPtr+1
+
+	lda lnxDirentries
+	sta lnxDirEntryCnt
+
+readDirEntry:
+	; read filename
+getFileName:
+	ldy #0
+getFileName0:
+	jsr lnxGetByte
+	bcs error
+	cmp #$0d
+	beq endOfName
+	cpy #$10
+	bcs getFileName
+	sta (lnxDirEntryPtr),y
+	iny
+	bne getFileName0	; bra
+
+	; fillup Filename ?
+fillUpName:
+	lda #$a0
+	sta (lnxDirEntryPtr),y
+	iny
+endOfName:
+	cpy #$10
+	bcc fillUpName
+
+	; get number of blocks
+	jsr lnxReadNumber
+	bcs error
+	ldy #$10
+	sta (lnxDirEntryPtr),y
+	iny
+	txa
+	sta (lnxDirEntryPtr),y
+
+	; expect $0d
+	jsr lnxExpect0D
+	bcs error
+
+	; get type
+	jsr lnxSkipSpace
+	bcs error
+	jsr lnxGetByte
+	bcs error
+	ldx #2
+checkType:
+	cmp lnxTypeTab,x
+	beq foundType
+	dex
+	bpl checkType
+	bmi error
+
+foundType:
+	ldy #$12
+	tax
+	sta (lnxDirEntryPtr),y
+
+	; expect $0d
+	jsr lnxExpect0D
+	bcs error
+
+	; get last block's size
+	jsr lnxReadNumber
+	bcs error
+	sbc #1-1
+	bcc error
+	cpx #1
+	bcs error
+	ldy #$13
+	sta (lnxDirEntryPtr),y
+
+	; expect $0d
+	jsr lnxExpect0D
+	bcs error
+
+	lda lnxDirEntryPtr
+	clc
+	adc #$14
+	sta lnxDirEntryPtr
+	bcc nextBlock0
+	inc lnxDirEntryPtr+1
+nextBlock0:
+	dec lnxDirEntryCnt
+	bne readDirEntry
+
+	; skip rest of dir
+skipRest:
+	lda lnxGetCnt
+	cmp lnxDirsize
+	lda lnxGetCnt+1
+	sbc lnxDirsize+1
+	bcs noSkip
+	jsr lnxGetByte
+	bcc skipRest
+error:
+	sec
+	rts
+
+noSkip:
+	lda lnxGetCnt
+	cmp lnxDirsize
+	bne error
+	lda lnxGetCnt+1
+	cmp lnxDirsize+1
+	bne error
+
+	clc
+	rts
+
+lnxTypeTab:
+	.DP 'p'
+	.DP 's'
+;	.DP 'r'		; no rel-files for now!
+	.DP 'u'
+
+    .)
+
+;--------------------------------------
+
+lnx_parse_header:
+    .(
+	; skip basic prg
+	; wait for $00, $00, $00
+parse0:
+	ldy #3
+parse1:
+	jsr lnxGetByte
+	bcs error
+	tax
+	bne parse0
+	dey
+	bne parse1
+
+	; expect $0d
+	jsr lnxExpect0D
+	bcs error
+
+	; read dirsize
+	jsr lnxReadNumber
+	bcs error
+	cpx #1
+	bcs error
+	tax
+	beq error
+	lda #0
+	tay
+getDirSize:
+	clc
+	adc #$fe
+	bcc getDirSize0
+	iny
+getDirSize0:
+	dex
+	bne getDirSize
+	sta lnxDirsize
+	sty lnxDirsize+1
+
+	; read lynx signature
+	jsr lnxReadSignature
+	bcs error
+	tay
+	bne error
+
+	; read number of entries
+	jsr lnxReadNumber
+	bcs error
+	sta lnxDirentries
+	stx lnxDirentries+1
+	txa
+	ora lnxDirentries
+	beq error
+
+	; expect $0d
+	jsr lnxExpect0D
+	bcs error
+
+	; header format ok!
+	clc
+	rts
+
+error:
+	sec
+	rts
+    .)
+
+;--------------------------------------
+
+lnxSkipSpace:
+    .(
+skipSpace:
+	jsr lnxGetByte
+	bcs error
+	cmp #$20
+	beq skipSpace
+	jmp lnxUngetByte
+
+error:
+	rts
+    .)
+
+;--------------------------------------
+
+lnxExpect0D:
+    .(
+	jsr lnxSkipSpace
+	bcs error
+
+	jsr lnxGetByte
+	cmp #$0d
+	bne error
+	clc
+	rts
+
+error:
+	sec
+	rts
+    .)
+
+;--------------------------------------
+
+lnxReadNumber:
+    .(
+	jsr lnxSkipSpace
+	bcs error
+
+	ldy #0
+readNumber:
+	jsr lnxGetByte
+	cmp #'9'+1
+	bcs noNumber
+	cmp #'0'
+	bcc noNumber
+	and #$0f
+	sta lnxNumBuf,y
+	iny
+	cpy #6
+	bcc readNumber
+	bcs parseNum
+
+noNumber:
+	jsr lnxUngetByte
+	tya
+	beq error
+
+parseNum:
+	sty lnxNumLen
+	ldx #0
+	stx lnxNum
+	stx lnxNum+1
+parseNum0:
+	lda lnxNumBuf-1,y
+	beq skipDigit
+	tay
+parseNum1:
+	clc
+	lda lnxNum
+	adc addTabLo,x
+	sta lnxNum
+	lda lnxNum+1
+	adc addTabHi,x
+	sta lnxNum+1
+	dey
+	bne parseNum1
+skipDigit:
+	inx
+	dec lnxNumLen
+	ldy lnxNumLen
+	bne parseNum0
+
+	lda lnxNum
+	ldx lnxNum+1
+	clc
+	rts
+
+error:
+	sec
+	rts
+
+addTabLo:
+	.DB <1
+	.DB <10
+	.DB <100
+	.DB <1000
+	.DB <10000
+addTabHi:
+	.DB >1
+	.DB >10
+	.DB >100
+	.DB >1000
+	.DB >10000
+    .)
+
+;--------------------------------------
+
+lnxReadSignature:
+    .(
+readSignature:
+	ldy #4
+readSignature0:
+	jsr lnxGetByte
+	bcs error
+	cmp #$0d
+	beq endOfSig
+	cmp lynxSignature-1,y
+	bne readSignature
+	dey
+	bne readSignature0
+
+	; ok, signature found. skip rest of string
+skipRest:
+	jsr lnxGetByte
+	bcs error
+	cmp #$0d
+	bne skipRest
+
+endOfSig:
+	tya
+	clc
+	rts
+
+error:
+	sec
+	rts
+
+lynxSignature:
+	.PET "xnyl"
+    .)
+
+;--------------------------------------
+
+lnxGetByte:
+    .(
+	lda lnxUngetFlag
+	bne getFromBuf
+
+	inc lnxGetCnt
+	bne getCnt0
+	inc lnxGetCnt+1
+getCnt0:
+	jmp MMC64Plugin_GetByte
+
+getFromBuf:
+	lda #0
+	sta lnxUngetFlag
+	lda lnxUngetChar
+	clc
+	rts
+    .)
+
+lnxUngetByte:
+    .(
+	sta lnxUngetChar
+	lda #1
+	sta lnxUngetFlag
+	clc
+	rts
+    .)
+
+;--------------------------------------
+
+#include "mmc64_plugin/mmc64_plugin.src"
+
+

@@ -1,0 +1,9 @@
+
+;--------------------------------------
+; Macro definitions for structures
+
+#macro struct_init() {__structure_adr:=0}
+#macro struct_elem(a) {=__structure_adr : __structure_adr+={a}}
+#macro struct_len() {=__structure_adr}
+
+;--------------------------------------

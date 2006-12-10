@@ -1,0 +1,688 @@
+
+;--------------------------------------
+
+exitToRom:
+    .(
+	; save flags and registers
+	php
+	sta exitToRom_saveA+1
+	stx exitToRom_saveX+1
+	sty exitToRom_saveY+1
+
+	; get the return address
+	tsx
+	lda $0102,x
+	sta exitToRom_Hi+1
+	lda $0103,x
+	sta exitToRom_Hi+2
+
+	; correct the stack pointer
+	pla
+	tay
+	pla
+	pla
+
+	; get the word behind the calling jsr
+	ldx #2
+	jmp exitToRom_Hi
+    .)
+
+;--------------------------------------
+
+jsrToRom:
+    .(
+	; save flags and registers
+	php
+	php
+	php
+	sta exitToRom_saveA+1
+	stx exitToRom_saveX+1
+	sty exitToRom_saveY+1
+
+	; get the return address
+	tsx
+	lda #<(switch_rom_bank0_save01-1)
+	sta $0102,x
+	lda #>(switch_rom_bank0_save01-1)
+	sta $0103,x
+
+	clc
+	lda $0104,x
+	sta exitToRom_Hi+1
+	adc #2
+	sta $0104,x
+	lda $0105,x
+	sta exitToRom_Hi+2
+	adc #0
+	sta $0105,x
+
+	; correct the stack pointer
+	pla
+	tay
+
+	; get the word behind the calling jsr
+	ldx #2
+	jmp exitToRom_Hi
+    .)
+
+;--------------------------------------
+
+DfiFs_Open_Rom:
+@0BANK0_DfiFs_Open_Rom:
+    .(
+	lda $ba
+	cmp DfiFs_DeviceAddress
+	beq openDfi
+	jsr exitToRom
+	.DW $f34a-1
+
+openDfi:
+	ldx $b8
+	bne foundLfn
+	jsr exitToRom
+	.DW $f70a-1
+
+foundLfn:
+	jsr $f30f	; checked, ok!
+	bne channelUnused
+	; already open
+	jsr exitToRom
+	.DW $f6fe-1
+
+channelUnused:
+	ldx $98
+	cpx #10
+	bcc channelLeft
+	; no more channels left
+	jsr exitToRom
+	.DW $f6fb-1
+
+channelLeft:
+	inc $98
+	lda $b8
+	sta $0259,x
+	lda $b9
+	ora #$60
+	sta $b9
+	sta $026d,x
+	lda $ba
+	sta $0263,x
+	jsr DfiFs_OpenFile_Rom
+	jmp switch_c64_restore01
+    .)
+
+
+;--------------------------------------
+
+
+DfiFs_Close_Rom:
+@0BANK0_DfiFs_Close_Rom:
+    .(
+	sta DfiFs_SaveA
+	jsr $f314	; checked, ok!
+	beq foundOpenedChannel
+	clc
+	jmp switch_c64_restore01
+
+foundOpenedChannel:
+	jsr $f31f	; checked, ok!
+	stx DfiFs_SaveX
+
+	lda $ba
+	cmp DfiFs_DeviceAddress
+	beq closeDfi
+	lda DfiFs_SaveA
+	jsr exitToRom
+	.DW $f291-1
+closeDfi:
+	jsr DfiFs_CloseFile_Rom
+	ldx DfiFs_SaveX
+	jsr exitToRom
+	.DW $f2f3-1
+    .)
+
+
+;--------------------------------------
+
+
+DfiFs_ChangeKernalInput_Rom:
+@0BANK0_DfiFs_ChangeKernalInput_Rom:
+    .(
+	; find open channel
+	jsr $f30f	; checked, ok!
+	beq foundOpenedChannel
+	jsr exitToRom
+	.DW $f701-1
+
+foundOpenedChannel:
+	; set file values (b8, b9, ba)
+	jsr $f31f	; checked, ok!
+	lda $ba
+	cmp DfiFs_DeviceAddress
+	beq change_done
+	; process kernal devices
+	jsr exitToRom
+	.DW $f219-1
+change_done:
+	; store input device and exit
+	jsr $f233	; checked, ok!
+	jmp switch_c64_restore01
+    .)
+
+
+;--------------------------------------
+
+
+DfiFs_ChangeKernalOutput_Rom:
+@0BANK0_DfiFs_ChangeKernalOutput_Rom:
+    .(
+	; find open channel
+	jsr $f30f	; checked, ok!
+	beq foundOpenedChannel
+	jsr exitToRom
+	.DW $f701-1
+
+
+foundOpenedChannel:
+	; set file values (b8, b9, ba)
+	jsr $f31f	; checked, ok!
+	lda $ba
+	cmp DfiFs_DeviceAddress
+	beq change_done
+	jsr exitToRom
+	.DW $f25b-1
+change_done:
+	; store output device and exit
+	jsr $f275	; checked, ok!
+	jmp switch_c64_restore01
+    .)
+
+
+;--------------------------------------
+
+DfiFs_ClearChannels_Rom:
+@0BANK0_DfiFs_ClearChannels_Rom:
+    .(
+	; no untalk needed for mmc
+	ldx $9a
+	cpx DfiFs_DeviceAddress
+	bne noMmcOutput
+	lda #3
+	sta $9a
+noMmcOutput:
+
+	ldx $9a
+	cpx DfiFs_DeviceAddress
+	bne noMmcInput
+	lda #0
+	sta $99
+noMmcInput:
+
+	jsr exitToRom
+	.DW $f333-1
+    .)
+
+;--------------------------------------
+
+DfiFs_Load_Rom:
+@0BANK0_DfiFs_Load_Rom:
+    .(
+	sta $93
+	lda #0
+	sta $90
+	lda $ba
+	cmp DfiFs_DeviceAddress
+	beq loadDfi
+	jsr exitToRom
+	.DW $f4ab-1
+
+loadDfi:
+	; no empty filename
+	ldy $b7
+	bne nameNotEmpty
+	jsr exitToRom
+	.DW $f710-1
+nameNotEmpty:
+
+	; open the file
+	ldx $b9
+
+	; print "searching for file"
+	lda $9d
+	bpl prgMode
+	ldy #$0c
+	jsr jsrToRom
+	.DW $f12f-1	; NOTE: !!!UNLOCKS IRQ!!!
+	ldy #$17
+	jsr jsrToRom
+	.DW $f12f-1	; NOTE: !!!UNLOCKS IRQ!!!
+	lda #$bb
+	sta readC64Bytes_mod+1
+	ldy #0
+printName:
+	.bankJsr(L_readC64Bytes)
+	jsr jsrToRom
+	.DW $ffd2-1	; NOTE: !!!UNLOCKS IRQ!!!
+	iny
+	cpy $b7
+	bcc printName
+prgMode:
+
+	lda #$60
+	sta $b9
+
+	jsr DfiFs_OpenFile_Rom
+
+	jsr DfiFs_GetByte_Rom
+	bcs loadError
+	sta $ae
+	jsr DfiFs_GetByte_Rom
+	bcs loadError
+	sta $af
+
+	txa
+	bne loadToFileAdr
+	lda $c3
+	sta $ae
+	lda $c4
+	sta $af
+loadToFileAdr:
+
+	; print Loading / Verifying
+	jsr jsrToRom
+	.DW $f5d2-1	; NOTE: !!!UNLOCKS IRQ!!!
+
+loadLoop:
+	; test stop key
+	jsr jsrToRom
+	.DW $ffe1-1	; NOTE: destroy irq flag with a call to $ffcc
+	bne noStopPressed
+	; stop pressed
+	; close the file
+	jsr DfiFs_CloseFile_Rom
+	lda #0
+	sec
+	jmp switch_c64_restore01
+
+noStopPressed:
+	jsr DfiFs_GetByte_Rom
+	bcs loadError
+	ldy $93
+	beq loadMode
+	; verify mode
+	ldy #0
+	cmp ($ae),y
+	beq verifyOk
+	lda #$10
+	jsr $fe1c	; checked, ok!
+	.DB $2c
+loadMode:
+	sta ($ae),y
+;	jsr storeC64Byte_rom
+
+verifyOk:
+	inc $ae
+	bne nextAddress
+	inc $af
+nextAddress:
+
+	; reached end of file?
+	bit $90
+	bvc loadLoop
+
+	jsr DfiFs_CloseFile_Rom
+
+	ldx $ae
+	ldy $af
+	clc
+	jmp switch_c64_restore01
+
+loadError:
+	jsr exitToRom
+	.DW $f704-1
+    .)
+
+;--------------------------------------
+
+DfiFs_Save_Rom:
+@0BANK0_DfiFs_Save_Rom:
+    .(
+	lda $ba
+	cmp DfiFs_DeviceAddress
+	beq saveDfi
+	jsr exitToRom
+	.DW $f5ed-1
+
+saveDfi:
+	lda #$61
+	sta $b9
+	ldy $b7
+	bne nameNotEmpty
+	; missing filename
+	jsr exitToRom
+	.DW $f710-1
+
+nameNotEmpty:
+	jsr DfiFs_OpenFile_Rom
+
+	; print "saving"
+	jsr jsrToRom
+	.DW $f68f-1	; NOTE: !!!UNLOCKS IRQ!!!
+
+	ldy #0
+	; init pointer
+	jsr $fb8e	; checked, ok!
+
+	; write start address
+	lda $ac
+	jsr DfiFs_SendByte_Rom
+	lda $ad
+	jsr DfiFs_SendByte_Rom
+saveLoop:
+	jsr $fcd1	; checked, ok!
+	bcs endOfArea
+	lda ($ac),y
+	jsr DfiFs_SendByte_Rom
+	; test stop key
+	jsr $ffe1	; destroy irq flag with a call to $ffcc
+	bne noStopPressed
+
+	; close file
+	jsr DfiFs_CloseFile_Rom
+	lda #0
+	sec
+	jmp switch_c64_restore01
+
+noStopPressed:
+	; inc pointer
+	jsr $fcdb	; checked, ok!
+	bne saveLoop	; bra for <= $ffff
+
+endOfArea:
+	jsr DfiFs_CloseFile_Rom
+	clc
+	jmp switch_c64_restore01
+    .)
+
+;--------------------------------------
+
+DfiFs_OpenFile_Rom:
+    .(
+	stx DfiFs_SaveX
+	sty DfiFs_SaveY
+	.bankJsr(L_DfiFs_OpenFile)
+	ldx DfiFs_SaveX
+	ldy DfiFs_SaveY
+	rts
+    .)
+
+
+;--------------------------------------
+
+
+DfiFs_CloseFile_Rom:
+    .(
+	lda DfiFs_InitFlag
+	bne initAlreadyDone
+	.bankJsr(L_DfiFs_Init)
+	bcs error
+initAlreadyDone:
+
+	jsr setChannelBuffer
+	bcs error
+
+	; close the channel
+	ldy DfiFs_ChannelBufferIdx
+	lda DfiFs_BufferMode,y
+	cmp #DfiFs_BufferMode_WriteFile
+	beq closeWriteChannel
+	cmp #DfiFs_BufferMode_ReplaceFile
+	bne closeChannel0
+
+	; close replace file
+	.bankJsr(L_closeReplaceFile)
+	bcs error
+	bcc closeChannel0
+
+	; close write file
+closeWriteChannel:
+	.bankJsr(L_closeWriteFile)
+	bcs error
+
+closeChannel0:
+	lda #DfiFs_BufferMode_Closed
+	.bankJsr(L_DfiFs_SetChannelMode)
+
+	.bankJsr(L_releaseBuffer)
+error:
+	rts
+    .)
+
+
+;--------------------------------------
+
+DfiFs_GetByteKernal_Rom:
+@0BANK0_DfiFs_GetByteKernal_Rom:
+	lda $99
+	cmp DfiFs_DeviceAddress
+	beq getByte_dfi
+	jsr exitToRom
+	.DW $f157-1
+getByte_dfi:
+	jsr DfiFs_GetByte_Rom 
+	jmp switch_c64_restore01
+
+DfiFs_GetInKernal_Rom:
+@0BANK0_DfiFs_GetInKernal_Rom:
+	lda $99
+	cmp DfiFs_DeviceAddress
+	beq getByte_dfi
+	jsr exitToRom
+	.DW $f13e-1
+
+
+DfiFs_GetByte_Rom:
+    .(
+	stx DfiFs_SaveX
+	sty DfiFs_SaveY
+
+	lda DfiFs_InitFlag
+	bne initAlreadyDone
+	.bankJsr(L_DfiFs_Init)
+	bcs channelClosed
+initAlreadyDone:
+
+#if DfiFs_DEBUG_FLICKER!=0
+	dec $d020
+#endif
+
+	; check the channel
+	lda $b9
+	and #$0f
+	; command channel?
+	cmp #$0f
+	beq read_command_channel
+
+	jsr setChannelBuffer
+	bcs channelClosed
+
+	ldy DfiFs_ChannelBufferIdx
+	lda DfiFs_BufferMode,y
+	cmp #DfiFs_BufferMode_ReadFile
+	beq dirmode_readFile
+	cmp #DfiFs_BufferMode_ReadDir
+	beq dirmode_readDir
+
+	; all other modes
+
+	; channel is closed, return error
+channelClosed:
+	lda #3
+	sta $90
+	sec
+	bcs exit
+
+dirmode_readDir:
+	jsr readDirByte_Rom
+	jmp exit
+
+read_command_channel:
+	.bankJsr(L_DfiFs_Err_ReadCommandChannel)
+	jmp exit
+
+dirmode_readFile:
+	jsr readFileByte_Rom
+
+exit:
+#if DfiFs_DEBUG_FLICKER!=0
+	inc $d020
+#endif
+
+	ldx DfiFs_SaveX
+	ldy DfiFs_SaveY
+	rts
+    .)
+
+
+;--------------------------------------
+
+DfiFs_SendByteKernal_Rom:
+@0BANK0_DfiFs_SendByteKernal_Rom:
+	pha
+	lda $9a
+	cmp DfiFs_DeviceAddress
+	beq charOutDfi
+	pla
+	jsr exitToRom
+	.DW $f1ca-1
+
+charOutDfi:
+	pla
+	jsr DfiFs_SendByte_Rom
+	jmp switch_c64_restore01
+
+
+DfiFs_SendByte_Rom:
+    .(
+	sta $95
+	stx DfiFs_SaveX
+	sty DfiFs_SaveY
+
+	lda DfiFs_InitFlag
+	bne initAlreadyDone
+	.bankJsr(L_DfiFs_Init)
+	bcs channelClosed
+initAlreadyDone:
+
+#if DfiFs_DEBUG_FLICKER!=0
+	dec $d020
+#endif
+
+	; check the channel
+	lda $b9
+	and #$0f
+	; command channel?
+	cmp #$0f
+	beq write_command_channel
+
+	jsr setChannelBuffer
+	bcs channelClosed
+
+	ldy DfiFs_ChannelBufferIdx
+	lda DfiFs_BufferMode,y
+	cmp #DfiFs_BufferMode_WriteFile
+	beq dirmode_writeFile
+	cmp #DfiFs_BufferMode_ReplaceFile
+	beq dirmode_writeFile
+
+	; all other modes
+
+	; channel is closed, return error
+channelClosed:
+	lda #3
+	sta $90
+	sec
+	bcs exit
+
+write_command_channel:
+	.bankJsr(L_DfiFs_Err_WriteCommandChannel)
+	jmp exit
+
+dirmode_writeFile:
+	.bankJsr(L_writeFileByte)
+
+exit:
+#if DfiFs_DEBUG_FLICKER!=0
+	inc $d020
+#endif
+
+	ldx DfiFs_SaveX
+	ldy DfiFs_SaveY
+	rts
+    .)
+
+
+;--------------------------------------
+
+
+readFileByte_Rom:
+    .(
+	; get buffer index
+	ldx DfiFs_ChannelBufferIdx
+	; still some bytes left?
+	ldy DfiFs_BlockPtr,x
+	lda (DfiFsZp_BufPtr),y
+	sta DfiFsZp_ByteBuffer
+
+	inc DfiFs_BlockPtr,x
+	tya
+	cmp DfiFs_BlockUsed,x
+	bcc bufferHasMoreBytes
+
+	; buffer empty
+	ldy #0
+	lda (DfiFsZp_BufPtr),y
+	tax
+	iny
+	lda (DfiFsZp_BufPtr),y
+	tay
+	.bankJsr(L_readFileNewBlock)
+	bcs error
+
+bufferHasMoreBytes:
+	lda DfiFsZp_ByteBuffer
+	clc
+error:
+	rts
+    .)
+
+;--------------------------------------
+
+readDirByte_Rom:
+    .(
+	; get buffer index
+	ldx DfiFs_ChannelBufferIdx
+	; still some bytes left?
+	ldy DfiFs_BlockPtr,x
+	lda (DfiFsZp_BufPtr),y
+	sta DfiFsZp_ByteBuffer
+
+	inc DfiFs_BlockPtr,x
+	tya
+	cmp DfiFs_BlockUsed,x
+	bcc bufferHasMoreBytes
+
+	; buffer empty
+	.bankJsr(L_readDirNewBlock)
+	bcs error
+
+bufferHasMoreBytes:
+	lda DfiFsZp_ByteBuffer
+	clc
+error:
+	rts
+    .)
+
+;--------------------------------------
+
+

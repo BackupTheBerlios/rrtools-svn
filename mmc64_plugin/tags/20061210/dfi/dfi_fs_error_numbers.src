@@ -1,0 +1,241 @@
+
+;--------------------------------------
+
+Err_00_Ok			= $00
+
+Err_01_FilesScratched		= $01
+
+Err_20_ReadError		= $20
+/*
+20: READ ERROR (block header not found) -- The disk controller is
+unable to locate the header of the requested data block. Caused by an
+illegal block number, or the header has been destroyed.
+*/
+
+Err_21_ReadError		= $21
+/*
+21: READ ERROR (no sync character) -- The disk controller is unable to
+detect a sync mark on the desired track. Caused by misalignment of the
+read/writer head, no diskette is present, or unformatted or improperly
+seated diskette. Can also indicate a hardware failure.
+*/
+
+Err_22_ReadError		= $22
+/*
+22: READ ERROR (data block not present) -- The disk controller has
+been requested to read or verify a data block that was not properly
+written. This error message occurs in conjunction with the BLOCK
+commands and indicates an illegal track and/or block request.
+*/
+
+Err_23_ReadError		= $23
+/*
+23: READ ERROR (checksum error in data block) -- This error message
+indicates that there is an error in one or more of the data bytes. The
+data has been read into the DOS memory, but the checksum over the data
+is in error. This message may also indicate grounding problems.
+*/
+
+Err_24_ReadError		= $24
+/*
+24: READ ERROR (byte decoding error) -- The data or header as been
+read into the DOS memory, but a hardware error has been created due to
+an invalid bit pattern in the data byte. This message may also
+indicate grounding problems.
+*/
+
+Err_25_WriteError		= $25
+/*
+25: WRITE ERROR (write-verify error) -- This message is generated if
+the controller detects a mismatch between the written data and the
+data in the DOS memory.
+*/
+
+Err_26_WriteProtectOn		= $26
+/*
+26: WRITE PROTECT ON -- This message is generated when the controller
+has been requested to write a data block while the write protect
+switch is depressed. Typically, this is caused by using a diskette
+with a write a protect tab over the notch.
+*/
+
+Err_27_ReadError		= $27
+/*
+27: READ ERROR (checksum error in header) -- The controller has
+detected an error in the header of the requested data block. The block
+has not been read into the DOS memory.  This message may also indicate
+grounding problems.
+*/
+
+Err_28_WriteError		= $28
+/*
+28: WRITE ERROR (long data block) -- The controller attempts to detect
+the sync mark of the next header after writing a data block. If the
+sync mark does not appear within a predetermined time, the error
+message is generated.  The error is caused by a bad diskette format
+(the data extends into the next block), or by hardware failure.
+*/
+
+Err_30_SyntaxError		= $30
+/*
+30: SYNTAX ERROR (general syntax) -- The DOS cannot interpret the
+command sent to the command channel.  Typically, this is caused by an
+illegal number of file names, or pattems are illegally used. For
+example, two file names may appear on the left side of the COPY
+command.
+*/
+
+Err_31_SyntaxError		= $31
+/*
+31: SYNTAX ERROR (invalid command) -- The DOS does not recognize the
+command.  The command must start in the first position.
+*/
+
+Err_32_SyntaxError		= $32
+/*
+32: SYNTAX ERROR (invalid command) -- The command sent is longer than
+58 characters.
+*/
+
+Err_33_SyntaxError		= $33
+/*
+33: SYNTAX ERROR (invalid file name) -- Pattem matching is invalidly
+used in the OPEN or SAVE command.
+*/
+
+Err_34_SyntaxError		= $34
+/*
+34: SYNTAX ERROR (no file given) -- the file name was left out of a
+command or the DOS does not recognize it as such.  Typically, a colon
+(:) has been left out of the command,
+*/
+
+Err_39_SyntaxError		= $39
+/*
+39: SYNTAX ERROR (invalid command) -- This error may result if the
+command sent to command channel (secondary address 15) is unrecognized
+by the DOS.
+*/
+
+Err_50_RecordNotPresent		= $50
+/*
+50: RECORD NOT PRESENT -- Result of disk reading past the last record
+through INPUT#, or GET# commands.  This message will also occur after
+positioning to a record beyond end of file in a relative file.  If the
+intent is to expand the file by adding the new record (with a PRINT#
+command), the error message may be ignored.  INPUT or GET should not
+be attempted after this error is detected without first repositioning.
+*/
+
+Err_51_OverflowInRecord		= $51
+/*
+51: OVERFLOW IN RECORD -- PRINT# statement exceeds record boundary.
+Information is cut off.  Since the carriage return is sent as a record
+terminator is counted in the record size.  This message will occur if
+the total characters in the record (including the final carriage
+return) exceeds the defined size.
+*/
+
+Err_52_FileTooLarge		= $52
+/*
+52: FILE TOO LARGE -- Record position within a relative file indicates
+that disk overflow will result.
+*/
+
+Err_60_WriteFileOpen		= $60
+/*
+60: WRITE FILE OPEN -- This message is generated when a write file
+that has not been closed is being opened for reading.
+*/
+
+Err_61_FileNotOpen		= $61
+/*
+61: FILE NOT OPEN -- This message is generated when a file is being
+accessed that has not been opened in the DOS.  Sometimes, in this case,
+a message is not generated; the request is simply ignored.
+*/
+
+Err_62_FileNotFound		= $62
+/*
+62: FILE NOT FOUND -- The requested file does not exist on the
+indicated drive.
+*/
+
+Err_63_FileExists		= $63
+/*
+63: FILE EXISTS -- The file name of the file being created already
+exists on the diskette.
+*/
+
+Err_64_FileTypeMismatch		= $64
+/*
+64: FILE TYPE MISMATCH -- The file type does not match the file type
+in the directory entry for the requested file.
+*/
+
+Err_65_NoBlock			= $65
+/*
+65: NO BLOCK -- This message occurs in conjunction with the B-A
+command.  It indicates that the block to be allocated has been
+previously allocated.  The parameters indicate the track and sector
+available with the next highest number.  If the parameters are zero
+(0), then all blocks higher in number are in use.
+*/
+
+Err_66_IllegalTrackOrSector	= $66
+/*
+66: ILLEGAL TRACK AND SECTOR -- The DOS has attempted to access a
+track or block which does not exist in the format being used.  This
+may indicate a problem reading the pointer to the next block.
+*/
+
+Err_67_IllegalTrackOrSector	= $67
+/*
+67: ILLEGAL SYSTEM T OR S -- This special error message indicates an
+illegal system track or block.
+*/
+
+Err_70_NoChannel		= $70
+/*
+70: NO CHANNEL (available) -- The requested channel is not available,
+or all channels are in use.  A maximum of five sequential files may be
+opened at one time to the DOS.  Direct access channels may have six
+opened files.
+*/
+
+Err_71_DirectoryError		= $71
+/*
+71: DIRECTORY ERROR -- The BAM does not match the internal count.
+There is a problem in the BAM allocation or the BAM has been
+overwritten in DOS memory.  To correct this problem, reinitialize the
+diskette to restore the BAM in memory.  Some active files may be
+terminated by the corrective action.  NOTE: BAM = Block Availability
+Map
+*/
+
+Err_72_DiskFull			= $72
+/*
+72: DISK FULL -- Either the blocks on the diskette are used or the
+directory is at its entry limit. DISK FULL is sent when two blocks are
+available on the 1541 to allow the current file to be closed.
+*/
+
+Err_73_DosMismatch		= $73
+/*
+73: DOS MISMATCH (73, CBM DOS V2.6 1541) -- DOS 1 and 2 are read
+compatible but not write compatible.  Disks may be interchangeably
+read with either DOS, but a disk formatted on one version cannot be
+written upon with the other version because the format is different.
+This error is displayed whenever an attempt is made to write upon a
+disk which has been formatted in a non-compatible format. (A utility
+routine is available to assist in converting from one format to
+another.) This message may also appear after power up.
+*/
+
+Err_74_DriveNotReady		= $74
+/*
+74: DRIVE NOT READY -- An attempt has been made to access the 1541
+Single Drive Floppy Disk without any diskettes present in either drive.
+*/
+
+;--------------------------------------

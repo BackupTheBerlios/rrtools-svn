@@ -1,0 +1,331 @@
+;--------------------------------------
+; Transfer Test plugin for MMC64
+;
+; by Doc Bacardi/DRM
+;--------------------------------------
+
+#segdef "zp", $02-$0100
+#segdef "data", $7000-$8000
+#segdef "code", $c000-$cf00
+
+#outfile @, startadr, sort, $00, "code"
+
+;--------------------------------------
+
+	.segment "zp"
+	* = $57
+
+	.segment "data"
+	* = $7000
+
+	.segment "code"
+	* = $c000
+
+;--------------------------------------
+
+	.segment "zp"
+
+SpriteMode			.db 0
+TestCnt				.dw 0
+TestCnt_Spr			.dw 0
+ErrorCnt			.dw 0
+ErrorCnt_Spr			.dw 0
+
+
+;--------------------------------------
+
+	.segment "code"
+    .(
+	sei
+	lda #$35
+	sta 1
+
+	; init the plugin variables
+	jsr MMC64Plugin_Init
+
+	; bring back Basic env
+	jsr MMC64Plugin_InitKernel
+	cli
+
+	lda #<Msg_Hello
+	ldy #>Msg_Hello
+	jsr $ab1e
+
+	; check filesize, must be 512 bytes
+	lda MMCBios_FileSize+2
+	ora MMCBios_FileSize+3
+	bne filesize_error
+	lda MMCBios_FileSize
+	cmp #<TestData_len
+	bne filesize_error
+	lda MMCBios_FileSize+1
+	cmp #>TestData_len
+	beq filesize_ok
+
+filesize_error:
+	lda #<Err_Filesize
+	ldy #>Err_Filesize
+MsgSpaceExit:
+	jsr $ab1e
+	jsr getSpace
+	; go back to MMC64 browser
+	jmp MMC64Plugin_Exit
+
+filesize_ok:
+	jsr MMC64Plugin_OpenFile
+
+	; init the test counter
+	lda #0
+	sta SpriteMode
+	sta TestCnt
+	sta TestCnt+1
+	sta ErrorCnt
+	sta ErrorCnt+1
+	sta TestCnt_Spr
+	sta TestCnt_Spr+1
+	sta ErrorCnt_Spr
+	sta ErrorCnt_Spr+1
+	sta $d015
+
+	; init spriteblock
+	lda #$ff
+	ldx #$3f
+fillSprite:
+	sta $0800,x
+	dex
+	bpl fillSprite
+	lda #$0800/64
+	ldx #7
+setSprPtr:
+	sta $07f0,x
+	dex
+	bpl setSprPtr
+	; set colors
+	ldx #7
+setSprCol:
+	txa
+	sta $d027,x
+	dex
+	bpl setSprCol
+	; set Y position
+	ldx #$0e
+	lda #$a0
+setSprPosY:
+	sta $d001,x
+	dex
+	dex
+	bpl setSprPosY
+	; set X position
+	ldx #$0e
+	lda #$38
+setSprPosX:
+	sta $d000,x
+	clc
+	adc #$18
+	dex
+	dex
+	bpl setSprPosX
+
+	lda #0
+	sta $d010
+	sta $d017
+	sta $d01b
+	sta $d01c
+	sta $d01d
+	sta $d020
+
+testloop:
+	; test start
+	inc $d020
+
+	; sprites on/off ?
+	jsr $ffe4
+	cmp #3
+	bne noBreak
+	lda #<Msg_Bye
+	ldy #>Msg_Bye
+	jmp MsgSpaceExit
+
+noBreak:
+	cmp #'1'
+	bcc noInvert
+	cmp #'8'+1
+	bcs noInvert
+	sec
+	sbc #'1'
+	tax
+	lda #0
+	sec
+getBit:
+	rol
+	dex
+	bpl getBit
+	eor SpriteMode
+	sta SpriteMode
+noInvert:
+
+	lda SpriteMode
+	sta $d015
+
+	jsr incTestCnt
+
+	; read
+	inc $d020
+	jsr MMC64Plugin_ReadSector
+	dec $d020
+	bcs readError
+
+	; compare sector
+	ldx #0
+compareSector:
+	lda MMC64Plugin_SectorBuffer,x
+	cmp TestData_start,x
+	bne readError
+	lda MMC64Plugin_SectorBuffer+$0100,x
+	cmp TestData_start+$0100,x
+	bne readError
+	inx
+	bne compareSector
+
+nextLoop:
+	; finished
+	dec $d020
+
+	; dump stats
+;	jsr $e566
+	lda #<Msg_Stats0
+	ldy #>Msg_Stats0
+	jsr $ab1e
+	lda TestCnt+1
+	ldy TestCnt
+	jsr hexWordOut
+	lda #'/'
+	jsr $ffd2
+	lda ErrorCnt+1
+	ldy ErrorCnt
+	jsr hexWordOut
+	lda #<Msg_Stats1
+	ldy #>Msg_Stats1
+	jsr $ab1e
+	lda TestCnt_Spr+1
+	ldy TestCnt_Spr
+	jsr hexWordOut
+	lda #'/'
+	jsr $ffd2
+	lda ErrorCnt_Spr+1
+	ldy ErrorCnt_Spr
+	jsr hexWordOut
+	lda #$0d
+	jsr $ffd2
+
+	jmp testloop
+
+readError:
+	jsr incErrorCnt
+	jmp nextLoop
+    .)
+
+;--------------------------------------
+
+Msg_Hello:
+	.pet 147, "mmc transfer test", 13, 0
+
+	;     01234567890
+Msg_Stats0:
+	.pet "spr off:",0
+Msg_Stats1:
+	.pet ", spr on :",0
+Msg_Bye:
+	.pet "press space", 13, 0
+
+Err_Filesize:
+	.pet "the testfile must be 512 bytes", 13, 0
+
+;--------------------------------------
+
+hexWordOut:
+    .(
+        jsr hexOut
+        tya
+hexOut:
+        pha
+        lsr
+        lsr
+        lsr
+        lsr
+        jsr hexOut0
+        pla
+        and #$0f
+hexOut0:
+        ora #$30
+        cmp #$3a
+        bcc hexOut1
+        adc #6
+hexOut1:
+        jmp $ffd2
+    .)
+
+
+incTestCnt:
+    .(
+	lda SpriteMode
+	beq noSprites
+	; sprites are on
+	inc TestCnt_Spr
+	bne next0
+	inc TestCnt_Spr+1
+next0:
+	rts
+
+noSprites:
+	; sprites are off
+	inc TestCnt
+	bne next1
+	inc TestCnt+1
+next1:
+	rts
+    .)
+
+
+incErrorCnt:
+    .(
+	lda SpriteMode
+	beq noSprites
+	; sprites are on
+	inc ErrorCnt_Spr
+	bne next0
+	inc ErrorCnt_Spr+1
+next0:
+	rts
+
+noSprites:
+	; sprites are off
+	inc ErrorCnt
+	bne next1
+	inc ErrorCnt+1
+next1:
+	rts
+    .)
+
+getSpace:
+    .(
+	jsr $ffe4
+	cmp #' '
+	bne getSpace
+	rts
+    .)
+
+;--------------------------------------
+
+TestData_start:
+	.binclude "testset.tst"
+TestData_end:
+TestData_len = * - TestData_start
+
+;--------------------------------------
+
+#include "mmc64_plugin/mmc64_plugin.src"
+
+;--------------------------------------
+
+

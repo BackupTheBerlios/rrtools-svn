@@ -1,0 +1,162 @@
+;--------------------------------------
+;
+; DFI Fs for MMC 64 and RetroReplay
+;
+;--------------------------------------
+
+#segdef "bank0", $8100-$9e02, fillup, force, $00
+#segdef "bank1", $8100-$9f00, fillup, force, $00
+#segdef "bank2", $8100-$9f00, fillup, force, $00
+#segdef "switcher", $de02-$df00, fillup, force, $00
+#segdef "bankjsr", $8000-$8080, fillup, force, $00
+#segdef "bankjsr_bank", $8080-$8100, fillup, force, $00
+#segdef "bankjsr_lo", $9f00-$9f80, fillup, force, $00
+#segdef "bankjsr_hi", $9f80-$a000, fillup, force, $00
+
+#outfile @, startadr, $00, "bankjsr", "bankjsr_bank", "bank0", "switcher", "bankjsr_lo", "bankjsr_hi", "bankjsr", "bankjsr_bank", "bank1", "bankjsr_lo", "bankjsr_hi", "bankjsr", "bankjsr_bank", "bank2", "bankjsr_lo", "bankjsr_hi"
+
+;--------------------------------------
+
+	.segment "bankjsr"
+	* = $8000
+
+	.segment "bankjsr_bank"
+	* = $8080
+
+	.segment "bank0"
+	* = $8100
+
+	.segment "bank1"
+	* = $8100
+
+	.segment "bank2"
+	* = $8100
+
+	.segment "switcher"
+	* = $de02
+
+	.segment "bankjsr_lo"
+	* = $9f00
+
+	.segment "bankjsr_hi"
+	* = $9f80
+
+; only export global variables
+    .(
+
+;--------------------------------------
+
+DfiFs_Cfg_NumberOfBuffers = 4
+; the normal buffers are followed by the directory and system buffer
+DfiFs_Cfg_DirBufferIdx = DfiFs_Cfg_NumberOfBuffers
+DfiFs_Cfg_BamBufferIdx = DfiFs_Cfg_NumberOfBuffers+1
+DfiFs_Cfg_SysBufferIdx = DfiFs_Cfg_NumberOfBuffers+2
+
+DfiFs_DEBUG_FLICKER = 1
+
+;--------------------------------------
+
+#include "struct.src"
+
+#include "dfi_fs_error_numbers.src"
+
+
+DfiFs_BufferMode_Closed = 0
+DfiFs_BufferMode_ReadFile = 1
+DfiFs_BufferMode_WriteFile = 2
+DfiFs_BufferMode_ReadDir = 3
+DfiFs_BufferMode_ReplaceFile = 4
+
+DfiFs_ReadDirState_Files = 0
+DfiFs_ReadDirState_BlocksFree = 1
+DfiFs_ReadDirState_End = 2
+
+;--------------------------------------
+
+; $a3 - $a5 are used by disk routines, use them for zp
+
+DfiFsZp_BufPtr			= $a3		; word pointer for buffer
+DfiFsZp_ByteBuffer		= $a5		; one byte buffer for read/write operations
+
+;--------------------------------------
+
+#macro bankJsr(dst)	{jsr bankJsr : .DB {dst}}
+
+#macro setBank(bank, val)
+{
+	__CURRENT_BANK__ := {bank}
+	__CURRENT_BANK_CFG__ := {val}
+}
+
+#macro defBankJumpLabel(labelname, value, banknr, bankcfg)
+{
+	@0BANK{banknr}_{labelname} = {value}
+	@0L_{labelname} = __BANKJSR_CNT__++
+	__SEGMENT_SAVE__ := segmentof *
+	.segment "bankjsr_lo"
+	.DB <BANK{banknr}_{labelname}
+	.segment "bankjsr_hi"
+	.DB >BANK{banknr}_{labelname}
+	.segment "bankjsr_bank"
+	.DB {bankcfg}
+	.segment __SEGMENT_SAVE__
+}
+
+#macro defBJL(name)
+{
+	.defBankJumpLabel({name}, *, __CURRENT_BANK__, __CURRENT_BANK_CFG__)
+}
+
+__BANKJSR_CNT__ = 0
+
+
+BankCfg_0_Ram	= $00|$23
+BankCfg_0_Rom	= $00|$20
+BankCfg_1_Ram	= $08|$23
+BankCfg_1_Rom	= $08|$20
+BankCfg_2_Ram	= $10|$23
+BankCfg_2_Rom	= $10|$20
+BankCfg_3_Ram	= $18|$23
+BankCfg_3_Rom	= $18|$20
+BankCfg_C64	= $00|$22
+
+;--------------------------------------
+
+#include "dfi_fs_bank_jsr.src"
+#include "dfi_fs_switcher.src"
+
+;--------------------------------------
+
+	.defBankJumpLabel(f12f, $f12f, C64Rom, BankCfg_C64)
+	.defBankJumpLabel(f13e, $f13e, C64Rom, BankCfg_C64)
+	.defBankJumpLabel(f157, $f157, C64Rom, BankCfg_C64)
+	.defBankJumpLabel(f1ca, $f1ca, C64Rom, BankCfg_C64)
+	.defBankJumpLabel(f219, $f219, C64Rom, BankCfg_C64)
+	.defBankJumpLabel(f25b, $f25b, C64Rom, BankCfg_C64)
+	.defBankJumpLabel(f291, $f291, C64Rom, BankCfg_C64)
+	.defBankJumpLabel(f2f3, $f2f3, C64Rom, BankCfg_C64)
+	.defBankJumpLabel(f333, $f333, C64Rom, BankCfg_C64)
+	.defBankJumpLabel(f34a, $f34a, C64Rom, BankCfg_C64)
+	.defBankJumpLabel(f4ab, $f4ab, C64Rom, BankCfg_C64)
+	.defBankJumpLabel(f5d2, $f5d2, C64Rom, BankCfg_C64)
+	.defBankJumpLabel(f5ed, $f5ed, C64Rom, BankCfg_C64)
+	.defBankJumpLabel(f68f, $f68f, C64Rom, BankCfg_C64)
+	.defBankJumpLabel(f6fb, $f6fb, C64Rom, BankCfg_C64)
+	.defBankJumpLabel(f6fe, $f6fe, C64Rom, BankCfg_C64)
+	.defBankJumpLabel(f701, $f701, C64Rom, BankCfg_C64)
+	.defBankJumpLabel(f704, $f704, C64Rom, BankCfg_C64)
+	.defBankJumpLabel(f70a, $f70a, C64Rom, BankCfg_C64)
+	.defBankJumpLabel(f710, $f710, C64Rom, BankCfg_C64)
+	.defBankJumpLabel(ffe1, $ffe1, C64Rom, BankCfg_C64)
+	.defBankJumpLabel(ffd2, $ffd2, C64Rom, BankCfg_C64)
+
+;--------------------------------------
+
+#include "dfi_fs_bank0.src"
+#include "dfi_fs_bank1.src"
+#include "dfi_fs_bank2.src"
+
+;--------------------------------------
+
+    .)
+

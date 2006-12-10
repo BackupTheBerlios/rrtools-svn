@@ -1,0 +1,32 @@
+
+;--------------------------------------
+
+SC			= $0400
+
+MaxXPos			= 33
+MaxYPos			= 19
+
+ScrlBorder_Up		= 4
+ScrlBorder_Down		= MaxYPos-4-1
+
+Palette_HeaderCol	= $e
+Palette_BFreeCol	= $d
+
+;--------------------------------------
+
+	.segment "code"
+
+ComLib_ScrTabLo:
+	.DB <SC+123,<SC+163,<SC+203,<SC+243
+	.DB <SC+283,<SC+323,<SC+363,<SC+403
+	.DB <SC+443,<SC+483,<SC+523,<SC+563
+	.DB <SC+603,<SC+643,<SC+683,<SC+723
+	.DB <SC+763,<SC+803,<SC+843
+ComLib_ScrTabHi:
+	.DB >SC+123,>SC+163,>SC+203,>SC+243
+	.DB >SC+283,>SC+323,>SC+363,>SC+403
+	.DB >SC+443,>SC+483,>SC+523,>SC+563
+	.DB >SC+603,>SC+643,>SC+683,>SC+723
+	.DB >SC+763,>SC+803,>SC+843
+
+;--------------------------------------

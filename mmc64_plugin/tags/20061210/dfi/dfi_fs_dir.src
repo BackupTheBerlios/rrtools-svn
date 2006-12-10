@@ -1,0 +1,825 @@
+
+;--------------------------------------
+
+dirSearchName				.DSB 16
+dirSearchNameLen			.DB 0
+dirSearchTypLo				.DB 0
+dirSearchTypHi				.DB 0
+
+readWriteDir_Idx			.DB 0		; tmp zp for read/write dir entry
+
+DfiFs_SearchDir_Idx			.DB 0		; directory search, offset in block
+DfiFs_SearchDir_Block			.DW 0		; directory search, block trk/sec
+
+newBlock_Trk				.DB 0
+newBlock_Sec				.DB 0
+
+dirTrk					.DB 0		; tmp zp for readHeaderLine
+dirSec					.DB 0		; tmp zp for readHeaderLine
+
+DfiFs_Dir_BufferTrk			.DB 0		; trk in dirbuffer
+DfiFs_Dir_BufferSec			.DB 0		; sec in dirbuffer
+DfiFs_Dir_BufferModified		.DB 0		; dirbuffer is modified
+DfiFs_Dir_ReqTrk			.DB 0		; requested track for read/write dir block
+DfiFs_Dir_ReqSec			.DB 0		; requested sector for read/write dir block
+
+;--------------------------------------
+
+DfiFs_Dir_DirentryIdxTab:
+	.DB $00, $20, $40, $60, $80, $a0, $c0, $e0
+
+;--------------------------------------
+
+DfiFs_Dir_Init:
+.defBJL(DfiFs_Dir_Init)
+    .(
+	; set trk and sector for directory buffer to illegal values
+	; this forces the first read request to read the block
+	lda #0
+	sta DfiFs_Dir_BufferTrk
+	sta DfiFs_Dir_BufferSec
+	sta DfiFs_Dir_BufferModified
+
+	; ok
+	clc
+	rts
+    .)
+
+
+DfiFs_Dir_ReadDirBlock:
+    .(
+	; save parameters
+	stx DfiFs_Dir_ReqTrk
+	sty DfiFs_Dir_ReqSec
+
+	; same trk/sec as in buffer?
+	cpx DfiFs_Dir_BufferTrk
+	bne blockNotBuffered
+	cpy DfiFs_Dir_BufferSec
+	beq blockIsBuffered
+blockNotBuffered:
+
+	; write any modifications in the old buffer back
+	jsr DfiFs_Dir_FlushDirBlock
+	bcs error
+
+	; read the requested block
+	lda #DfiFs_Cfg_DirBufferIdx
+	ldx DfiFs_Dir_ReqTrk
+	ldy DfiFs_Dir_ReqSec
+	jsr DfiFs_ReadBlock
+	bcs error
+
+	; set buffered trk/sec
+	lda DfiFs_Dir_ReqTrk
+	sta DfiFs_Dir_BufferTrk
+	lda DfiFs_Dir_ReqSec
+	sta DfiFs_Dir_BufferSec
+
+blockIsBuffered:
+	; ok
+	clc
+error:
+	rts
+    .)
+
+
+DfiFs_Dir_DirBlockIsModified:
+    .(
+	lda #1
+	sta DfiFs_Dir_BufferModified
+
+	clc
+	rts
+    .)
+
+
+DfiFs_Dir_WriteBufferBack:
+	ldx DfiFs_Dir_BufferTrk
+	ldy DfiFs_Dir_BufferSec
+DfiFs_Dir_WriteDirBlock:
+    .(
+	; write buffer back
+	lda #DfiFs_Cfg_DirBufferIdx
+	stx DfiFs_Dir_BufferTrk
+	sty DfiFs_Dir_BufferSec
+	jsr DfiFs_WriteBlock
+	bcs error
+
+	; buffer written back
+	lda #0
+	sta DfiFs_Dir_BufferModified
+
+	; ok
+	clc
+error:
+	rts
+    .)
+
+
+DfiFs_Dir_FlushDirBlock:
+.defBJL(DfiFs_Dir_FlushDirBlock)
+    .(
+	; is the buffer modified?
+	lda DfiFs_Dir_BufferModified
+	beq notModified
+
+	; write buffer back
+	jsr DfiFs_Dir_WriteBufferBack
+	bcs error
+
+notModified:
+	; ok
+	clc
+error:
+	rts
+    .)
+
+
+;--------------------------------------
+;
+; DfiFs_Dir_ReadDirEntry
+;
+; Read one dir entry and store it in the exchange buffer
+;
+; Parameters:
+;   A: dir entry index (0 - 7)
+;   X: dir track
+;   Y: dir sector
+;
+; Returns:
+;   Carry: Clear=ok, Set=error
+;
+DfiFs_Dir_ReadDirEntry:
+.defBJL(DfiFs_Dir_ReadDirEntry)
+    .(
+	; save the dir entry idx
+	cmp #8
+	bcs error
+	sta readWriteDir_Idx
+
+	; read the directory block
+	jsr DfiFs_Dir_ReadDirBlock
+	bcs error
+
+	ldx readWriteDir_Idx
+	ldy DfiFs_Dir_DirentryIdxTab,x
+	ldx #0
+copyBlock:
+	lda DfiFs_DirBuffer,x
+	sta DfiFs_ExchangeBuffer,y
+	inx
+	iny
+	cpx #$20
+	bcc copyBlock
+
+	; ok!
+	clc
+	rts
+
+error:
+;	sec
+	rts
+    .)
+
+
+;--------------------------------------
+;
+; DfiFs_Dir_WriteDirEntry
+;
+; Get dir entry from the exchange buffer and write it.
+;
+; Parameters:
+;   A: dir entry index (0 - 7)
+;   X: dir track
+;   Y: dir sector
+;
+; Returns:
+;   Carry: Clear=ok, Set=error
+;
+
+DfiFs_Dir_WriteDirEntry:
+.defBJL(DfiFs_Dir_WriteDirEntry)
+    .(
+	; save parameters
+	cmp #8
+	bcs error
+	sta readWriteDir_Idx
+
+	; read the directory block
+	jsr DfiFs_Dir_ReadDirBlock
+	bcs error
+
+	ldx readWriteDir_Idx
+	ldy DfiFs_Dir_DirentryIdxTab,x
+	ldx #0
+copyBlock:
+	lda DfiFs_ExchangeBuffer+2,x
+	sta DfiFs_DirBuffer+2,y
+	inx
+	iny
+	cpx #$20
+	bcc copyBlock
+
+	; write the directory block back
+	jmp DfiFs_Dir_DirBlockIsModified
+
+error:
+;	sec
+	rts
+    .)
+
+;--------------------------------------
+;
+; getFreeDirEntry
+;
+; Search for a free entry in the current directory.
+;
+; Parameters:
+;   -
+;
+; Returns:
+;   Carry: Clear=success / Set=error
+;   A: index in directory block (0 - 7)
+;   X: directory track
+;   Y: directory sector
+;
+getFreeDirEntry:
+.defBJL(getFreeDirEntry)
+    .(
+	; first look for a free entry in the existing directory blocks
+	lda #'*'
+	sta DfiFs_ExchangeBuffer+DfiFs_ParamOffs_SearchDir_Name
+	lda #1
+	sta DfiFs_ExchangeBuffer+DfiFs_ParamOffs_SearchDir_NameLen
+	lda #$00
+	sta DfiFs_ExchangeBuffer+DfiFs_ParamOffs_SearchDir_TypLo
+	lda #$01
+	sta DfiFs_ExchangeBuffer+DfiFs_ParamOffs_SearchDir_TypHi
+
+	jsr searchDir_init
+	bcs error
+
+	jsr findNextMatchingDirEntry
+	bcs error
+	cmp #$ff
+	bne foundFreeEntry
+
+	; nothing found, try to append a new directory block
+
+	; allocate a new directory block
+	ldx DfiFs_SearchDir_Block
+	jsr DfiFs_Bam_Alloc
+	bcs error
+	txa
+	bne foundFreeBlock
+
+	; disk full
+	lda #Err_72_DiskFull
+	.bankJsr(L_DfiFs_SetError_NoBlock)
+	sec
+error:
+	rts
+
+foundFreeBlock:
+	stx newBlock_Trk
+	sty newBlock_Sec
+
+	; load last dir block
+	ldx DfiFs_SearchDir_Block
+	ldy DfiFs_SearchDir_Block+1
+	jsr DfiFs_Dir_ReadDirBlock
+	bcs error
+
+	; link new sector
+	lda newBlock_Trk
+	sta DfiFs_DirBuffer
+	lda newBlock_Sec
+	sta DfiFs_DirBuffer+1
+
+	; write the modified buffer back
+	jsr DfiFs_Dir_WriteBufferBack
+	bcs error
+
+	; fill new block
+	lda #0
+	tax
+fillNewDirBlk:
+	sta DfiFs_DirBuffer,x
+	inx
+	bne fillNewDirBlk
+	dex
+	stx DfiFs_SystemBuffer+1
+
+	; save new dir block
+	ldx newBlock_Trk
+	stx DfiFs_SearchDir_Block
+	ldy newBlock_Sec
+	sty DfiFs_SearchDir_Block+1
+	jsr DfiFs_Dir_WriteDirBlock
+	bcs error
+
+	; set block as free entry
+	lda #0
+	sta DfiFs_SearchDir_Idx
+	ldx DfiFs_SearchDir_Block
+	ldy DfiFs_SearchDir_Block+1
+
+foundFreeEntry:
+	; ok, found a free block
+	clc
+	rts
+    .)
+
+
+;--------------------------------------
+;
+; readDirNewBlock
+;
+; Read a new directory block in 'Read Directory' mode.
+;
+; Parameters:
+;   -
+;
+; Returns:
+;   Carry: Clear=success / Set=error
+;
+readDirNewBlock:
+.defBJL(readDirNewBlock)
+    .(
+	; get buffer index
+	ldy DfiFs_ChannelBufferIdx
+	lda DfiFs_BufferModeState,y
+	beq dirEnd
+	jmp readDirFileEntry
+
+dirEnd:
+	; default is end
+	lda #0
+	sta DfiFs_BlockUsed,y
+	lda #0
+	sta DfiFs_BlockPtr,y
+	lda #$40	; EOF
+	sta $90
+	clc
+	rts
+    .)
+
+
+;--------------------------------------
+;
+; readHeaderLine
+;
+; Read directory header in 'Read Directory' mode.
+;
+; Parameters:
+;   X: header trk
+;   Y: header sec
+;
+; Returns:
+;   Carry: Clear=success / Set=error
+;   X: first dir block trk
+;   Y: first dir block sec
+;
+readHeaderLine:
+.defBJL(readHeaderLine)
+    .(
+	; save parameters
+	stx dirTrk
+	sty dirSec
+
+	; read the dir header
+	jsr DfiFs_Dir_ReadDirBlock
+	bcs error
+
+	jsr setChannelBuffer
+	bcs error
+
+	; copy start of header line
+	ldy #dirHeaderPre_len-1
+copyDirHeaderPre:
+	lda dirHeaderPre,y
+	sta (DfiFsZp_BufPtr),y
+	dey
+	bpl copyDirHeaderPre
+
+	; replace last char of ID if padded
+	ldy #dirHeaderPre_len+$16
+	lda DfiFs_DirBuffer+$90-dirHeaderPre_len,y
+	cmp #$a0
+	bne noPadding
+	lda #'1'
+	bne noPadding	; bra
+replacePadding:
+	lda DfiFs_DirBuffer+$90-dirHeaderPre_len,y
+	cmp #$a0
+	bne noPadding
+	lda #' '
+noPadding:
+	sta (DfiFsZp_BufPtr),y
+	dey
+	cpy #dirHeaderPre_len
+	bcs replacePadding
+
+	; write ending quotes and space
+	ldy #dirHeaderPre_len+$10
+	lda #'"'
+	sta (DfiFsZp_BufPtr),y
+	iny
+	lda #' '
+	sta (DfiFsZp_BufPtr),y
+	ldy #$1f
+	lda #0
+	sta (DfiFsZp_BufPtr),y
+
+	; get buffer index
+	ldy DfiFs_ChannelBufferIdx
+	lda #$1f
+	sta DfiFs_BlockUsed,y
+	lda #0
+	sta DfiFs_BlockPtr,y
+
+	lda #1
+	sta DfiFs_BufferModeState,y
+
+	ldx dirTrk
+	ldy dirSec
+	jmp searchDir_init
+
+error:
+	sec
+	rts
+
+dirHeaderPre:
+	.DB $01, $04, $01, $01, $00, $00, $12, $22
+dirHeaderPre_len = * - dirHeaderPre
+
+    .)
+
+
+searchDir_init:
+.defBJL(searchDir_init)
+    .(
+	; save parameters
+	stx dirTrk
+	sty dirSec
+
+	; copy the parameters from the exchange buffer to this bank
+	ldx #$0f
+copyName:
+	lda DfiFs_ExchangeBuffer+DfiFs_ParamOffs_SearchDir_Name,x
+	sta dirSearchName,x
+	dex
+	bpl copyName
+	lda DfiFs_ExchangeBuffer+DfiFs_ParamOffs_SearchDir_NameLen
+	sta dirSearchNameLen
+	lda DfiFs_ExchangeBuffer+DfiFs_ParamOffs_SearchDir_TypLo
+	sta dirSearchTypLo
+	lda DfiFs_ExchangeBuffer+DfiFs_ParamOffs_SearchDir_TypHi
+	sta dirSearchTypHi
+
+	jsr setChannelBuffer
+	bcs error
+
+	; read the working dir header to the channel buffer
+	ldx dirTrk
+	ldy dirSec
+	jsr DfiFs_Dir_ReadDirBlock
+	bcs error
+
+	; reset the dir entry index
+	lda #$ff
+	sta DfiFs_SearchDir_Idx
+
+	; read the first directory block to the channel buffer
+	ldx DfiFs_DirBuffer
+	stx DfiFs_SearchDir_Block
+	ldy DfiFs_DirBuffer+1
+	sty DfiFs_SearchDir_Block+1
+	jmp DfiFs_Dir_ReadDirBlock
+
+error:
+	rts
+    .)
+
+
+findNextMatchingDirEntry:
+.defBJL(findNextMatchingDirEntry)
+    .(
+nextEntry:
+	; still something left in the current block?
+	ldy DfiFs_SearchDir_Idx
+	iny
+	cpy #8
+	bcc entryLeft
+
+	; get link trk/sec
+	ldx DfiFs_DirBuffer
+	bne anotherDirBlock
+
+	; nothing found
+	lda #$ff
+	ldx #0
+	ldy #0
+	clc
+	rts
+
+anotherDirBlock:
+	stx DfiFs_SearchDir_Block
+	ldy DfiFs_DirBuffer+1
+	sty DfiFs_SearchDir_Block+1
+
+	; read the dir block
+	jsr DfiFs_Dir_ReadDirBlock
+	bcc readNewBlock
+error:
+	sec
+	rts
+
+readNewBlock:
+	; start at index 0
+	ldy #0
+
+entryLeft:
+	sty DfiFs_SearchDir_Idx
+	ldx DfiFs_Dir_DirentryIdxTab,y
+
+	lda DfiFs_DirBuffer+2,x
+	and #%10111111
+	cmp dirSearchTypLo
+	bcc nextEntry
+	cmp dirSearchTypHi
+	bcs nextEntry
+
+	; found an entry
+	tay
+	beq doNotCompareName
+
+	; compare name
+	ldy #0
+compareName:
+	lda dirSearchName,y
+	cmp #'*'
+	beq foundName
+	cmp #'?'
+	beq nextChar
+	cmp DfiFs_DirBuffer+5,x
+	bne nextEntry
+nextChar:
+	inx
+	iny
+	cpy dirSearchNameLen
+	bcc compareName
+	cpy #16
+	bcs foundName
+	lda #$a0
+	cmp DfiFs_DirBuffer+5,x
+	bne nextEntry
+
+foundName:
+	txa
+	and #$e0
+	tax
+
+doNotCompareName:
+	ldy #0
+copyDirEntry:
+	lda DfiFs_DirBuffer,x
+	sta DfiFs_ExchangeBuffer,y
+	inx
+	iny
+	cpy #$20
+	bcc copyDirEntry
+
+	lda DfiFs_SearchDir_Idx
+	ldx DfiFs_SearchDir_Block
+	ldy DfiFs_SearchDir_Block+1
+	clc
+	rts
+    .)
+
+
+readDirFileEntry:
+    .(
+	jsr findNextMatchingDirEntry
+	bcs error
+	; found entry?
+	tax
+	bpl foundEntry
+	; no more entries found -> end of dir
+	jmp getBlocksFreeLine
+
+error:
+	sec
+	rts
+
+foundEntry:
+	ldy #0
+	lda #1
+	sta (DfiFsZp_BufPtr),y
+	iny
+	sta (DfiFsZp_BufPtr),y
+	iny
+	lda DfiFs_ExchangeBuffer+$1e
+	sta (DfiFsZp_BufPtr),y
+	iny
+	lda DfiFs_ExchangeBuffer+$1f
+	sta (DfiFsZp_BufPtr),y
+
+	; get number of spaces
+	ldx #3
+getBlkIndent:
+	lda DfiFs_ExchangeBuffer+$1e
+	cmp blockIndentTabLo-1,x
+	lda DfiFs_ExchangeBuffer+$1f
+	sbc blockIndentTabHi-1,x
+	bcc foundIndent
+	dex
+	bne getBlkIndent
+foundIndent:
+	lda #' '
+fillIndent:
+	iny
+	sta (DfiFsZp_BufPtr),y
+	dex
+	bpl fillIndent
+
+	lda #'"'
+	sta (DfiFsZp_BufPtr),y
+	iny
+
+	; copy the name
+	ldx #0
+copyName0:
+	lda DfiFs_ExchangeBuffer+5,x
+	cmp #'"'
+	beq copyName1
+	cmp #$a0
+	beq nameEnd0
+	sta (DfiFsZp_BufPtr),y
+	iny
+	inx
+	cpx #16
+	bcc copyName0
+	lda #'"'
+	sta (DfiFsZp_BufPtr),y
+	iny
+	bne nameEnd2
+
+nameEnd0:
+	lda #'"'
+	bne nameEnd1
+
+copyName1:
+	lda DfiFs_ExchangeBuffer+5,x
+	and #$7f
+nameEnd1:
+	sta (DfiFsZp_BufPtr),y
+	iny
+	inx
+	cpx #16
+	bcc copyName1
+	lda #' '
+	sta (DfiFsZp_BufPtr),y
+	iny
+nameEnd2:
+
+	; file closed?
+	lda #' '
+	bit DfiFs_ExchangeBuffer+2
+	bmi fileIsClosed
+	lda #'*'
+fileIsClosed:
+	sta (DfiFsZp_BufPtr),y
+	iny
+
+	; file typ
+	lda DfiFs_ExchangeBuffer+2
+	and #$0f
+	cmp #suffixtab_len
+	bcc typOk
+	lda #suffixtab_len-1
+typOk:
+	tax
+	lda suffixtab0,x
+	sta (DfiFsZp_BufPtr),y
+	iny
+	lda suffixtab1,x
+	sta (DfiFsZp_BufPtr),y
+	iny
+	lda suffixtab2,x
+	sta (DfiFsZp_BufPtr),y
+	iny
+
+	; file protected?
+	lda #' '
+	bit DfiFs_ExchangeBuffer+2
+	bvc fileIsNotProtected
+	lda #'*'
+fileIsNotProtected:
+	sta (DfiFsZp_BufPtr),y
+
+	; fill rest with spaces
+	lda #' '
+fillRest:
+	iny
+	sta (DfiFsZp_BufPtr),y
+	cpy #$1f
+	bcc fillRest
+
+	lda #0
+	sta (DfiFsZp_BufPtr),y
+
+	; get buffer index
+	ldy DfiFs_ChannelBufferIdx
+	lda #$1f
+	sta DfiFs_BlockUsed,y
+	lda #0
+	sta DfiFs_BlockPtr,y
+
+	clc
+	rts
+
+blockIndentTabLo:
+	.DB <1000
+	.DB <100
+	.DB <10
+blockIndentTabHi:
+	.DB >1000
+	.DB >100
+	.DB >10
+
+suffixtab0:
+	.PET "dspurcd?"
+suffixtab_len = * - suffixtab0
+suffixtab1:
+	.PET "eersebi?"
+suffixtab2:
+	.PET "lqgrlmr?"
+
+    .)
+
+
+getBlocksFreeLine:
+    .(
+	; fill the line with spaces
+	lda #' '
+	ldy #$1c
+fillBlocksFreeLine:
+	sta (DfiFsZp_BufPtr),y
+	dey
+	bne fillBlocksFreeLine
+
+	; y is 0 here
+	lda #1
+	sta (DfiFsZp_BufPtr),y
+	iny
+	sta (DfiFsZp_BufPtr),y
+
+	ldy #$1d
+	lda #0
+	sta (DfiFsZp_BufPtr),y
+	iny
+	sta (DfiFsZp_BufPtr),y
+	iny
+	sta (DfiFsZp_BufPtr),y
+
+	; set the number of free blocks
+	ldy #2
+	lda DfiFs_FreeBlocks
+	sta (DfiFsZp_BufPtr),y
+	iny
+	lda DfiFs_FreeBlocks+1
+	sta (DfiFsZp_BufPtr),y
+
+	; copy the 'blocks free' text
+	ldy #4
+copyBlocksFreeText:
+	lda blocksFreeText-4,y
+	sta (DfiFsZp_BufPtr),y
+	iny
+	cpy #4+blocksFreeText_len
+	bcc copyBlocksFreeText
+
+	; get buffer index
+	ldy DfiFs_ChannelBufferIdx
+	lda #$1f
+	sta DfiFs_BlockUsed,y
+	lda #0
+	sta DfiFs_BlockPtr,y
+
+	; no more dir data
+	lda #0
+	sta DfiFs_BufferModeState,y
+
+	clc
+	rts
+
+
+blocksFreeText:
+	.DB $42, $4c, $4f, $43, $4b, $53, $20, $46
+	.DB $52, $45, $45, $2e
+blocksFreeText_len = * - blocksFreeText
+    .)
+
+;--------------------------------------
