@@ -40,26 +40,7 @@ bankJsr:
 	; switch to the destination bank
 	lda DfiFs_CurrentBank
 	and #$80
-	jsr bankJsr_Hi
-
-	; NOTE: this is already in the destination bank
-
-	.(
-		; set destination address
-		lda jumpTable_Lo,x
-		sta bankJsr_jumpAdr+1
-		lda jumpTable_Hi,x
-		sta bankJsr_jumpAdr+2
-
-		; restore registers and call the routine
-		pla
-		tay
-		pla
-		tax
-		pla
-		plp
-		jmp bankJsr_jumpAdr
-	.)
+	jmp bankJsr_Hi
 
 ;--------------------------------------
 
@@ -71,13 +52,13 @@ bankJsr:
 
 	.segment "bankjsr_lo"
 
-jumpTable_Lo:
+@0jumpTable_Lo:
 
 ;--------------------------------------
 
 	.segment "bankjsr_hi"
 
-jumpTable_Hi:
+@0jumpTable_Hi:
 
     .)
 

@@ -59,17 +59,11 @@ DfiFs_Switcher_Org = $de02
 	jmp BANK0_DfiFs_Save_Rom
 
 
-readC64Bytes_ram:
-.defBankJumpLabel(readC64Bytes_ram, readC64Bytes_ram, C64, BankCfg_C64)
-readC64Bytes_ram_mod:
+readC64Bytes:
+.defBankJumpLabel(readC64Bytes, readC64Bytes, C64, BankCfg_C64)
+readC64Bytes_mod:
 	lda ($00),y
 	rts
-
-readC64Bytes_rom:
-	jsr switch_c64
-readC64Bytes_rom_mod:
-	lda ($00),y
-	jmp switch_rom_bank0
 
 switch_rom_bank0_save01:
 	sei
@@ -92,9 +86,31 @@ switch_rom_bank0:
 	rts
 
 
+bankJsr_Hi:
+bankJsr_Hi_selfMod_Get:
+   .(
+	ldx $ffff,y
 
-bankJsr_jumpAdr:
-    .(
+	; set destination address
+	ldy jumpTable_Lo,x
+	sty bankJsr_jumpAdr_selfMod+1
+	ldy jumpTable_Hi,x
+	sty bankJsr_jumpAdr_selfMod+2
+
+	eor jumpTable_Bank,x
+	jsr switchDelay
+
+	; NOTE: this is already in the destination bank
+
+	; restore registers and call the routine
+	pla
+	tay
+	pla
+	tax
+	pla
+	plp
+
+bankJsr_jumpAdr_selfMod:
 	jsr $ffff
 
 	; back from the routine, save regs and status
@@ -154,13 +170,6 @@ switch_c64:
 	pla
 	plp
 	rts
-
-
-bankJsr_Hi:
-bankJsr_Hi_selfMod_Get:
-	ldx $ffff,y
-	eor jumpTable_Bank,x
-; NOTE: fallthrough to switchDelay
 
 switchDelay:
     .(

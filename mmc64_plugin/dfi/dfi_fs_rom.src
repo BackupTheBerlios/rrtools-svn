@@ -257,10 +257,10 @@ nameNotEmpty:
 	jsr jsrToRom
 	.DW $f12f-1	; NOTE: !!!UNLOCKS IRQ!!!
 	lda #$bb
-	sta readC64Bytes_rom_mod+1
+	sta readC64Bytes_mod+1
 	ldy #0
 printName:
-	jsr readC64Bytes_rom
+	.bankJsr(L_readC64Bytes)
 	jsr jsrToRom
 	.DW $ffd2-1	; NOTE: !!!UNLOCKS IRQ!!!
 	iny

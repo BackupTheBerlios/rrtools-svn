@@ -96,12 +96,12 @@ noDefaultMode:
 	; copy filename to buffer
 
 	lda #$bb
-	sta readC64Bytes_ram_mod+1
+	sta readC64Bytes_mod+1
 
 	ldy #0
 	sty DfiFs_CommandPos
 copyFilename:
-	.bankJsr(L_readC64Bytes_ram)
+	.bankJsr(L_readC64Bytes)
 	sta DfiFs_CommandBuf,y
 	iny
 	cpy $b7
@@ -485,11 +485,11 @@ DfiFs_OpenCommandChannel:
 
 	; copy the complete command
 	lda #$bb
-	sta readC64Bytes_ram_mod+1
+	sta readC64Bytes_mod+1
 
 	ldy #0
 copyFilename:
-	.bankJsr(L_readC64Bytes_ram)
+	.bankJsr(L_readC64Bytes)
 	sta DfiFs_CommandBuf,y
 	iny
 	cpy $b7
