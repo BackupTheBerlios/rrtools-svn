@@ -4,6 +4,7 @@
 
 .struct_init
 DfiFs_MMC64_ParamOffset_ClusterBitShift		.struct_elem(1)
+DfiFs_MMC64_ParamOffset_ClusterMask		.struct_elem(1)
 DfiFs_MMC64_ParamOffset_FileSize		.struct_elem(4)
 DfiFs_MMC64_ParamOffset_FirstDataSector		.struct_elem(3)
 DfiFs_MMC64_ParamOffset_ClusLo			.struct_elem(2)

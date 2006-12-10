@@ -5,14 +5,15 @@
 ;--------------------------------------
 
 #segdef "bank0", $8100-$9e02, fillup, force, $00
-#segdef "bank1", $8100-$9e02, fillup, force, $00
+#segdef "bank1", $8100-$9f00, fillup, force, $00
+#segdef "bank2", $8100-$9f00, fillup, force, $00
 #segdef "switcher", $de02-$df00, fillup, force, $00
 #segdef "bankjsr", $8000-$8080, fillup, force, $00
 #segdef "bankjsr_bank", $8080-$8100, fillup, force, $00
 #segdef "bankjsr_lo", $9f00-$9f80, fillup, force, $00
 #segdef "bankjsr_hi", $9f80-$a000, fillup, force, $00
 
-#outfile @, startadr, $00, "bankjsr", "bankjsr_bank", "bank0", "switcher", "bankjsr_lo", "bankjsr_hi", "bankjsr", "bankjsr_bank", "bank1", "switcher", "bankjsr_lo", "bankjsr_hi"
+#outfile @, startadr, $00, "bankjsr", "bankjsr_bank", "bank0", "switcher", "bankjsr_lo", "bankjsr_hi", "bankjsr", "bankjsr_bank", "bank1", "bankjsr_lo", "bankjsr_hi", "bankjsr", "bankjsr_bank", "bank2", "bankjsr_lo", "bankjsr_hi"
 
 ;--------------------------------------
 
@@ -26,6 +27,9 @@
 	* = $8100
 
 	.segment "bank1"
+	* = $8100
+
+	.segment "bank2"
 	* = $8100
 
 	.segment "switcher"
@@ -150,6 +154,7 @@ BankCfg_C64	= $00|$22
 
 #include "dfi_fs_bank0.src"
 #include "dfi_fs_bank1.src"
+#include "dfi_fs_bank2.src"
 
 ;--------------------------------------
 

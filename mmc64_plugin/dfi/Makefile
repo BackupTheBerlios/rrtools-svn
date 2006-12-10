@@ -31,6 +31,7 @@ DFI_FS_SRC =	dfi_fs.src \
 		dfi_fs_bam.src \
 		dfi_fs_bank0.src \
 		dfi_fs_bank1.src \
+		dfi_fs_bank2.src \
 		dfi_fs_bank_jsr.src \
 		dfi_fs_cmd.src \
 		dfi_fs_dir.src \

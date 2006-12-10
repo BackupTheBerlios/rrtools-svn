@@ -4,7 +4,7 @@
 ; by Doc Bacardi/DRM
 ;--------------------------------------
 
-#segdef "zp", $26-$71
+#segdef "zp", $26-$8a
 #segdef "data", $6800-$7c00
 #segdef "code", $3000-$6800
 #segdef "dirbuffer", $0c00-$3000
@@ -52,6 +52,7 @@ ToggleEGDelay = $00
 
 LoadPtr				.DW 0
 HexdumpPtr			.DW 0
+exo_zp_area:			.DSB 7
 
 	.segment "data"
 
@@ -88,6 +89,8 @@ magic_buffer			.DSB $18
 
 dfi_fs_params			.DSB DfiFs_MMC64_ParamOffset_len
 
+DfiFs_KernalParameters_ClusterTableSize		.DW 0
+
 ;--------------------------------------
 ; start with code which does not run after booting the file.
 ; no need to save this area
@@ -106,9 +109,98 @@ dfi_fs_banks_start:
 
 #include "banks.lab"
 
+KernalMode_ClusterBufferSize = DfiFs_ClusterTable_End - DfiFs_ClusterTable_Start
+
+;--------------------------------------
+
+get_crunched_byte:
+    .(
+	inc selfMod0+1
+	bne selfMod0
+	inc selfMod0+2
+selfMod0:
+	lda dfi_fs_banks_start-1
+	rts
+    .)
+
+#include "exodecrunch.src"
+
+;--------------------------------------
+
+
 installKernelPatch:
     .(
 	sei
+
+	; copy parameter to struct
+	; NOTE: the parameters must be copied before the data is depacked. the bios
+	; parameters will be overwritten by the depacked data.
+	lda MMC64Plugin_ClusterBitShift
+	sta dfi_fs_params+DfiFs_MMC64_ParamOffset_ClusterBitShift
+
+	; this is for 512 sectors only!
+	lda MMCBios_SecPerCluster
+	asl
+	sec
+	sbc #1
+	sta dfi_fs_params+DfiFs_MMC64_ParamOffset_ClusterMask
+
+	ldx #3
+copyFileSize:
+	lda MMC64Plugin_FileSize,x
+	sta dfi_fs_params+DfiFs_MMC64_ParamOffset_FileSize,x
+	dex
+	bpl copyFileSize
+
+	ldx #2
+copyDataSector:
+	lda MMCBios_FirstDataSector,x
+	sta dfi_fs_params+DfiFs_MMC64_ParamOffset_FirstDataSector,x
+	dex
+	bpl copyDataSector
+
+	lda MMCBios_ClusLo
+	sta dfi_fs_params+DfiFs_MMC64_ParamOffset_ClusLo
+	lda MMCBios_ClusLo+1
+	sta dfi_fs_params+DfiFs_MMC64_ParamOffset_ClusLo+1
+	lda mmc64_param_device
+	sta dfi_fs_params+DfiFs_MMC64_ParamOffset_Device
+
+
+	; switch to ram
+	lda #$34
+	sta 1
+
+	; decrunch all banks
+	jsr decrunch
+
+	; copy cluster table
+	ldy #0
+	ldx #0
+copyClusterTable:
+	lda EntryMem_Start,y
+	; the clustertable is in bank 2, this means 2 * $2000 bytes offset from the 'real address'
+	sta DfiFs_ClusterTable_Start+$4000,y
+	iny
+	bne copyClusterTable0
+	inc copyClusterTable+2
+	inc copyClusterTable+5
+	inx
+copyClusterTable0:
+	cpy DfiFs_KernalParameters_ClusterTableSize
+	txa
+	sbc DfiFs_KernalParameters_ClusterTableSize+1
+	bcc copyClusterTable
+
+	; set cluster table size
+	lda DfiFs_KernalParameters_ClusterTableSize
+	sta DfiFs_ClusterTable_Size+$4000
+	lda DfiFs_KernalParameters_ClusterTableSize+1
+	sta DfiFs_ClusterTable_Size+$4000+1
+
+	; back to normal
+	lda #$37
+	sta 1
 
 	; switch to c64 mode
 	lda #$22
@@ -118,40 +210,6 @@ delay0:
 	nop
 	inx
 	bne delay0
-
-	; copy the main code to $8000
-	ldx #$20
-copyMainCode:
-	lda dfi_fs_banks_start,y
-	sta $8000,y
-	iny
-	bne copyMainCode
-	inc copyMainCode+2
-	inc copyMainCode+5
-	dex
-	bne copyMainCode
-
-	; copy parameter to struct
-	lda MMC64Plugin_ClusterBitShift
-	sta dfi_fs_params+DfiFs_MMC64_ParamOffset_ClusterBitShift
-	ldx #3
-copyFileSize:
-	lda MMC64Plugin_FileSize,x
-	sta dfi_fs_params+DfiFs_MMC64_ParamOffset_FileSize,x
-	dex
-	bpl copyFileSize
-	ldx #2
-copyDataSector:
-	lda MMCBios_FirstDataSector,x
-	sta dfi_fs_params+DfiFs_MMC64_ParamOffset_FirstDataSector,x
-	dex
-	bpl copyDataSector
-	lda MMCBios_ClusLo
-	sta dfi_fs_params+DfiFs_MMC64_ParamOffset_ClusLo
-	lda MMCBios_ClusLo+1
-	sta dfi_fs_params+DfiFs_MMC64_ParamOffset_ClusLo+1
-	lda mmc64_param_device
-	sta dfi_fs_params+DfiFs_MMC64_ParamOffset_Device
 
 	lda #<dfi_fs_params
 	ldy #>dfi_fs_params
@@ -164,67 +222,32 @@ installCopyCode:
 	sta copy_code_start,x
 	dex
 	bpl installCopyCode
-	sei
+
+	; copy bank 0
+	lda #>$8000
+	ldy #$80|$00|$23
 	jsr copy_code_start
 
-	lda #$e7
-	sta 1
+	; copy bank 1
+	lda #>$a000
+	ldy #$80|$08|$23
+	jsr copy_code_start
+
+	; copy bank 2
+	lda #>$c000
+	ldy #$80|$10|$23
+	jsr copy_code_start
 
 	; reinit back Basic env
 	jsr MMC64Plugin_InitKernel
 
-
-	; patch the vectors
-	lda #<DfiFs_Open
-	sta $031a
-	lda #>DfiFs_Open
-	sta $031b
-
-	lda #<DfiFs_Close
-	sta $031c
-	lda #>DfiFs_Close
-	sta $031d
-
-	lda #<DfiFs_ChangeKernalInput
-	sta $031e
-	lda #>DfiFs_ChangeKernalInput
-	sta $031f
-
-	lda #<DfiFs_ChangeKernalOutput
-	sta $0320
-	lda #>DfiFs_ChangeKernalOutput
-	sta $0321
-
-	lda #<DfiFs_ClearChannels
-	sta $0322
-	lda #>DfiFs_ClearChannels
-	sta $0323
-
-	lda #<DfiFs_CharIn
-	sta $0324
-	lda #>DfiFs_CharIn
-	sta $0325
-
-	lda #<DfiFs_CharOut
-	sta $0326
-	lda #>DfiFs_CharOut
-	sta $0327
-
-	lda #<DfiFs_GetIn
-	sta $032a
-	lda #>DfiFs_GetIn
-	sta $032b
-
-	lda #<DfiFs_Load
-	sta $0330
-	lda #>DfiFs_Load
-	sta $0331
-
-	lda #<DfiFs_Save
-	sta $0332
-	lda #>DfiFs_Save
-	sta $0333
-
+	; patch the load/save/open/get vectors
+	ldx #vectors_end-vectors_start-1
+installVectors:
+	lda vectors_start,x
+	sta $031a,x
+	dex
+	bpl installVectors
 
 	ldx #$ff
 	txs
@@ -232,26 +255,56 @@ installCopyCode:
 	jmp $e39a
 
 
+vectors_start:
+	.DW DfiFs_Open			; $031a
+	.DW DfiFs_Close			; $031c
+	.DW DfiFs_ChangeKernalInput	; $031e
+	.DW DfiFs_ChangeKernalOutput	; $0320
+	.DW DfiFs_ClearChannels		; $0322
+	.DW DfiFs_CharIn		; $0324
+	.DW DfiFs_CharOut		; $0326
+	.DW $f6ed			; $0328
+	.DW DfiFs_GetIn			; $032a
+	.DW $f32f			; $032c
+	.DW $fe66			; $032e
+	.DW DfiFs_Load			; $0330
+	.DW DfiFs_Save			; $0332
+vectors_end:
+
+
+
 copy_code_start_psy:
 	.PSEUDOPC $0340
 copy_code_start:
-	; always transfer a full page
+	sta copyDfi_selfModSrc+2
+	sty copyDfi_selfModBank+1
+
+	lda #$80
+	sta copyDfi_selfModDst+2
+
 	ldx #$20
 
 copyDfiFsCode0:
+	lda #$e4
+	sta 1
 	ldy #0
-copyDfiFsCode1:
-	lda $8000,y
+copyDfi_selfModSrc:
+	lda $ff00,y
 	sta $0400,y
 	iny
-	bne copyDfiFsCode1
+	bne copyDfi_selfModSrc
+	lda #$e7
+	sta 1
 
-	; switch to bank 0, ram
-	ldy #$80|$00|$23
+	; switch to bank x, ram
+copyDfi_selfModBank:
+	ldy #$ff
 	jsr switchToBank
 
+	ldy #0
 copyDfiFsCode2:
 	lda $0400,y
+copyDfi_selfModDst:
 	sta $8000,y
 	iny
 	bne copyDfiFsCode2
@@ -259,30 +312,8 @@ copyDfiFsCode2:
 	ldy #$22
 	jsr switchToBank
 
-	ldy #0
-copyDfiFsCode3:
-	lda dfi_fs_banks_start+$2000,y
-	sta $0400,y
-	iny
-	bne copyDfiFsCode3
-
-	; switch to bank 1, ram
-	ldy #$80|$08|$23
-	jsr switchToBank
-
-copyDfiFsCode4:
-	lda $0400,y
-	sta $8000,y
-	iny
-	bne copyDfiFsCode4
-
-	ldy #$22
-	jsr switchToBank
-
-	inc copyDfiFsCode1+2
-	inc copyDfiFsCode2+5
-	inc copyDfiFsCode3+2
-	inc copyDfiFsCode4+5
+	inc copyDfi_selfModSrc+2
+	inc copyDfi_selfModDst+2
 	dex
 	bne copyDfiFsCode0
 	rts
@@ -373,7 +404,7 @@ scanLoop:
 
 	jsr scanJmpR
 
-	; that's too much output
+	; that's too much output for the normal mode
 	lda DebugMode
 	beq noDebugMode
 	lda MMC64Plugin_Cluster+1
@@ -453,8 +484,8 @@ scanJmpR_dummy:
 romCheck:
     .(
 	; init the results
-	lda #0
-	sta flag_retroReplay_present
+	ldy #0
+	sty flag_retroReplay_present
 
 	; detect retro replay style hardware, other modules might crash :(
 	jsr detectRetroReplay
@@ -497,70 +528,99 @@ check:
 
 detectRetroReplay:
     .(
-	; configure rr: reu mem map, no freeze, allow banking
-	lda #%01000110
+	sei
+
+	; configure rr
 	sta $de01
+	eor $de01
+	and #%01000010
+	bne detectRR_miss
+
+	; copy switcher code
+	ldx #detectRR_switcher_len-1
+copySwitcherCode:
+	lda detectRR_switcher_psy,x
+	sta detectRR_switcher_start,x
+	dex
+	bpl copySwitcherCode
 
 	; write values to all banks, c64 val is special
-	lda #$22
-	jsr detectRR_switcher
-	lda #$a0
-	sta $9eff
-
-	ldy #1
+	ldx #detectRR_bankTabRw_len-1
 detectRR0:
-	lda detectRR_bankTab,y
-	jsr detectRR_switcher
-	tya
-	ora #$a0
-	sta $deff
-	iny
-	cpy #detectRR_bankTab_len
-	bcc detectRR0
-
-	lda #13
-	jsr $ffd2
+	ldy detectRR_bankTabRw,x
+	jsr detectRR_switcherWrite
+	dex
+	bpl detectRR0
 
 	; read values back
-	ldy #0
+	ldx #detectRR_bankTabRo_len-1
 detectRR1:
-	lda detectRR_bankTab,y
-	jsr detectRR_switcher
-	tya
-	ora #$a0
-	cmp $9eff
+	ldy detectRR_bankTabRo,x
+	jsr detectRR_switcherRead
 	bne detectRR_miss
-	iny
-	cpy #detectRR_bankTab_len
-	bcc detectRR1
+	dex
+	bpl detectRR1
 
-	; ok, retro replay found!
-	lda #$22
-	jsr detectRR_switcher
+	cli
 	clc
 	rts
 
 detectRR_miss:
 	; no retro replay
+	cli
 	sec
 	rts
 
 
-detectRR_bankTab:
+detectRR_bankTabRo:
 	.DB %00100010
 	.DB %00100000
 	.DB %00101000
 	.DB %00110000
 	.DB %00111000
-detectRR_bankTab_len = * - detectRR_bankTab
+detectRR_bankTabRo_len = * - detectRR_bankTabRo
 
-detectRR_switcher:
-	sta $de00
-	ldx #ToggleEGDelay
-detectRR_switcher1:
-	inx
-	bne detectRR_switcher1
+detectRR_bankTabRw:
+	.DB %00100010
+	.DB %00100011
+	.DB %00101011
+	.DB %00110011
+ 	.DB %00111011
+detectRR_bankTabRw_len = * - detectRR_bankTabRw
+
+
+detectRR_switcher_psy:
+	.PSEUDOPC $0340
+detectRR_switcher_start:
+
+detectRR_switcherRead:
+	jsr detectRR_switcher
+	txa
+	ora #$a0
+	eor $8000
+	pha
+	ldy #$22
+	jsr detectRR_switcher
+	pla
 	rts
+
+detectRR_switcherWrite:
+	jsr detectRR_switcher
+	txa
+	ora #$a0
+	sta $8000
+	ldy #$22
+detectRR_switcher:
+	sty $de00
+	ldy #0
+detectRR_switcher_delay:
+	nop
+	iny
+	bne detectRR_switcher_delay
+	rts
+	.REALPC
+detectRR_switcher_len = * - detectRR_switcher_psy
+
     .)
 
 
@@ -582,9 +642,9 @@ initRetroReplay:
 	lda #1
 	sta flag_retroReplay_present
 
-	lda #<(4*$fe+1)
+	lda #<((4*$fe+1)/2)
 	sta scanFile_MaxMem
-	lda #>(4*$fe+1)
+	lda #>((4*$fe+1)/2)
 	sta scanFile_MaxMem+1
 	lda #<rrRamWrite
 	sta scanFile_WriteRoutine
@@ -1111,6 +1171,8 @@ fileSizeOk:
 	sta scanFile_MaxMem
 	sta scanFile_MaxMem+1
 
+	; configure rr: reu mem map, no freeze, allow banking
+	lda #%01000110
 	jsr romCheck
 	bcs quitPlugin
 
@@ -1146,6 +1208,8 @@ quitPlugin:
 
 
 pluginMode_kernal:
+	; configure rr: reu mem map, no freeze, do not allow banking
+	lda #%01000100
 	jsr romCheck
 	bcs quitPlugin
 
@@ -1167,16 +1231,66 @@ noDebug3:
 	jmp quitPlugin
 
 kernal_cart_found:
-	; disable rr mode
-	lda #0
-	sta scanFile_BufModeAvailable
-	; select loader mode
-	jsr selectLoaderMode
+	; set size of available memory
+	lda #<(KernalMode_ClusterBufferSize/2)
+	sta scanFile_MaxMem
+	lda #>(KernalMode_ClusterBufferSize/2)
+	sta scanFile_MaxMem+1
+	; set write routine
+	lda #<KernalMode_WriteCluster
+	sta scanFile_WriteRoutine
+	lda #>KernalMode_WriteCluster
+	sta scanFile_WriteRoutine+1
+
+	; set start of mem
+	lda #<EntryMem_Start
+	sta LoadPtr
+	lda #>EntryMem_Start
+	sta LoadPtr+1
+
+	; scan the image
+	jsr scanFile
 	bcs quitPlugin
+
+	; did the cluster table fit into the buffer?
+	lda scanFile_BufModeAvailable
+	beq fileTooLarge
+
+	; get the size of the cluster table
+	sec
+	lda LoadPtr
+	sbc #<EntryMem_Start
+	sta DfiFs_KernalParameters_ClusterTableSize
+	lda LoadPtr+1
+	sbc #>EntryMem_Start
+	sta DfiFs_KernalParameters_ClusterTableSize+1
 
 	; pluginMode_kernel
 	jmp installKernelPatch
 
+fileTooLarge:
+	lda #<Err_Kernal_ClusterBufferFull
+	ldy #>Err_Kernal_ClusterBufferFull
+	jsr $ab1e
+	jsr debugStep
+	jmp quitPlugin
+
+KernalMode_WriteCluster:
+	pha
+	tya
+	ldy #1
+	sta (LoadPtr),y
+	dey
+	pla
+	sta (LoadPtr),y
+	lda LoadPtr
+	clc
+	adc #2
+	sta LoadPtr
+	bcc KernalMode_WriteCluster0
+	inc LoadPtr+1
+KernalMode_WriteCluster0:
+	rts
 
 ;--------------------------------------
 
@@ -1785,6 +1899,9 @@ Err_TrackNumer:
 Err_TracksExceedFile:
 	.PET "the number of tracks exceeds the", 13
 	.PET "filesize!", 13, 0
+
+Err_Kernal_ClusterBufferFull:
+	.PET "file too large for this cluster size!", 13, 0
 
 ;--------------------------------------
 

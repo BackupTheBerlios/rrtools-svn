@@ -53,6 +53,7 @@ DfiFs_MMC64_BlockBuffer:
 
 
 DfiFs_MMC64_ClusterBitShift		.DB 0
+DfiFs_MMC64_ClusterMask			.DB 0
 DfiFs_MMC64_FileSize			.DSB 4
 DfiFs_MMC64_FilePos			.DSB 4
 
@@ -72,6 +73,10 @@ DfiFs_MMC64_RetryCnt			.DB 0
 
 crc16_value				.DW 0
 
+DfiFs_MMC64_LastSkipClusters		.DW 0		; number of clusters to skip for the last request
+DfiFs_MMC64Zp_SkipClusters		.DW 0		; number of clusters to skip for a requested block
+DfiFs_MMC64Zp_ClusterOffset		.DW 0		; offset in cluster for a requested block
+
 ;--------------------------------------
 
 ; NOTE: this routine must not use bankswitching.
@@ -87,6 +92,11 @@ crc16_value				.DW 0
 	ldy #DfiFs_MMC64_ParamOffset_ClusterBitShift
 	lda (DfiFsZp_BufPtr),y
 	sta DfiFs_MMC64_ClusterBitShift
+
+	; get cluster mask
+	ldy #DfiFs_MMC64_ParamOffset_ClusterMask
+	lda (DfiFsZp_BufPtr),y
+	sta DfiFs_MMC64_ClusterMask
 
 	; init filesize and position
 	ldx #3
@@ -119,6 +129,8 @@ copyClusLo:
 	lda (DfiFsZp_BufPtr),y
 	sta DfiFs_MMC64_StartCluster,x
 	sta DfiFs_MMC64_Cluster,x
+	lda #0
+	sta DfiFs_MMC64_LastSkipClusters,x
 	dex
 	bpl copyClusLo
 
@@ -127,26 +139,26 @@ copyClusLo:
 	ldx #0
 	ldy #2
 	clc
-copyFistSector:
+copyFirstSector:
 	lda DfiFs_MMC64_Sector,x
 	rol
 	sta DfiFs_MMC64_FirstFileSector,x
 	inx
 	dey
-	bpl copyFistSector
+	bpl copyFirstSector
 
 	ldy #DfiFs_MMC64_ParamOffset_Device
 	lda (DfiFsZp_BufPtr),y
 	sta DfiFs_MMC64_param_device
 
-	lda #<DfiFs_MMC64_ReadSector
+	lda #<DfiFs_MMC64_ReadBlock
 	sta DfiFs_ReadBlock+1
-	lda #>DfiFs_MMC64_ReadSector
+	lda #>DfiFs_MMC64_ReadBlock
 	sta DfiFs_ReadBlock+2
 
-	lda #<DfiFs_MMC64_WriteSector
+	lda #<DfiFs_MMC64_WriteBlock
 	sta DfiFs_WriteBlock+1
-	lda #>DfiFs_MMC64_WriteSector
+	lda #>DfiFs_MMC64_WriteBlock
 	sta DfiFs_WriteBlock+2
 
 	clc
@@ -160,39 +172,75 @@ copyFistSector:
 
 DfiFs_MMC64_GetBlockAddress:
     .(
-;	lda DfiFs_MMC64_param_device
-;	cmp #DLoad_MMC64Cnt_DeviceAddress
-;	bne plain
-
+	; track must not be 0
 	txa
 	beq error
 	dex
 
-	; continuous mode
+	; get clusteroffset for the block address
 	tya
-	and #$fe
-	clc
-	adc DfiFs_MMC64_FirstFileSector
-	sta DfiFs_MMC64_Sector
+	sta DfiFs_MMC64Zp_SkipClusters
+
+	; get block offset in the cluster
+	and DfiFs_MMC64_ClusterMask
+	lsr
+	sta DfiFs_MMC64Zp_ClusterOffset
+
+	; get number of clusters to skip
 	txa
-	adc DfiFs_MMC64_FirstFileSector+1
-	sta DfiFs_MMC64_Sector+1
-	lda DfiFs_MMC64_FirstFileSector+2
-	adc #0
-	sta DfiFs_MMC64_Sector+2
+	ldx DfiFs_MMC64_ClusterBitShift
+shiftBlocks:
+	lsr
+	ror DfiFs_MMC64Zp_SkipClusters
+	dex
+	bpl shiftBlocks
+	sta DfiFs_MMC64Zp_SkipClusters+1
+
+	; compare with last cluster skip
+	lda DfiFs_MMC64Zp_SkipClusters
+; 	cmp DfiFs_MMC64_LastSkipClusters
+; 	bne differentCluster
+	ldy DfiFs_MMC64Zp_SkipClusters+1
+; 	cpy DfiFs_MMC64_LastSkipClusters+1
+; 	beq sameCluster
+; differentCluster:
+	; get cluster number from the offset
+	.bankJsr(L_DfiFs_GetMMC64Cluster)
+	bcs error
+	sta DfiFs_MMC64_Cluster
+	sty DfiFs_MMC64_Cluster+1
+
+	; cluster holds now the number of the new offset
+	lda DfiFs_MMC64Zp_SkipClusters
+	sta DfiFs_MMC64_LastSkipClusters
+	lda DfiFs_MMC64Zp_SkipClusters+1
+	sta DfiFs_MMC64_LastSkipClusters+1
+
+sameCluster:
+	; get the start sector for the cluster
+	jsr DfiFs_MMC64_GetFirstSectorOfCluster
+
+	; add the cluster offset to the sector
+	clc
+	lda DfiFs_MMC64_Sector
+	adc DfiFs_MMC64Zp_ClusterOffset
+	sta DfiFs_MMC64_Sector
+	bcc addOfset0
+	inc DfiFs_MMC64_Sector+1
+	bne addOfset0
+	inc DfiFs_MMC64_Sector+2
+addOfset0:
+
+	asl DfiFs_MMC64_Sector
+	rol DfiFs_MMC64_Sector+1
+	rol DfiFs_MMC64_Sector+2
+
 	clc
 	rts
 
 error:
 	sec
 	rts
-
-plain:
-	lda #2
-	sta $d021
-
-	inc $d020
-	jmp plain
     .)
 
 

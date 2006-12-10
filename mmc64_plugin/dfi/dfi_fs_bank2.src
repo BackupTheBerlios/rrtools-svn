@@ -1,0 +1,68 @@
+
+	.segment "bank2"
+
+    .(
+
+DfiFs_MMC64Zp_Offset			.DW 0
+
+;--------------------------------------
+
+	.setBank(2, BankCfg_2_Ram)
+
+DfiFs_GetMMC64Cluster:
+.defBJL(DfiFs_GetMMC64Cluster)
+    .(
+	;prevent overflow
+	cpy #$80
+	bcs illegalOffset
+
+	; save offset * 2
+	asl
+	sta DfiFs_MMC64Zp_Offset
+	tya
+	rol
+	sta DfiFs_MMC64Zp_Offset+1
+
+	; valid entry?
+	lda DfiFs_MMC64Zp_Offset
+	cmp DfiFs_ClusterTable_Size
+	lda DfiFs_MMC64Zp_Offset+1
+	sbc DfiFs_ClusterTable_Size+1
+	bcs illegalOffset
+
+	; yes, entry is valid
+	lda DfiFs_MMC64Zp_Offset
+	adc #<DfiFs_ClusterTable_Start
+	sta selfMod0+1
+	lda DfiFs_MMC64Zp_Offset+1
+	adc #>DfiFs_ClusterTable_Start
+	sta selfMod0+2
+
+	; load hi byte to y, load lo byte to a
+	ldx #1
+getClusterLoop:
+	tay
+selfMod0:
+	lda DfiFs_ClusterTable_Start,x
+	dex
+	bpl getClusterLoop
+
+	clc
+	rts
+
+illegalOffset:
+	sec
+	rts
+    .)
+
+@0DfiFs_ClusterTable_Size:
+	.DW 0
+
+@0DfiFs_ClusterTable_Start:
+	.DSB $9e02 - *
+@0DfiFs_ClusterTable_End:
+
+;--------------------------------------
+
+    .)
+
