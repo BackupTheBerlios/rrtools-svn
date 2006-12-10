@@ -65,7 +65,7 @@ dfitest.prg: dfitest.src banks.exo banks.lab
 
 .PHONY: sim
 
-dfitest.d64: dfitest.prg banks.bin
+dfitest.d64: dfitest.prg
 	rm -f $@
 	cbmconvert -nD4 $@ $^
 
