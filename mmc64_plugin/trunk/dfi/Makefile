@@ -51,6 +51,9 @@ SOURCES =	actions.src \
 		$(MYLENE_SRC)/mylene/mylene.src \
 		$(DLOAD_SRC)/dload/mmcparam.src
 
+HEADERS =	$(MYLENE_SRC)/mylene/entry.h \
+		$(MYLENE_SRC)/mylene/mylene.h
+
 
 banks.bin banks.lab: $(DFI_FS_SRC)
 	$(DA) -v -d banks.html -l banks.lab -o banks.bin $<
@@ -58,7 +61,7 @@ banks.bin banks.lab: $(DFI_FS_SRC)
 banks.exo: banks.bin
 	$(EXO) -r -o $@ $<
 
-$(TARGET).bin: $(TARGET).src $(SOURCES) banks.exo banks.lab
+$(TARGET).bin: $(TARGET).src $(SOURCES) $(HEADERS) banks.exo banks.lab
 	$(DA) -I$(MMC64_PLUGIN_SRC) -I$(MYLENE_SRC) -I$(DLOAD_SRC) -v -d $(TARGET).html -l $(TARGET).lab -o $@ $(TARGET).src
 
 dfitest.prg: dfitest.src banks.exo banks.lab
