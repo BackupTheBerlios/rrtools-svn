@@ -32,9 +32,6 @@ ListOutZp_TmpPtr		.DW 0
 BarPtr				.DW 0
 BarCrsrPos			.DB 0
 
-LevelBuf			.DSB level_entry_size
-LevelAction			.DSB level_action_size
-
 ;--------------------------------------
 
 	.segment "data"
@@ -52,5 +49,8 @@ LevelMax			.DB 0
 Level0Init			.DW 0
 
 MovePrevCache_LastHeader	.DW 0
+
+LevelBuf			.DSB level_entry_size
+LevelAction			.DSB level_action_size
 
 ;--------------------------------------

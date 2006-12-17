@@ -51,7 +51,6 @@ EntryZp_ListEnd		.DW 0
 EntryZp_MemEnd		.DW 0
 EntryZp_ActHeader	.DW 0
 EntryZp_ActEntry	.DW 0
-EntryZp_HBuf		.DSB DirH_len
 EntryZp_HeadPtr		.DW 0
 EntryZp_FirstPtr	.DW 0
 EntryZp_LastPtr		.DW 0
@@ -65,6 +64,7 @@ EntryZp_LastScrlLine	.DB 0
 	.segment "data"
 
 Entry_EBuf		.DSB DirE_len
+EntryZp_HBuf		.DSB DirH_len
 
 ;--------------------------------------
 
