@@ -4,7 +4,7 @@
 ; by Doc Bacardi/DRM
 ;--------------------------------------
 
-#segdef "zp", $26-$8a
+#segdef "zp", $26-$61
 #segdef "data", $6800-$7c00
 #segdef "code", $3000-$6800
 #segdef "dirbuffer", $0c00-$3000
@@ -733,8 +733,7 @@ checkMagic:
 	ldx #3
 skipHeader0:
 	jsr MMC64Plugin_GetByte
-psy_read_error:
-	bcs read_error
+	bcs psy_read_error
 	dex
 	bpl skipHeader0
 
@@ -742,7 +741,7 @@ psy_read_error:
 	ldx #0
 getTracks:
 	jsr MMC64Plugin_GetByte
-	bcs read_error
+	bcs psy_read_error
 	sta Dfi_MaxTracks,x
 	inx
 	cpx #4
@@ -780,8 +779,13 @@ showTracks:
 	sbc #0
 	bcc fileSizeError
 
+	lda #'*'
+	jsr $ffd2
+	jsr debugStep
+
 	; get rootdir track / sector
 	jsr MMC64Plugin_GetByte
+psy_read_error:
 	bcs read_error
 	sta dfi_rootDir
 	jsr MMC64Plugin_GetByte
@@ -1161,6 +1165,10 @@ openOk:
 	jmp quitPlugin
 fileSizeOk:
 
+	; open the image (also checks for magic)
+	jsr openImage
+	bcs quitPlugin
+
 	; select kernal or dload mode
 	jsr selectPluginMode
 	bcs quitPlugin
@@ -1180,10 +1188,6 @@ fileSizeOk:
 	jsr scanFile
 	bcs quitPlugin
 
-	; open the image
-	jsr openImage
-	bcs quitPlugin
-
 	; select loader mode
 	jsr selectLoaderMode
 	bcs quitPlugin
@@ -1201,7 +1205,11 @@ quitPlugin:
 	lda #<Msg_Exit
 	ldy #>Msg_Exit
 	jsr $ab1e
-	jsr debugStep
+
+	; wait for keypress
+waitForKey:
+	jsr $ffe4
+	beq waitForKey
 
 	; go back to MMC64 browser
 	jmp MMC64Plugin_Exit
@@ -1803,7 +1811,7 @@ Msg_EnterApplication:
 	.PET "enter application...", 13, 0
 
 Msg_Exit:
-	.PET "exit to mmc64 browser", 13, 0
+	.PET "exit to mmc64 browser, press a key", 13, 0
 
 Msg_Booting:
 	.PET "booting file ", 0
