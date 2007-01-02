@@ -1178,6 +1178,7 @@ void CBMImager::ReadCbmDirectory()
 
 void CBMImager::AddFile(wxString& filename)
 {
+	unsigned char aucBuffer[17];
 	int track = 0, sector = 0, readBytes;
 	int newTrack = 0, newSector = 0;
 	byte buffer[256];
@@ -1195,8 +1196,25 @@ void CBMImager::AddFile(wxString& filename)
 		dialog->Destroy();
 		return;
 	}
+#ifdef __WIN32__
 	wxString fName = filename.AfterLast('\\');
+#else
+	wxString fName = filename.AfterLast('/');
+#endif
+
 	fName = fName.Left(16);
+	// Check, if a File with this name already exist
+	if (cbmDir->SearchFile(cbmImage, (const char*)CCbmImageBase::ASCII2PET(fName.mb_str(), 16, aucBuffer), false, false) == true)
+	{
+		CRenameDialog dialog(this, fName);
+		if (dialog.ShowModal() == wxID_OK)
+		{
+			fName = CCbmImageBase::ASCII2PET(dialog.GetText().mb_str(), 16, aucBuffer);
+		}
+		else
+			return;
+	}
+
 	try
 	{
 		entry = cbmDir->CreateNewEntry(cbmImage, fName.mb_str());

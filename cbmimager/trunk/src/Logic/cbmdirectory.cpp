@@ -335,7 +335,7 @@ bool CCbmDirectory::CreateSubDirectory(CCbmImageBase *image, const char *name)
 }
 
 
-bool CCbmDirectory::SearchFile(CCbmImageBase *image, const char *fileName, bool partial)
+bool CCbmDirectory::SearchFile(CCbmImageBase *image, const char *fileName, bool partial, bool searchSubDirs)
 {
 	int i;
 	bool result = false;
@@ -349,10 +349,13 @@ bool CCbmDirectory::SearchFile(CCbmImageBase *image, const char *fileName, bool 
 			CCbmDirectoryEntry *entry = dirEntries[i];
 			if (entry->GetFileType() == CBM_DIR && image->GetImageType() == DFI)
 			{
-				subDir = new CCbmDirectory(image, entry->GetFileStartTrack(), entry->GetFileStartSector());
-				result = subDir->SearchFile(image, fileName, partial);
-				delete subDir;
-				subDir = NULL;
+				if (searchSubDirs)
+				{
+					subDir = new CCbmDirectory(image, entry->GetFileStartTrack(), entry->GetFileStartSector());
+					result = subDir->SearchFile(image, fileName, partial);
+					delete subDir;
+					subDir = NULL;
+				}
 			}
 			else
 			{

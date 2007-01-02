@@ -168,6 +168,8 @@ CCbmSector *CCbmImageBase::GetSector(int track, int sector)
 
 void CCbmImageBase::WriteSector(CCbmSector *sector)
 {
+//	if (sector->GetTrack() == 1 && sector->GetSector() == 33)
+//		int i = 0;
     int offset = GetSectorOffset(sector->GetTrack(), sector->GetSector());		// Get offset of Sector
 	memcpy(image + offset, sector->GetRawSector(), 256);						// Write data to Image
 }

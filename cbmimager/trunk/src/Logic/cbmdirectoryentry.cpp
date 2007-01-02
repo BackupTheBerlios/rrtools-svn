@@ -48,7 +48,7 @@ CCbmDirectoryEntry::CCbmDirectoryEntry(CCbmImageBase *image, CCbmSector *sectorD
 {
 	int track, sector;
 	bool cont = true;
-
+	int offset;
 
 	Init();
 
@@ -75,18 +75,17 @@ CCbmDirectoryEntry::CCbmDirectoryEntry(CCbmImageBase *image, CCbmSector *sectorD
 	while (track > 0 && cont)
 	{
 		sectorArray.Add((track << 16) + sector);
-		CCbmSector *sec = image->GetSector(track, sector);
-		track = sec->GetNextTrack();
-		sector = sec->GetNextSector();
+		offset = image->GetSectorOffset(track, sector);
+		track =  image->GetRawImage()[offset + 0];
+		sector = image->GetRawImage()[offset + 1];
 		if (sectorArray.Index((track << 16) + sector) != wxNOT_FOUND)	// circular link encountered
 		{
 			cont = false;
 			circularLinked = true;					// mark file as bad
-			sec->SetNextTrack(0);
-			sec->SetNextSector(255);
-			image->WriteSector(sec);				// Fix the Link to prevent freezing when deleting or extracting the file
+			// Fix the Link to prevent freezing when deleting or extracting the file
+			image->GetRawImage()[offset + 0] = 0;	// next Track
+			image->GetRawImage()[offset + 1] = 255; // next Sector
 		}
-		delete sec;
 		blocksUsedReal++;
 	}
 }

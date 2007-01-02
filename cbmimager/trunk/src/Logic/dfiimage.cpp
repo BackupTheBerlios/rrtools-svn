@@ -104,13 +104,14 @@ void CDFIImage::InitImage()
     CCbmSector *sec = GetSector(1, 0);		// Read DFI-Header
     bam = GetSector(sec->GetRawSector()[0x20], sec->GetRawSector()[0x21]);		// ROOT Sector
     bamStart = GetSectorOffset(sec->GetRawSector()[0x22], sec->GetRawSector()[0x23]);
-	delete sec;
 
     AllocateSector(1, 0);                   // Allocate DFI Header
     AllocateSector(1, 1);                   // Allocate Root Sector
     AllocateSector(1, 2);                   // Allocate first Directory Block
 	for (int i = 0; i < 32; i++)
-		AllocateSector(bam->GetTrack(), bam->GetSector() + i);	// Allocate BAM (32 Sectors)
+		AllocateSector(sec->GetRawSector()[0x22], sec->GetRawSector()[0x23] + i);	// Allocate BAM (32 Sectors)
+
+	delete sec;
 }
 
 

@@ -61,7 +61,7 @@ public:
 	bool MoveEntry(CCbmImageBase *image, int fromIndex, int toIndex);
 
 	bool CreateSubDirectory(CCbmImageBase *image, const char *name);
-	bool SearchFile(CCbmImageBase *image, const char *fileName, bool partial = true);
+	bool SearchFile(CCbmImageBase *image, const char *fileName, bool partial = true, bool searchSubDirs = true);
 
 	// returns the number of files in the given directory
 	int GetFileCount(CCbmImageBase *image, CCbmDirectoryEntry *dirEntry);
