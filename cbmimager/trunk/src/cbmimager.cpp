@@ -683,7 +683,10 @@ void CBMImager::OnMenufilesaveClick( wxCommandEvent& event )
 			fileDlg->Destroy();
 		}
 		else
+		{
+			event.SetClientData((void*)1);		// Set Flag to avoid recursive calls from FileSaveAs
 			OnMenufilesaveasClick(event);
+		}
 	}
     event.Skip();
 }
@@ -700,7 +703,7 @@ void CBMImager::OnMenufilesaveasClick( wxCommandEvent& event )
 	if (cbmImage != NULL)
 	{
 		sImagePath = cbmImage->GetImagePath();
-		if ( sImagePath.IsEmpty()==false )
+		if ( sImagePath.IsEmpty()==false || event.GetClientData() != NULL)
 		{
 			wxFileDialog *fileDlg;
 			wxString filter;
@@ -1206,6 +1209,16 @@ void CBMImager::AddFile(wxString& filename)
 		dialog->Destroy();
 		if (entry != NULL)
 			delete entry;
+		return;
+	}
+
+	// Maybe we allocated a new Directory Sector in CreateNewEntry(), so check again for free sectors for the file
+	if (!cbmImage->GetNextFreeSector(1, 0, &track, &sector))
+	{
+		wxMessageDialog* dialog = new wxMessageDialog(this,
+			wxT("Disk full"), wxT("CBMImager"), wxOK | wxICON_ERROR);
+		dialog->ShowModal();
+		dialog->Destroy();
 		return;
 	}
 
