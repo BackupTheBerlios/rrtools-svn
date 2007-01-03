@@ -37,6 +37,7 @@
 
 
 ////@begin includes
+#include "cbmimager_version.h"
 #include "filesearcher.h"
 #include "cbmimager.h"
 
@@ -222,14 +223,14 @@ void CFileSearcher::OnButtonsearchClick( wxCommandEvent& event )
 
 	if (m_searchFolder->GetValue().IsEmpty())
 	{
-		wxMessageDialog* dialog = new wxMessageDialog(this, wxT("Please select a Folder first"), wxT("CBMImager"), wxOK | wxICON_WARNING);
+		wxMessageDialog* dialog = new wxMessageDialog(this, wxT("Please select a Folder first"), wxT(CBMIMAGER_APPLICATION_NAME), wxOK | wxICON_WARNING);
 		dialog->ShowModal();
 		dialog->Destroy();
 		return;
 	}
 	if (m_searchText->GetValue().IsEmpty())
 	{
-		wxMessageDialog* dialog = new wxMessageDialog(this, wxT("Nothing to search for"), wxT("CBMImager"), wxOK | wxICON_WARNING);
+		wxMessageDialog* dialog = new wxMessageDialog(this, wxT("Nothing to search for"), wxT(CBMIMAGER_APPLICATION_NAME), wxOK | wxICON_WARNING);
 		dialog->ShowModal();
 		dialog->Destroy();
 		return;

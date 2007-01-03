@@ -33,13 +33,19 @@
 #include "wx/wx.h"
 #endif
 
-////@begin includes
-////@end includes
-
+#include "cbmimager_version.h"
 #include "cbmimagerapp.h"
 
-////@begin XPM images
-////@end XPM images
+
+// some necessary wx features
+//#if !wxUSE_ZIPSTREAM
+//	#error "This tool requires zipstream support!"
+//#endif
+
+//#if !wxUSE_ZLIB
+//	#error "This tool requires zlib support!"
+//#endif
+
 
 /*!
  * Application instance implementation
@@ -89,37 +95,41 @@ void CbmImagerApp::Init()
 }
 
 bool CbmImagerApp::OnInit()
-{    
-////@begin CbmImagerApp initialisation
-	// Remove the comment markers above and below this block
-	// to make permanent changes to the code.
+{
+	CBMImager *mainWindow;
 
-#if wxUSE_XPM
-	wxImage::AddHandler(new wxXPMHandler);
-#endif
-#if wxUSE_LIBPNG
-	wxImage::AddHandler(new wxPNGHandler);
-#endif
-#if wxUSE_LIBJPEG
-	wxImage::AddHandler(new wxJPEGHandler);
-#endif
-#if wxUSE_GIF
-	wxImage::AddHandler(new wxGIFHandler);
-#endif
-	CBMImager* mainWindow = new CBMImager( NULL, ID_CBMIMAGER );
+
+	wxInitAllImageHandlers();
+//	wxFileSystem::AddHandler(new wxZipFSHandler);
+
+	// set application and vendor name, this is needed
+	// for the config file (unix) or registry keys (win)
+	SetVendorName(wxT("TheDreams"));
+	SetAppName(wxString::FromAscii(CBMIMAGER_APPLICATION_NAME));
+
+	// create the main window
+	mainWindow = new CBMImager(NULL, ID_CBMIMAGER);
+
+	// show the main window
 	mainWindow->Show(true);
-////@end CbmImagerApp initialisation
+	SetTopWindow(mainWindow);
 
-    return true;
+	return true;
 }
 
 /*!
  * Cleanup for CbmImagerApp
  */
 int CbmImagerApp::OnExit()
-{    
-////@begin CbmImagerApp cleanup
+{
+	wxConfigBase *pConfig;
+
+
+	pConfig = wxConfigBase::Set((wxConfigBase *) NULL);
+	if( pConfig!=NULL ) {
+		delete pConfig;
+	}
+
 	return wxApp::OnExit();
-////@end CbmImagerApp cleanup
 }
 

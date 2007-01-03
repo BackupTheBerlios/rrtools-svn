@@ -36,6 +36,7 @@
 #endif
 
 ////@begin includes
+#include "cbmimager_version.h"
 #include "bameditor.h"
 #include "trackeditor.h"
 #include "cbmimager_id.h"
@@ -302,7 +303,7 @@ void CBamEditor::ReadCbmDirectory()
 	}
 	catch (char* text)
 	{
-		wxMessageDialog* dialog = new wxMessageDialog(NULL, wxString::FromAscii(text), wxT("CBMImager"), wxOK);
+		wxMessageDialog* dialog = new wxMessageDialog(NULL, wxString::FromAscii(text), wxT(CBMIMAGER_APPLICATION_NAME), wxOK);
 		dialog->ShowModal();
 		dialog->Destroy();
 		return;

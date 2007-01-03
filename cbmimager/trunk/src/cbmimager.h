@@ -33,6 +33,8 @@
  */
 
 ////@begin includes
+#include <wx/fileconf.h>
+#include <wx/filename.h>
 #include <wx/frame.h>
 #include <wx/statusbr.h>
 #include <wx/splitter.h>
@@ -90,11 +92,12 @@ class CBMImager: public wxFrame
 
 public:
     /// Constructors
-    CBMImager( );
-    CBMImager( wxWindow* parent, wxWindowID id = SYMBOL_CBMIMAGER_IDNAME, const wxString& caption = SYMBOL_CBMIMAGER_TITLE, const wxPoint& pos = SYMBOL_CBMIMAGER_POSITION, const wxSize& size = SYMBOL_CBMIMAGER_SIZE, long style = SYMBOL_CBMIMAGER_STYLE );
+    CBMImager(void);
+    CBMImager(wxWindow* parent, wxWindowID id = SYMBOL_CBMIMAGER_IDNAME, long style = SYMBOL_CBMIMAGER_STYLE);
+    ~CBMImager(void);
 
     /// Creation
-    bool Create( wxWindow* parent, wxWindowID id = SYMBOL_CBMIMAGER_IDNAME, const wxString& caption = SYMBOL_CBMIMAGER_TITLE, const wxPoint& pos = SYMBOL_CBMIMAGER_POSITION, const wxSize& size = SYMBOL_CBMIMAGER_SIZE, long style = SYMBOL_CBMIMAGER_STYLE );
+    bool Create( wxWindow* parent, wxWindowID id = SYMBOL_CBMIMAGER_IDNAME, long style = SYMBOL_CBMIMAGER_STYLE );
 
     /// Initialises member variables
     void Init();
@@ -183,7 +186,15 @@ private:
 	wxArrayString usedTempFiles;
 	int itemUnderCursor;
 
+	wxString strApplicationPath;			// application path
+	wxFileName tConfigFileName;			// config filename
+	wxFileConfig *ptConfigFile;			// config file object
+
+	wxString GetApplicationPath(void);
 	void ShowVersionInfo(void);
+
+	void readConfig(void);
+	void writeConfig(void);
 };
 
 /*!

@@ -37,17 +37,15 @@
 #include "wx/wx.h"
 #endif
 
-////@begin includes
-////@end includes
-
-#include "wx/image.h"
-#include "wx/filedlg.h"
-#include "wx/textctrl.h"
+#include <wx/config.h>
 #include "wx/dnd.h"
-#include "wx/stdpaths.h"
-#include "wx/filename.h"
 #include "wx/ffile.h"
+#include "wx/filedlg.h"
+#include "wx/image.h"
+#include "wx/stdpaths.h"
+#include "wx/textctrl.h"
 
+#include "cbmimager_version.h"
 #include "cbmimager.h"
 #include "cbmimagerapp.h"
 #include "selectimage.h"
@@ -129,30 +127,54 @@ END_EVENT_TABLE()
  * CBMImager constructors
  */
 
-CBMImager::CBMImager( )
+CBMImager::CBMImager(void)
 {
-    Init();
+	Init();
 }
 
-CBMImager::CBMImager( wxWindow* parent, wxWindowID id, const wxString& caption, const wxPoint& pos, const wxSize& size, long style )
+CBMImager::CBMImager( wxWindow* parent, wxWindowID id, long style )
 {
-    Init();
-    Create(parent, id, caption, pos, size, style);
+	Init();
+	Create(parent, id, style);
+}
+
+CBMImager::~CBMImager(void)
+{
+	writeConfig();
 }
 
 /*!
  * CBMImager creator
  */
 
-bool CBMImager::Create( wxWindow* parent, wxWindowID id, const wxString& caption, const wxPoint& pos, const wxSize& size, long style )
+bool CBMImager::Create( wxWindow* parent, wxWindowID id, long style )
 {
-////@begin CBMImager creation
-    wxFrame::Create( parent, id, caption, pos, size, style );
+	wxString strMsg;
 
-    CreateControls();
-    Centre();
-////@end CBMImager creation
-    return true;
+
+	// get the application path
+	strApplicationPath = GetApplicationPath();
+
+	// open the config file
+	tConfigFileName.Assign(strApplicationPath, wxTheApp->GetAppName(), wxT("cfg"));
+	ptConfigFile = new wxFileConfig(wxTheApp->GetAppName(), wxTheApp->GetVendorName(), tConfigFileName.GetFullPath(), tConfigFileName.GetFullPath(), wxCONFIG_USE_LOCAL_FILE);
+	wxConfigBase::Set(ptConfigFile);
+	ptConfigFile->SetRecordDefaults();
+
+	// print program name and version
+	strMsg.Printf(wxT("%s v%d.%d.%d"), wxT(CBMIMAGER_APPLICATION_NAME), CBMIMAGER_VER_MAJ, CBMIMAGER_VER_MIN, CBMIMAGER_VER_SUB);
+
+	// create the frame
+	// NOTE: position and size will be set by readConfig
+	wxFrame::Create( parent, id, strMsg, wxDefaultPosition, wxDefaultSize, style );
+
+	// create all controls
+	CreateControls();
+
+	// read config
+	readConfig();
+
+	return true;
 }
 
 /*!
@@ -161,14 +183,16 @@ bool CBMImager::Create( wxWindow* parent, wxWindowID id, const wxString& caption
 
 void CBMImager::Init()
 {
-    m_FileMenu = NULL;
-    m_FileList = NULL;
-    m_StatusBar = NULL;
+	m_FileMenu = NULL;
+	m_FileList = NULL;
+	m_StatusBar = NULL;
 
 	cbmImage = NULL;
 	cbmDir = NULL;
 
 	isDragSource = false;
+
+	ptConfigFile = NULL;
 }
 /*!
  * Control creation for CBMImager
@@ -177,8 +201,8 @@ void CBMImager::Init()
 void CBMImager::CreateControls()
 {
 	long style;
-	wxSize size;
 	wxLog *ptOldLogTarget;
+	wxString strMsg;
 
 
 	wxMenuBar* menuBar = new wxMenuBar;
@@ -211,8 +235,7 @@ void CBMImager::CreateControls()
 	m_sizerMain->Add(m_splitter, 1, wxEXPAND);
 	m_upperPanel = new wxPanel(m_splitter);
 	m_lowerPanel = new wxPanel(m_splitter);
-	size = m_splitter->GetClientSize();
-	m_splitter->SplitHorizontally(m_upperPanel, m_lowerPanel, 3*size.GetHeight()/4);
+	m_splitter->SplitHorizontally(m_upperPanel, m_lowerPanel, 0);
 	m_splitter->SetMinimumPaneSize(20);
 
 	// set sizer for both windows
@@ -252,7 +275,8 @@ void CBMImager::CreateControls()
 	//wxLog::SetLogLevel(wxLog::wxLOG_Verbose);
 
 
-	wxLogMessage(_("Welcome to CBMImager V 0.1"));
+	strMsg.Printf(wxTRANSLATE("Welcome to %s V %d.%d.%d"), wxT(CBMIMAGER_APPLICATION_NAME), CBMIMAGER_VER_MAJ, CBMIMAGER_VER_MIN, CBMIMAGER_VER_SUB);
+	wxLogMessage(strMsg);
 	wxLogMessage(_("(w) 2006 Uncle Tom/DRM + Doc Bacardi/DRM."));
 
 	// show some details on OS version and compiler
@@ -269,6 +293,114 @@ void CBMImager::CreateControls()
 		wxString imageName = argv[1];
 		OpenImage(imageName);
 	}
+}
+
+
+wxString CBMImager::GetApplicationPath(void)
+{
+	wxFileName appName;
+	wxPathList pathList;
+	wxString appFullName;
+
+
+#ifdef __WXMSW__
+	// try GetModuleFileName on win systems first
+
+	TCHAR acAppName[MAX_PATH];
+
+
+	*acAppName = '\0';
+	if( GetModuleFileName(NULL, acAppName, MAX_PATH)!=0 ) {
+		// ok, success!
+		appName.Assign(acAppName);
+		return appName.GetPath(wxPATH_GET_VOLUME|wxPATH_GET_SEPARATOR);
+	}
+
+	// fallthrough to argv routine
+#endif
+
+	// try argv
+	appName.Assign( wxTheApp->argv[0] );
+	// does the file exist?
+	if( appName.MakeAbsolute() && appName.FileExists() ) {
+		// yes -> found application path
+		return appName.GetPath(wxPATH_GET_VOLUME|wxPATH_GET_SEPARATOR);
+	}
+
+	// search the path list
+	pathList.AddEnvList( wxT("PATH") );
+	appFullName = pathList.FindAbsoluteValidPath(wxTheApp->argv[0]);
+	if( appFullName.IsEmpty()==false ) {
+		appName.Assign( appFullName );
+		// does the file exist?
+		if( appName.FileExists() ) {
+			// yes -> found application path
+			return appName.GetPath(wxPATH_GET_VOLUME|wxPATH_GET_SEPARATOR);
+		}
+	}
+
+	// no more ideas...
+	return wxEmptyString;
+}
+
+
+void CBMImager::readConfig(void)
+{
+	long lMainWindowX, lMainWindowY, lMainWindowW, lMainWindowH;
+	long lSplitterPosition;
+
+
+	ptConfigFile->SetPath(wxT("/MainWindow"));
+
+	// get the position of the mainframe, defaults are (x/y) 50/50, (w/h) 640/480
+	lMainWindowX = ptConfigFile->Read(wxT("x"), (long)50);
+	lMainWindowY = ptConfigFile->Read(wxT("y"), (long)50);
+	lMainWindowW = ptConfigFile->Read(wxT("w"), (long)640);
+	lMainWindowH = ptConfigFile->Read(wxT("h"), (long)480);
+	SetSize(lMainWindowX, lMainWindowY, lMainWindowW, lMainWindowH);
+
+	// propagate new size to the child objects
+	m_sizerMain->Layout();
+
+	// get the splitter position
+	lSplitterPosition = ptConfigFile->Read(wxT("splitterpos"), (long)0);
+	m_splitter->SetSashPosition(lSplitterPosition);
+
+// 	// get the data files
+// 	pConfig->SetPath(wxT("/Tests"));
+// 	muhkuh_cfg_sTestDir = pConfig->Read(wxT("path"), wxT("tests"));
+// 	fSaveRelativePaths = pConfig->Read(wxT("userelpaths"), (long)true);
+// 	muhkuh_cfg_sTestSuf = pConfig->Read(wxT("suffix"), wxT("*.mtd"));
+// 	iLastBoardCount = pConfig->Read(wxT("boardcount"), 1);
+}
+
+
+void CBMImager::writeConfig(void)
+{
+	int iMainWindowX, iMainWindowY, iMainWindowW, iMainWindowH;
+	long lSplitterPosition;
+
+
+	// save the frame position
+	GetPosition(&iMainWindowX, &iMainWindowY);
+	GetSize(&iMainWindowW, &iMainWindowH);
+	lSplitterPosition = m_splitter->GetSashPosition();
+
+	ptConfigFile->SetPath(wxT("/MainWindow"));
+	ptConfigFile->Write(wxT("x"), (long)iMainWindowX);
+	ptConfigFile->Write(wxT("y"), (long)iMainWindowY);
+	ptConfigFile->Write(wxT("w"), (long)iMainWindowW);
+	ptConfigFile->Write(wxT("h"), (long)iMainWindowH);
+	ptConfigFile->Write(wxT("splitterpos"), (long)lSplitterPosition);
+	ptConfigFile->SetPath(wxT("/"));
+
+/*	// save the data files
+	pConfig->SetPath(wxT("/Tests"));
+	pConfig->Write(wxT("path"), muhkuh_cfg_sTestDir);
+	pConfig->Write(wxT("userelpaths"), fSaveRelativePaths);
+	pConfig->Write(wxT("suffix"), muhkuh_cfg_sTestSuf);
+	pConfig->Write(wxT("boardcount"), iLastBoardCount);
+	pConfig->SetPath(wxT("/"));*/
 }
 
 
@@ -477,6 +609,13 @@ void CBMImager::ShowVersionInfo(void)
 	strMsg.Printf(wxTRANSLATE("Compiler: Windows CE"));
 	wxLogMessage(strMsg);
 #endif
+
+
+	// show the application path
+	wxLogMessage(wxTRANSLATE("Application path: ")+strApplicationPath);
+
+	// show the config file path
+	wxLogMessage(wxTRANSLATE("Config file: ")+tConfigFileName.GetFullPath(wxPATH_NATIVE));
 }
 
 
@@ -541,7 +680,7 @@ void CBMImager::OnMenuextrasEditFile(wxCommandEvent& event)
 	}
 	catch (char *text)
 	{
-		wxMessageDialog* dialog = new wxMessageDialog(this, wxString::FromAscii(text), wxT("CBMImager"), wxOK | wxICON_ERROR);
+		wxMessageDialog* dialog = new wxMessageDialog(this, wxString::FromAscii(text), wxT(CBMIMAGER_APPLICATION_NAME), wxOK | wxICON_ERROR);
 		dialog->ShowModal();
 		dialog->Destroy();
 		return;
@@ -794,7 +933,7 @@ void CBMImager::OnListboxfilesDClick( wxCommandEvent& event )
 					cbmImage->InitBAM(sec->GetTrack(), sec->GetSector());			// Restore previous BAM
 					delete sec;
 					bamStack.RemoveAt(bamStack.GetCount() -1);
-					wxMessageDialog* dialog = new wxMessageDialog(this, wxString::FromAscii(text), wxT("CBMImager"), wxOK | wxICON_ERROR);
+					wxMessageDialog* dialog = new wxMessageDialog(this, wxString::FromAscii(text), wxT(CBMIMAGER_APPLICATION_NAME), wxOK | wxICON_ERROR);
 					dialog->ShowModal();
 					dialog->Destroy();
 					return;
@@ -1089,7 +1228,7 @@ void CBMImager::ReadCbmDirectory()
 	}
 	catch (char* text)
 	{
-		wxMessageDialog* dialog = new wxMessageDialog(NULL, wxString::FromAscii(text), wxT("CBMImager"), wxOK | wxICON_ERROR);
+		wxMessageDialog* dialog = new wxMessageDialog(NULL, wxString::FromAscii(text), wxT(CBMIMAGER_APPLICATION_NAME), wxOK | wxICON_ERROR);
 		dialog->ShowModal();
 		dialog->Destroy();
 		return;
@@ -1169,7 +1308,7 @@ void CBMImager::ReadCbmDirectory()
 		msg.Append(wxString::FromAscii("\n"));			// is this correct ?
 #endif
 		msg.Append(wxT("This may be a corrupted Image. The error is fixed, you should re-save this file"));
-		wxMessageDialog* dialog = new wxMessageDialog(this, msg, wxT("CBMImager"), wxOK | wxICON_WARNING);
+		wxMessageDialog* dialog = new wxMessageDialog(this, msg, wxT(CBMIMAGER_APPLICATION_NAME), wxOK | wxICON_WARNING);
 		dialog->ShowModal();
 		dialog->Destroy();
 	}
@@ -1191,7 +1330,7 @@ void CBMImager::AddFile(wxString& filename)
 	if (!cbmImage->GetNextFreeSector(1, 0, &track, &sector))
 	{
 		wxMessageDialog* dialog = new wxMessageDialog(this,
-			wxT("Disk full"), wxT("CBMImager"), wxOK | wxICON_ERROR);
+			wxT("Disk full"), wxT(CBMIMAGER_APPLICATION_NAME), wxOK | wxICON_ERROR);
 		dialog->ShowModal();
 		dialog->Destroy();
 		return;
@@ -1223,7 +1362,7 @@ void CBMImager::AddFile(wxString& filename)
 	catch (char *text)
 	{
 		wxMessageDialog* dialog = new wxMessageDialog(this,
-			wxString::FromAscii(text), wxT("CBMImager"), wxOK | wxICON_ERROR);
+			wxString::FromAscii(text), wxT(CBMIMAGER_APPLICATION_NAME), wxOK | wxICON_ERROR);
 		dialog->ShowModal();
 		dialog->Destroy();
 		if (entry != NULL)
@@ -1235,7 +1374,7 @@ void CBMImager::AddFile(wxString& filename)
 	if (!cbmImage->GetNextFreeSector(1, 0, &track, &sector))
 	{
 		wxMessageDialog* dialog = new wxMessageDialog(this,
-			wxT("Disk full"), wxT("CBMImager"), wxOK | wxICON_ERROR);
+			wxT("Disk full"), wxT(CBMIMAGER_APPLICATION_NAME), wxOK | wxICON_ERROR);
 		dialog->ShowModal();
 		dialog->Destroy();
 		return;
@@ -1250,7 +1389,7 @@ void CBMImager::AddFile(wxString& filename)
 		if (!cbmImage->AllocateSector(track, sector))
 		{
 			wxMessageDialog* dialog = new wxMessageDialog(this,
-				wxT("Disk full"), wxT("CBMImager"), wxOK | wxICON_ERROR);
+				wxT("Disk full"), wxT(CBMIMAGER_APPLICATION_NAME), wxOK | wxICON_ERROR);
 			dialog->ShowModal();
 			dialog->Destroy();
 			entry->DeleteFile(cbmImage);			// delete incomplete File
@@ -1267,7 +1406,7 @@ void CBMImager::AddFile(wxString& filename)
 			if (!cbmImage->GetNextFreeSector(track, sector, &newTrack, &newSector))
 			{
 				wxMessageDialog* dialog = new wxMessageDialog(this,
-					wxT("Disk full"), wxT("CBMImager"), wxOK | wxICON_ERROR);
+					wxT("Disk full"), wxT(CBMIMAGER_APPLICATION_NAME), wxOK | wxICON_ERROR);
 				dialog->ShowModal();
 				dialog->Destroy();
 				entry->DeleteFile(cbmImage);		// delete incomplete File
@@ -1320,7 +1459,7 @@ void CBMImager::ExtractFile(CCbmDirectoryEntry *entry, wxString& fileName)
 		catch (char *text)
 		{
 			wxMessageDialog* dialog = new wxMessageDialog(this,
-				wxString::FromAscii(text), wxT("CBMImager"), wxOK | wxICON_ERROR);
+				wxString::FromAscii(text), wxT(CBMIMAGER_APPLICATION_NAME), wxOK | wxICON_ERROR);
 			dialog->ShowModal();
 			dialog->Destroy();
 			break;
@@ -1380,7 +1519,7 @@ void CBMImager::OnEvent(wxCommandEvent& event)
 								if (cbmDir->GetFileCount(cbmImage, entry) > 0)
 								{
 									wxMessageDialog* dialog = new wxMessageDialog(this,
-										wxT("Directory is not empty !"), wxT("CBMImager - can't delete"), wxICON_ERROR | wxOK);
+										wxT("Can't delete, directory is not empty !"), wxT(CBMIMAGER_APPLICATION_NAME), wxICON_ERROR | wxOK);
 									dialog->ShowModal();
 									dialog->Destroy();
 									return;
@@ -1388,7 +1527,7 @@ void CBMImager::OnEvent(wxCommandEvent& event)
 							}
 							catch (char* text)
 							{
-								wxMessageDialog* dialog = new wxMessageDialog(NULL, wxString::FromAscii(text), wxT("CBMImager"), wxOK | wxICON_ERROR);
+								wxMessageDialog* dialog = new wxMessageDialog(NULL, wxString::FromAscii(text), wxT(CBMIMAGER_APPLICATION_NAME), wxOK | wxICON_ERROR);
 								dialog->ShowModal();
 								dialog->Destroy();
 								continue;
@@ -1478,7 +1617,7 @@ void CBMImager::OnEvent(wxCommandEvent& event)
 				if (prevEntry != NULL && prevEntry->GetFileType() != CBM_DEL)		// Previous Entry must be of type DEL
 				{
 					wxMessageDialog* dialog = new wxMessageDialog(this,
-						wxT("Previous Entry must be of type DEL !"), wxT("CBMImager - can't shift up"), wxOK | wxICON_ERROR);
+						wxT("Can't shift up, previous Entry must be of type DEL !"), wxT(CBMIMAGER_APPLICATION_NAME), wxOK | wxICON_ERROR);
 					dialog->ShowModal();
 					dialog->Destroy();
 					return;
@@ -1517,7 +1656,7 @@ void CBMImager::OnEvent(wxCommandEvent& event)
 					else
 					{
 						wxMessageDialog* dialog = new wxMessageDialog(this,
-							wxT("Failed to create Directory"), wxT("CBMImager"), wxOK | wxICON_ERROR);
+							wxT("Failed to create Directory"), wxT(CBMIMAGER_APPLICATION_NAME), wxOK | wxICON_ERROR);
 						dialog->ShowModal();
 						dialog->Destroy();
 					}
