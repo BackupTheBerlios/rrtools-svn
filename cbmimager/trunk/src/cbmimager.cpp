@@ -1156,14 +1156,14 @@ void CBMImager::ReadCbmDirectory()
 		msg.Printf(wxT("WARNING: Circular link detected in following File(s) :"));
 		for (i = 0; i < (int)badFiles.Count(); i++)
 		{
-#ifdef __WIN32__
+#ifdef __WXMSW__
 			msg.Append(wxString::FromAscii("\r\n"));		// Newline
 #else
 			msg.Append(wxString::FromAscii("\n"));			// is this correct ?
 #endif
 			msg.Append(badFiles[i]);
 		}
-#ifdef __WIN32__
+#ifdef __WXMSW__
 		msg.Append(wxString::FromAscii("\r\n"));		// Newline
 #else
 		msg.Append(wxString::FromAscii("\n"));			// is this correct ?
@@ -1178,7 +1178,7 @@ void CBMImager::ReadCbmDirectory()
 
 void CBMImager::AddFile(wxString& filename)
 {
-	unsigned char aucBuffer[17];
+	unsigned char aucFilenameBuffer[17];
 	int track = 0, sector = 0, readBytes;
 	int newTrack = 0, newSector = 0;
 	byte buffer[256];
@@ -1196,28 +1196,29 @@ void CBMImager::AddFile(wxString& filename)
 		dialog->Destroy();
 		return;
 	}
-#ifdef __WIN32__
-	wxString fName = filename.AfterLast('\\');
-#else
-	wxString fName = filename.AfterLast('/');
-#endif
-
+	wxString fName = filename.AfterLast(wxFileName::GetPathSeparator(wxPATH_NATIVE));
 	fName = fName.Left(16);
-	// Check, if a File with this name already exist
-	if (cbmDir->SearchFile(cbmImage, (const char*)CCbmImageBase::ASCII2PET(fName.mb_str(), 16, aucBuffer), false, false) == true)
+	// convert filename to petscii, result is in aucFilenameBuffer
+	CCbmImageBase::ASCII2PET(fName.mb_str(), 16, aucFilenameBuffer);
+	// Check if a File with this name already exist
+	if (cbmDir->SearchFile(cbmImage, (const char*)aucFilenameBuffer, false, false) == true)
 	{
 		CRenameDialog dialog(this, fName);
 		if (dialog.ShowModal() == wxID_OK)
 		{
-			fName = CCbmImageBase::ASCII2PET(dialog.GetText().mb_str(), 16, aucBuffer);
+			// overwrite aucBuffer with new filename from the RenameDialog
+			CCbmImageBase::ASCII2PET(dialog.GetText().mb_str(), 16, aucFilenameBuffer);
 		}
 		else
+		{
+			// rename canceled
 			return;
+		}
 	}
 
 	try
 	{
-		entry = cbmDir->CreateNewEntry(cbmImage, fName.mb_str());
+		entry = cbmDir->CreateNewEntry(cbmImage, (const char*)aucFilenameBuffer);
 	}
 	catch (char *text)
 	{

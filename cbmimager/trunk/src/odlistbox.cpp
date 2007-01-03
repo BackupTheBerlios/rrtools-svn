@@ -202,7 +202,7 @@ bool CODListBox::SetCBMCharset(byte *buffer, int nLength)
 		{
 			bCharsetByte  = pbInputCharset[iYCnt+(iXCnt<<3)];
 
-#ifndef __WIN32__								// don't invert the charset on Win32 systems (my personal flavor)
+#ifndef __WXMSW__								// don't invert the charset on Win32 systems (my personal flavor)
 			bCharsetByte ^= 0xff;
 #endif
 			bCharsetByte  = abMirrorTab[bCharsetByte];
