@@ -381,7 +381,10 @@ void CBamEditor::OnSectorSelected(wxCommandEvent& event)
 
 	m_BamList->GetCbmSelection(&track, &sector);
 	wxString label;
-	label.Printf(_T("%d, %d"), track, sector);
+	if (track == -1 || sector == -1)
+		label = "";
+	else
+		label.Printf(_T("%d, %d"), track, sector);
 	m_trackSector->SetLabel(label);
 
 	wxUnusedVar(event);

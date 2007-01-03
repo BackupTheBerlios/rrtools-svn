@@ -45,6 +45,8 @@ CBamControl::CBamControl(wxWindow* parent, wxWindowID id, const wxPoint& pos, co
 	cbmImage = NULL;
 	m_selRow = -1;
 	m_selCol = -1;
+	m_selTrack = 0;
+	m_selSector = 0;
 	SetItemCount(0);
 }
 
@@ -133,7 +135,7 @@ void CBamControl::OnMouseEvent(wxMouseEvent& event)
 		SetSelection(sel);
 		m_selRow = sel + first;					// absolute row
 		m_selCol = event.m_x / 8;
-		if (m_selCol > 16)
+		if (m_selCol >= 16)
 			m_selCol = -1;						// Reset, when outside the editable region
 		Refresh();
 		ScrollToLine(first);
@@ -155,6 +157,13 @@ void CBamControl::OnMouseEvent(wxMouseEvent& event)
 		}
 		else
 			m_selTrack = m_selSector = -1;
+
+		// Signal an invalid selection
+		if (m_selTrack == -1 && m_selSector == -1)
+		{
+			wxCommandEvent eventCBMSel(wxEVT_BAMCONTROL_SELECTION_EVENT);
+			wxPostEvent( this, eventCBMSel);		// Send Sector-Selected Event
+		}
 	}
 	event.Skip();
 }
