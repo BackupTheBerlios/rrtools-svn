@@ -242,6 +242,9 @@ int main(int argc, char **argv)
 
 void showHelp(const char *pcArgv0)
 {
+	int iCnt;
+
+
 	printf(
 		"Usage: %s [-s padded_size] [-v] input_file output_file\n"
 		"Fillup image to match a vaild reu size for vice.\n"
@@ -256,11 +259,31 @@ void showHelp(const char *pcArgv0)
 		"It does not increase the number of free blocks. Use a tool like cbmimager or\n"
 		"cbmconvert for this purpose.\n"
 		"\n"
+		"Valid sizes are:\n", pcArgv0);
+
+	iCnt=0;
+	do
+	{
+		printf("%ld", goff_valid_filesizes[iCnt]);
+		++iCnt;
+		if( iCnt<(sizeof(goff_valid_filesizes)/sizeof(goff_valid_filesizes[0])) )
+		{
+			printf(", ");
+		}
+		else
+		{
+			break;
+		}
+	} while(1);
+
+	printf(
+		"\n"
+		"\n"
 		"Examples:\n"
 		"  %s pubgames.dfi paddedpubgames.dfi            convert with autodetect\n"
 		"\n"
 		"Email bug reports to baccy_drm@berlios.de .\n"
-		"DreamAss home page: http://rrtools.berlios.de\n", pcArgv0, pcArgv0 );
+		"DreamAss home page: http://rrtools.berlios.de\n", pcArgv0 );
 }
 
 
