@@ -104,10 +104,14 @@ DfiFs_KernalParameters_ClusterTableSize		.DW 0
 
 #print "dfifs start:", *
 dfi_fs_banks_start:
+#ifdef DEBUG
+	.binclude "banks_debug.exo"
+	#include "banks_debug.lab"
+#else
 	.binclude "banks.exo"
+	#include "banks.lab"
+#endif
 #print "dfifs end:", *
-
-#include "banks.lab"
 
 KernalMode_ClusterBufferSize = DfiFs_ClusterTable_End - DfiFs_ClusterTable_Start
 
@@ -166,7 +170,6 @@ copyDataSector:
 	lda mmc64_param_device
 	sta dfi_fs_params+DfiFs_MMC64_ParamOffset_Device
 
-
 	; switch to ram
 	lda #$34
 	sta 1
@@ -180,7 +183,7 @@ copyDataSector:
 copyClusterTable:
 	lda EntryMem_Start,y
 	; the clustertable is in bank 2, this means 2 * $2000 bytes offset from the 'real address'
-	sta DfiFs_ClusterTable_Start+$4000,y
+	sta DfiFs_ClusterTable_Start+__OUTFILE_BANK2_OFFSET__,y
 	iny
 	bne copyClusterTable0
 	inc copyClusterTable+2
@@ -194,14 +197,31 @@ copyClusterTable0:
 
 	; set cluster table size
 	lda DfiFs_KernalParameters_ClusterTableSize
-	sta DfiFs_ClusterTable_Size+$4000
+	sta DfiFs_ClusterTable_Size+__OUTFILE_BANK2_OFFSET__
 	lda DfiFs_KernalParameters_ClusterTableSize+1
-	sta DfiFs_ClusterTable_Size+$4000+1
+	sta DfiFs_ClusterTable_Size+__OUTFILE_BANK2_OFFSET__+1
 
 	; back to normal
 	lda #$37
 	sta 1
 
+#ifdef DEBUG
+	; NOTE: this clears the I flag
+	lda #'*'
+	jsr $ffd2
+	jsr debugStep
+	sei
+
+	lda #$35
+	sta 1
+
+	lda #<dfi_fs_params
+	ldy #>dfi_fs_params
+	jsr BANK0_DfiFs_MMC64_Init
+
+	lda #$37
+	sta 1
+#else
 	; switch to c64 mode
 	lda #$22
 	sta $de00
@@ -237,6 +257,7 @@ installCopyCode:
 	lda #>$c000
 	ldy #$80|$10|$23
 	jsr copy_code_start
+#endif
 
 	; reinit back Basic env
 	jsr MMC64Plugin_InitKernel
@@ -778,10 +799,6 @@ showTracks:
 	lda MMC64Plugin_FileSize+3
 	sbc #0
 	bcc fileSizeError
-
-	lda #'*'
-	jsr $ffd2
-	jsr debugStep
 
 	; get rootdir track / sector
 	jsr MMC64Plugin_GetByte

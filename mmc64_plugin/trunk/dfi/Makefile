@@ -16,53 +16,66 @@ export MYLENE_SRC = ../..
 # dload source directory
 export DLOAD_SRC = ../..
 
-TARGET = dfiplgin
-
 #--------------------------------------
 
 .PHONY: all backup clean distrib install
 
-all: $(TARGET).bin dfitest.d64
-#all: $(TARGET).bin
+all: dfiplgin.bin dfitest.d64 dfiplgin_debug.bin
+#all: dfiplgin.bin
 
 #--------------------------------------
 
-DFI_FS_SRC =	dfi_fs.src \
-		dfi_fs_bam.src \
-		dfi_fs_bank0.src \
-		dfi_fs_bank1.src \
-		dfi_fs_bank2.src \
-		dfi_fs_bank_jsr.src \
-		dfi_fs_cmd.src \
-		dfi_fs_dir.src \
-		dfi_fs_error.src \
-		dfi_fs_mmc64.src \
-		dfi_fs_reu.src \
-		dfi_fs_rom.src \
-		dfi_fs_switcher.src
+DFI_FS_SRC_ALL =	dfi_fs_bam.src \
+			dfi_fs_bank0.src \
+			dfi_fs_bank1.src \
+			dfi_fs_bank2.src \
+			dfi_fs_bank_jsr.src \
+			dfi_fs_cmd.src \
+			dfi_fs_debug.src \
+			dfi_fs_dir.src \
+			dfi_fs_error.src \
+			dfi_fs_mmc64.src \
+			dfi_fs_reu.src \
+			dfi_fs_rom.src \
+			dfi_fs_switcher.src
 
-SOURCES =	actions.src \
-		browser.src \
-		mylene_dfi.src \
-		$(MMC64_PLUGIN_SRC)/mmc64_plugin/mmc64_plugin.src \
-		$(MYLENE_SRC)/mylene/com_lib.src \
-		$(MYLENE_SRC)/mylene/entry.src \
-		$(MYLENE_SRC)/mylene/levels.src \
-		$(MYLENE_SRC)/mylene/mylene.src \
-		$(DLOAD_SRC)/dload/mmcparam.src
+DFI_FS_SRC_RELEASE =	dfi_fs.src \
+			dfi_fs_switcher.src
 
-HEADERS =	$(MYLENE_SRC)/mylene/entry.h \
-		$(MYLENE_SRC)/mylene/mylene.h
+DFI_FS_SRC_DEBUG =	dfi_fs_debug.src \
+			dfi_fs_switcher_debug.src
+
+PLGIN_SRC =		actions.src \
+			browser.src \
+			mylene_dfi.src \
+			$(MMC64_PLUGIN_SRC)/mmc64_plugin/mmc64_plugin.src \
+			$(MYLENE_SRC)/mylene/com_lib.src \
+			$(MYLENE_SRC)/mylene/entry.src \
+			$(MYLENE_SRC)/mylene/levels.src \
+			$(MYLENE_SRC)/mylene/mylene.src \
+			$(DLOAD_SRC)/dload/mmcparam.src
+
+PLGIN_HEADERS =		$(MYLENE_SRC)/mylene/entry.h \
+			$(MYLENE_SRC)/mylene/mylene.h
 
 
-banks.bin banks.lab: $(DFI_FS_SRC)
-	$(DA) -v -d banks.html -l banks.lab -o banks.bin $<
+banks.bin banks.lab: $(DFI_FS_SRC_ALL) $(DFI_FS_SRC_RELEASE)
+	$(DA) -v -d banks.html -l banks.lab -o $@ dfi_fs.src
+
+banks_debug.bin banks_debug.lab: $(DFI_FS_SRC_ALL) $(DFI_FS_SRC_DEBUG)
+	$(DA) -v -d banks_debug.html -l banks_debug.lab -o $@ dfi_fs_debug.src
 
 banks.exo: banks.bin
 	$(EXO) -r -o $@ $<
 
-$(TARGET).bin: $(TARGET).src $(SOURCES) $(HEADERS) banks.exo banks.lab
-	$(DA) -I$(MMC64_PLUGIN_SRC) -I$(MYLENE_SRC) -I$(DLOAD_SRC) -v -d $(TARGET).html -l $(TARGET).lab -o $@ $(TARGET).src
+banks_debug.exo: banks_debug.bin
+	$(EXO) -r -o $@ $<
+
+dfiplgin.bin: dfiplgin.src $(PLGIN_SRC) $(PLGIN_HEADERS) banks.exo banks.lab
+	$(DA) -I$(MMC64_PLUGIN_SRC) -I$(MYLENE_SRC) -I$(DLOAD_SRC) -v -d dfiplgin.html -l dfiplgin.lab -o $@ dfiplgin.src
+
+dfiplgin_debug.bin: dfiplgin.src $(PLGIN_SRC) $(PLGIN_HEADERS) banks_debug.exo banks_debug.lab
+	$(DA) -DDEBUG=1 -I$(MMC64_PLUGIN_SRC) -I$(MYLENE_SRC) -I$(DLOAD_SRC) -v -d dfiplgin_debug.html -l dfiplgin_debug.lab -o $@ dfiplgin.src
 
 dfitest.prg: dfitest.src banks.exo banks.lab
 	$(DA) -v -d dfitest.html -l dfitest.lab -o $@ $<
@@ -73,41 +86,21 @@ dfitest.d64: dfitest.prg
 	rm -f $@
 	cbmconvert -nD4 $@ $^
 
-flimbo.dfi: flimbo.d81
-	rm -f flimbo.dfi
-	dd if=/dev/zero of=padme.bin bs=1024 count=192
-	cbmconvert -dF fq.dfi flimbo.d81
-	cat fq.dfi padme.bin > flimbo.dfi
-	rm -f fq.dfi
-
-SammyLightfoot.dfi: SammyLightfoot.d64
-	rm -f SammyLightfoot.dfi
-	dd if=/dev/zero of=padme.bin bs=1024 count=448
-	cbmconvert -dF sl.dfi SammyLightfoot.d64
-	cat sl.dfi padme.bin > SammyLightfoot.dfi
-	rm -f sl.dfi
-
-HauntedHouse.dfi: HauntedHouse.d64
-	rm -f HauntedHouse.dfi
-	dd if=/dev/zero of=padme.bin bs=1024 count=448
-	cbmconvert -dF hh.dfi HauntedHouse.d64
-	cat hh.dfi padme.bin > HauntedHouse.dfi
-	rm -f hh.dfi
-
-sim: dfitest.d64 SammyLightfoot.dfi HauntedHouse.dfi flimbo.dfi
+sim: dfitest.d64
 	x64 +sound -cartrr /home/baccy/RetroReplay/rr-38a-64pal.bin -reu -reusize 512 dfitest.d64
 
 #--------------------------------------
 
 install:
 	mount /MemoryStickDos
-	cp $(TARGET).bin /MemoryStickDos/system64/
+	cp dfiplgin.bin /MemoryStickDos/system64/
 	umount /MemoryStickDos
 
 #--------------------------------------
 
 clean:
-	$(RM) $(TARGET).bin banks.bin banks.exo banks.html banks.lab
+	$(RM) dfiplgin.bin banks.bin banks.exo banks.html banks.lab
+	$(RM) dfiplgin_debug.bin banks_debug.bin banks_debug.exo banks_debug.html banks_debug.lab
 
 #--------------------------------------
 
@@ -118,14 +111,14 @@ CURRENTPATH := $(subst /, ,$(shell pwd))
 THISDIR := $(word $(words $(CURRENTPATH)), $(CURRENTPATH))
 
 backup:
-	cd .. && tar cfjv $(ArcDir)$(TARGET)_complete_$(DATETIME).tar.bz2 $(THISDIR)
+	cd .. && tar cfjv $(ArcDir)dfiplgin_complete_$(DATETIME).tar.bz2 $(THISDIR)
 
 
 DISTRIBFILES := $(addprefix $(THISDIR)/,$(SRC) $(HEADER) $(MISCARC))
 
 distrib:
-	cd .. && tar cfjv $(ArcDir)$(TARGET)_src_$(DATE).tar.bz2 $(DISTRIBFILES)
-	zip -9 $(ArcDir)$(TARGET)_bin_$(DATE).zip $(TARGET).bin
+	cd .. && tar cfjv $(ArcDir)dfiplgin_src_$(DATE).tar.bz2 $(DISTRIBFILES)
+	zip -9 $(ArcDir)dfiplgin_bin_$(DATE).zip dfiplgin.bin
 
 #---------------------------------------
 

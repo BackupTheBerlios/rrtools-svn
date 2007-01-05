@@ -2,50 +2,36 @@
 ;
 ; DFI Fs for MMC 64 and RetroReplay
 ;
+; *** DEBUG Version ***
+;
 ;--------------------------------------
 
-#segdef "bank0", $8100-$9e02, fillup, force, $00
-#segdef "bank1", $8100-$9f00, fillup, force, $00
-#segdef "bank2", $8100-$9f00, fillup, force, $00
-#segdef "switcher", $de02-$df00, fillup, force, $00
-#segdef "bankjsr", $8000-$8080, fillup, force, $00
-#segdef "bankjsr_bank", $8080-$8100, fillup, force, $00
-#segdef "bankjsr_lo", $9f00-$9f80, fillup, force, $00
-#segdef "bankjsr_hi", $9f80-$a000, fillup, force, $00
+#segdef "bank0", $a000-$c000, fillup, force, $00
+#segdef "bank1", $c100-$ce00, fillup, force, $00
+#segdef "bank2", $ce00-$ee00, fillup, force, $00
+#segdef "switcher", $c000-$c100, fillup, force, $00
 
-#outfile @, startadr, $00, "bankjsr", "bankjsr_bank", "bank0", "switcher", "bankjsr_lo", "bankjsr_hi", "bankjsr", "bankjsr_bank", "bank1", "bankjsr_lo", "bankjsr_hi", "bankjsr", "bankjsr_bank", "bank2", "bankjsr_lo", "bankjsr_hi"
+#outfile @, startadr, $00, "bank0", "switcher", "bank1", "bank2"
 
 ;--------------------------------------
 ; this is the offset for bank2 in the bin image
 
-__OUTFILE_BANK2_OFFSET__ = $4000
+__OUTFILE_BANK2_OFFSET__ = 0
 
 ;--------------------------------------
 
-	.segment "bankjsr"
-	* = $8000
-
-	.segment "bankjsr_bank"
-	* = $8080
-
 	.segment "bank0"
-	* = $8100
+	* = $a000
 
 	.segment "bank1"
-	* = $8100
+	* = $c100
 
 	.segment "bank2"
-	* = $8100
-	__SEGMENT_BANK2_LIMIT__ = $9f00
+	* = $ce00
+	__SEGMENT_BANK2_LIMIT__ = $ee00
 
 	.segment "switcher"
-	* = $de02
-
-	.segment "bankjsr_lo"
-	* = $9f00
-
-	.segment "bankjsr_hi"
-	* = $9f80
+	* = $c000
 
 ; only export global variables
     .(
@@ -59,6 +45,8 @@ DfiFs_Cfg_BamBufferIdx = DfiFs_Cfg_NumberOfBuffers+1
 DfiFs_Cfg_SysBufferIdx = DfiFs_Cfg_NumberOfBuffers+2
 
 DfiFs_DEBUG_FLICKER = 1
+
+DfiFs_DEBUG_Bank2IsC64Ram = 1
 
 ;--------------------------------------
 
@@ -86,7 +74,7 @@ DfiFsZp_ByteBuffer		= $a5		; one byte buffer for read/write operations
 
 ;--------------------------------------
 
-#macro bankJsr(dst)	{jsr bankJsr : .DB {dst}}
+#macro bankJsr(dst)	{jsr {dst}}
 
 #macro setBank(bank, val)
 {
@@ -97,15 +85,7 @@ DfiFsZp_ByteBuffer		= $a5		; one byte buffer for read/write operations
 #macro defBankJumpLabel(labelname, value, banknr, bankcfg)
 {
 	@0BANK{banknr}_{labelname} = {value}
-	@0L_{labelname} = __BANKJSR_CNT__++
-	__SEGMENT_SAVE__ := segmentof *
-	.segment "bankjsr_lo"
-	.DB <BANK{banknr}_{labelname}
-	.segment "bankjsr_hi"
-	.DB >BANK{banknr}_{labelname}
-	.segment "bankjsr_bank"
-	.DB {bankcfg}
-	.segment __SEGMENT_SAVE__
+	@0L_{labelname} = {value}
 }
 
 #macro defBJL(name)
@@ -113,23 +93,9 @@ DfiFsZp_ByteBuffer		= $a5		; one byte buffer for read/write operations
 	.defBankJumpLabel({name}, *, __CURRENT_BANK__, __CURRENT_BANK_CFG__)
 }
 
-__BANKJSR_CNT__ = 0
-
-
-BankCfg_0_Ram	= $00|$23
-BankCfg_0_Rom	= $00|$20
-BankCfg_1_Ram	= $08|$23
-BankCfg_1_Rom	= $08|$20
-BankCfg_2_Ram	= $10|$23
-BankCfg_2_Rom	= $10|$20
-BankCfg_3_Ram	= $18|$23
-BankCfg_3_Rom	= $18|$20
-BankCfg_C64	= $00|$22
-
 ;--------------------------------------
 
-#include "dfi_fs_bank_jsr.src"
-#include "dfi_fs_switcher.src"
+#include "dfi_fs_switcher_debug.src"
 
 ;--------------------------------------
 
@@ -156,15 +122,98 @@ BankCfg_C64	= $00|$22
 	.defBankJumpLabel(ffe1, $ffe1, C64Rom, BankCfg_C64)
 	.defBankJumpLabel(ffd2, $ffd2, C64Rom, BankCfg_C64)
 
-Kernal_f30f = $f30f
-Kernal_f314 = $f314
-Kernal_f31f = $f31f
-Kernal_f233 = $f233
-Kernal_f275 = $f275
-Kernal_fb8e = $fb8e
-Kernal_fcd1 = $fcd1
-Kernal_fcdb = $fcdb
-Kernal_fe1c = $fe1c
+	.segment "bank0"
+
+Kernal_f30f:
+	php
+	inc $01
+	plp
+	jsr $f30f
+	php
+	dec $01
+	plp
+	rts
+
+Kernal_f314:
+	php
+	inc $01
+	plp
+	jsr $f314
+	php
+	dec $01
+	plp
+	rts
+
+Kernal_f31f:
+	php
+	inc $01
+	plp
+	jsr $f31f
+	php
+	dec $01
+	plp
+	rts
+
+Kernal_f233:
+	php
+	inc $01
+	plp
+	jsr $f233
+	php
+	dec $01
+	plp
+	rts
+
+Kernal_f275:
+	php
+	inc $01
+	plp
+	jsr $f275
+	php
+	dec $01
+	plp
+	rts
+
+Kernal_fb8e:
+	php
+	inc $01
+	plp
+	jsr $fb8e
+	php
+	dec $01
+	plp
+	rts
+
+Kernal_fcd1:
+	php
+	inc $01
+	plp
+	jsr $fcd1
+	php
+	dec $01
+	plp
+	rts
+
+Kernal_fcdb:
+	php
+	inc $01
+	plp
+	jsr $fcdb
+	php
+	dec $01
+	plp
+	rts
+
+Kernal_fe1c:
+	php
+	inc $01
+	plp
+	jsr $fe1c
+	php
+	dec $01
+	plp
+	rts
+
 
 ;--------------------------------------
 

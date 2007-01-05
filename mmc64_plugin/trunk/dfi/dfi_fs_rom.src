@@ -83,7 +83,7 @@ openDfi:
 	.DW $f70a-1
 
 foundLfn:
-	jsr $f30f	; checked, ok!
+	jsr Kernal_f30f	; checked, ok!
 	bne channelUnused
 	; already open
 	jsr exitToRom
@@ -119,13 +119,13 @@ DfiFs_Close_Rom:
 @0BANK0_DfiFs_Close_Rom:
     .(
 	sta DfiFs_SaveA
-	jsr $f314	; checked, ok!
+	jsr Kernal_f314	; checked, ok!
 	beq foundOpenedChannel
 	clc
 	jmp switch_c64_restore01
 
 foundOpenedChannel:
-	jsr $f31f	; checked, ok!
+	jsr Kernal_f31f	; checked, ok!
 	stx DfiFs_SaveX
 
 	lda $ba
@@ -149,14 +149,14 @@ DfiFs_ChangeKernalInput_Rom:
 @0BANK0_DfiFs_ChangeKernalInput_Rom:
     .(
 	; find open channel
-	jsr $f30f	; checked, ok!
+	jsr Kernal_f30f	; checked, ok!
 	beq foundOpenedChannel
 	jsr exitToRom
 	.DW $f701-1
 
 foundOpenedChannel:
 	; set file values (b8, b9, ba)
-	jsr $f31f	; checked, ok!
+	jsr Kernal_f31f	; checked, ok!
 	lda $ba
 	cmp DfiFs_DeviceAddress
 	beq change_done
@@ -165,7 +165,7 @@ foundOpenedChannel:
 	.DW $f219-1
 change_done:
 	; store input device and exit
-	jsr $f233	; checked, ok!
+	jsr Kernal_f233	; checked, ok!
 	jmp switch_c64_restore01
     .)
 
@@ -177,7 +177,7 @@ DfiFs_ChangeKernalOutput_Rom:
 @0BANK0_DfiFs_ChangeKernalOutput_Rom:
     .(
 	; find open channel
-	jsr $f30f	; checked, ok!
+	jsr Kernal_f30f	; checked, ok!
 	beq foundOpenedChannel
 	jsr exitToRom
 	.DW $f701-1
@@ -185,7 +185,7 @@ DfiFs_ChangeKernalOutput_Rom:
 
 foundOpenedChannel:
 	; set file values (b8, b9, ba)
-	jsr $f31f	; checked, ok!
+	jsr Kernal_f31f	; checked, ok!
 	lda $ba
 	cmp DfiFs_DeviceAddress
 	beq change_done
@@ -193,7 +193,7 @@ foundOpenedChannel:
 	.DW $f25b-1
 change_done:
 	; store output device and exit
-	jsr $f275	; checked, ok!
+	jsr Kernal_f275	; checked, ok!
 	jmp switch_c64_restore01
     .)
 
@@ -314,7 +314,7 @@ noStopPressed:
 	cmp ($ae),y
 	beq verifyOk
 	lda #$10
-	jsr $fe1c	; checked, ok!
+	jsr Kernal_fe1c	; checked, ok!
 	.DB $2c
 loadMode:
 	sta ($ae),y
@@ -371,7 +371,7 @@ nameNotEmpty:
 
 	ldy #0
 	; init pointer
-	jsr $fb8e	; checked, ok!
+	jsr Kernal_fb8e	; checked, ok!
 
 	; write start address
 	lda $ac
@@ -379,7 +379,7 @@ nameNotEmpty:
 	lda $ad
 	jsr DfiFs_SendByte_Rom
 saveLoop:
-	jsr $fcd1	; checked, ok!
+	jsr Kernal_fcd1	; checked, ok!
 	bcs endOfArea
 	lda ($ac),y
 	jsr DfiFs_SendByte_Rom
@@ -395,7 +395,7 @@ saveLoop:
 
 noStopPressed:
 	; inc pointer
-	jsr $fcdb	; checked, ok!
+	jsr Kernal_fcdb	; checked, ok!
 	bne saveLoop	; bra for <= $ffff
 
 endOfArea:
@@ -469,7 +469,7 @@ DfiFs_GetByteKernal_Rom:
 	jsr exitToRom
 	.DW $f157-1
 getByte_dfi:
-	jsr DfiFs_GetByte_Rom 
+	jsr DfiFs_GetByte_Rom
 	jmp switch_c64_restore01
 
 DfiFs_GetInKernal_Rom:

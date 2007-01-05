@@ -38,6 +38,11 @@ DfiFs_GetMMC64Cluster:
 	adc #>DfiFs_ClusterTable_Start
 	sta selfMod0+2
 
+#ifdef DfiFs_DEBUG_Bank2IsC64Ram
+	ldx #$34
+	stx 1
+#endif
+
 	; load hi byte to y, load lo byte to a
 	ldx #1
 getClusterLoop:
@@ -46,6 +51,11 @@ selfMod0:
 	lda DfiFs_ClusterTable_Start,x
 	dex
 	bpl getClusterLoop
+
+#ifdef DfiFs_DEBUG_Bank2IsC64Ram
+	ldx #$35
+	stx 1
+#endif
 
 	clc
 	rts
@@ -59,7 +69,7 @@ illegalOffset:
 	.DW 0
 
 @0DfiFs_ClusterTable_Start:
-	.DSB $9e02 - *
+	.DSB __SEGMENT_BANK2_LIMIT__ - *
 @0DfiFs_ClusterTable_End:
 
 ;--------------------------------------
