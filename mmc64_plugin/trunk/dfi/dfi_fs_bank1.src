@@ -332,6 +332,11 @@ DfiFs_OpenFileForWriting:
 	cmp #$ff
 	beq filenameDoesNotExist
 
+	; copy the dir entry position
+	sta DfiFs_SaveFile_DirEntryIdx
+	stx DfiFs_SaveFile_DirEntryTrk
+	sty DfiFs_SaveFile_DirEntrySec
+
 	; mark file as open
 	lda DfiFs_ExchangeBuffer+DfiFs_paramOffs_DirEntry_Typ
 	ora #$20
