@@ -1,0 +1,696 @@
+;--------------------------------------
+; DFI Filesystem,
+; MMC64 read/write routines
+;--------------------------------------
+
+
+#include "dfi_fs_mmc64_parameters.src"
+
+;--------------------------------------
+; the MMC64 registers and some bit defs
+
+MMC64_Data                      = $df10
+
+MMC64_Ctrl                      = $df11
+MMC64_Ctrl_ExtRomActive         = $01
+MMC64_Ctrl_nCS                  = $02
+MMC64_Ctrl_Clk8Mhz              = $04
+MMC64_Ctrl_ClockportDF20        = $08
+MMC64_Ctrl_FlashMode            = $10
+MMC64_Ctrl_DisableExtRom        = $20
+MMC64_Ctrl_ReadMode             = $40
+MMC64_Ctrl_DisableMMC           = $80
+
+MMC64_Status                    = $df12
+MMC64_Status_Busy               = $01
+MMC64_Status_Game               = $02
+MMC64_Status_Exrom              = $04
+MMC64_Status_CardAway           = $08
+MMC64_Status_WriteProtect       = $10
+MMC64_Status_FlashMode          = $20
+
+MMC64_Id                        = $df13
+
+;--------------------------------------
+
+MMC_IdleByte = $ff
+
+; normal mode
+;MMCBaseMode = MMC64_Ctrl_ExtRomActive|MMC64_Ctrl_DisableExtRom
+
+; debugging mode
+MMCBaseMode = MMC64_Ctrl_ExtRomActive|MMC64_Ctrl_ClockportDF20
+
+;--------------------------------------
+
+	.align $0100
+
+DfiFs_MMC64_BlockBuffer:
+	.DSB $200
+
+;DfiFs_MMC64_BamBuffer:
+;	.DSB $200
+
+
+DfiFs_MMC64_ClusterBitShift		.DB 0
+DfiFs_MMC64_ClusterMask			.DB 0
+DfiFs_MMC64_FileSize			.DSB 4
+DfiFs_MMC64_FilePos			.DSB 4
+
+DfiFs_MMC64_FATBuffer_SectorNr		.DSB 3
+DfiFs_MMC64_FirstDataSector		.DSB 3
+DfiFs_MMC64_FirstFileSector		.DSB 3
+DfiFs_MMC64_Sector			.DSB 3
+
+DfiFs_MMC64_Cluster			.DW 0
+DfiFs_MMC64_StartCluster		.DW 0
+
+DfiFs_MMC64_param_device		.DB 0
+
+DfiFs_MMC64_Trk				.DB 0
+DfiFs_MMC64_Sec				.DB 0
+DfiFs_MMC64_RetryCnt			.DB 0
+
+crc16_value				.DW 0
+
+DfiFs_MMC64_LastSkipClusters		.DW 0		; number of clusters to skip for the last request
+DfiFs_MMC64Zp_SkipClusters		.DW 0		; number of clusters to skip for a requested block
+DfiFs_MMC64Zp_ClusterOffset		.DW 0		; offset in cluster for a requested block
+
+;--------------------------------------
+
+; NOTE: this routine must not use bankswitching.
+; It runs in C64 ram before the code is copied
+; to RR Ram.
+
+@0BANK0_DfiFs_MMC64_Init:
+    .(
+	sta DfiFsZp_BufPtr
+	sty DfiFsZp_BufPtr+1
+
+	; get bit shift
+	ldy #DfiFs_MMC64_ParamOffset_ClusterBitShift
+	lda (DfiFsZp_BufPtr),y
+	sta DfiFs_MMC64_ClusterBitShift
+
+	; get cluster mask
+	ldy #DfiFs_MMC64_ParamOffset_ClusterMask
+	lda (DfiFsZp_BufPtr),y
+	sta DfiFs_MMC64_ClusterMask
+
+	; init filesize and position
+	ldx #3
+	ldy #DfiFs_MMC64_ParamOffset_FileSize+3
+copyFileSize:
+	lda (DfiFsZp_BufPtr),y
+	sta DfiFs_MMC64_FileSize,x
+	lda #0
+	sta DfiFs_MMC64_FilePos,x
+	dey
+	dex
+	bpl copyFileSize
+
+	ldx #2
+	ldy #DfiFs_MMC64_ParamOffset_FirstDataSector+2
+initSectorNr:
+	; invalidate fat buffer
+	lda #0
+	sta DfiFs_MMC64_FATBuffer_SectorNr,x
+	lda (DfiFsZp_BufPtr),y
+	sta DfiFs_MMC64_FirstDataSector,x
+	dey
+	dex
+	bpl initSectorNr
+
+	; init first cluster
+	ldx #1
+	ldy #DfiFs_MMC64_ParamOffset_ClusLo+1
+copyClusLo:
+	lda (DfiFsZp_BufPtr),y
+	sta DfiFs_MMC64_StartCluster,x
+	sta DfiFs_MMC64_Cluster,x
+	lda #0
+	sta DfiFs_MMC64_LastSkipClusters,x
+	dex
+	bpl copyClusLo
+
+	; init first sector
+	jsr DfiFs_MMC64_GetFirstSectorOfCluster
+	ldx #0
+	ldy #2
+	clc
+copyFirstSector:
+	lda DfiFs_MMC64_Sector,x
+	rol
+	sta DfiFs_MMC64_FirstFileSector,x
+	inx
+	dey
+	bpl copyFirstSector
+
+	ldy #DfiFs_MMC64_ParamOffset_Device
+	lda (DfiFsZp_BufPtr),y
+	sta DfiFs_MMC64_param_device
+
+	lda #<DfiFs_MMC64_ReadBlock
+	sta DfiFs_ReadBlock+1
+	lda #>DfiFs_MMC64_ReadBlock
+	sta DfiFs_ReadBlock+2
+
+	lda #<DfiFs_MMC64_WriteBlock
+	sta DfiFs_WriteBlock+1
+	lda #>DfiFs_MMC64_WriteBlock
+	sta DfiFs_WriteBlock+2
+
+	clc
+	rts
+    .)
+
+
+
+;--------------------------------------
+
+
+DfiFs_MMC64_GetBlockAddress:
+    .(
+	; track must not be 0
+	txa
+	beq error
+	dex
+
+	; get clusteroffset for the block address
+	tya
+	sta DfiFs_MMC64Zp_SkipClusters
+
+	; get block offset in the cluster
+	and DfiFs_MMC64_ClusterMask
+	lsr
+	sta DfiFs_MMC64Zp_ClusterOffset
+
+	; get number of clusters to skip
+	txa
+	ldx DfiFs_MMC64_ClusterBitShift
+shiftBlocks:
+	lsr
+	ror DfiFs_MMC64Zp_SkipClusters
+	dex
+	bpl shiftBlocks
+	sta DfiFs_MMC64Zp_SkipClusters+1
+
+	; compare with last cluster skip
+	lda DfiFs_MMC64Zp_SkipClusters
+; 	cmp DfiFs_MMC64_LastSkipClusters
+; 	bne differentCluster
+	ldy DfiFs_MMC64Zp_SkipClusters+1
+; 	cpy DfiFs_MMC64_LastSkipClusters+1
+; 	beq sameCluster
+; differentCluster:
+	; get cluster number from the offset
+	.bankJsr(L_DfiFs_GetMMC64Cluster)
+	bcs error
+	sta DfiFs_MMC64_Cluster
+	sty DfiFs_MMC64_Cluster+1
+
+	; cluster holds now the number of the new offset
+	lda DfiFs_MMC64Zp_SkipClusters
+	sta DfiFs_MMC64_LastSkipClusters
+	lda DfiFs_MMC64Zp_SkipClusters+1
+	sta DfiFs_MMC64_LastSkipClusters+1
+
+sameCluster:
+	; get the start sector for the cluster
+	jsr DfiFs_MMC64_GetFirstSectorOfCluster
+
+	; add the cluster offset to the sector
+	clc
+	lda DfiFs_MMC64_Sector
+	adc DfiFs_MMC64Zp_ClusterOffset
+	sta DfiFs_MMC64_Sector
+	bcc addOfset0
+	inc DfiFs_MMC64_Sector+1
+	bne addOfset0
+	inc DfiFs_MMC64_Sector+2
+addOfset0:
+
+	asl DfiFs_MMC64_Sector
+	rol DfiFs_MMC64_Sector+1
+	rol DfiFs_MMC64_Sector+2
+
+	clc
+	rts
+
+error:
+	sec
+	rts
+    .)
+
+
+;--------------------------------------
+; DfiFs_MMC64_GetFirstSectorOfCluster
+;
+; Get the number of the first sector for
+; a given cluster.
+; FirstSectorOfCluster = (Cluster-2)*SectorsPerCluster + FirstDataSector
+;
+; Parameter:
+;   MMC64Plugin_Cluster: cluster number
+;
+; Return:
+;   MMC64Plugin_Sector:  number of the first sector in the cluster
+;
+
+DfiFs_MMC64_GetFirstSectorOfCluster:
+    .(
+	; ClusterZp -= 2
+	sec
+	lda DfiFs_MMC64_Cluster
+	sbc #2
+	sta DfiFs_MMC64_Sector
+	lda DfiFs_MMC64_Cluster+1
+	sbc #0
+	sta DfiFs_MMC64_Sector+1
+	lda #0
+	sta DfiFs_MMC64_Sector+2
+
+	ldx DfiFs_MMC64_ClusterBitShift
+	beq noShiftSector
+shiftSector:
+	asl DfiFs_MMC64_Sector
+	rol DfiFs_MMC64_Sector+1
+	rol DfiFs_MMC64_Sector+2
+	dex
+	bne shiftSector
+noShiftSector:
+
+	clc
+	lda DfiFs_MMC64_Sector
+	adc DfiFs_MMC64_FirstDataSector
+	sta DfiFs_MMC64_Sector
+	lda DfiFs_MMC64_Sector+1
+	adc DfiFs_MMC64_FirstDataSector+1
+	sta DfiFs_MMC64_Sector+1
+	lda DfiFs_MMC64_Sector+2
+	adc DfiFs_MMC64_FirstDataSector+2
+	sta DfiFs_MMC64_Sector+2
+	rts
+    .)
+
+;--------------------------------------
+; DfiFs_MMC64_ReadSector
+;
+; Read a sector to the buffer.
+;
+; Parameter:
+;   DfiFs_MMC64_Sector: number of the sector to read
+;
+; Return:
+;   Carry :                    clear = ok
+;                              set   = read error
+;   DfiFs_MMC64_BlockBuffer :  sector data (only valid if carry is clear!)
+;
+
+DfiFs_MMC64_ReadSector:
+    .(
+	lda #0
+	sta DfiFs_MMC64_RetryCnt
+
+retry:
+	; init bus
+	lda #MMC_IdleByte
+	sta MMC64_Data
+
+	; select card
+	lda #MMCBaseMode|MMC64_Ctrl_Clk8Mhz
+	sta MMC64_Ctrl
+
+	lda #($40|$11)
+	sta MMC64_Data
+	lda DfiFs_MMC64_Sector+2
+	sta MMC64_Data
+	lda DfiFs_MMC64_Sector+1
+	sta MMC64_Data
+	lda DfiFs_MMC64_Sector
+	sta MMC64_Data
+	lda #0			; address lsb
+	sta MMC64_Data
+	lda #MMC_IdleByte	; cmd crc (not used, but must be $ff for some stupid cards)
+	sta MMC64_Data
+
+	; get response for command
+	jsr DfiFs_MMC64_WaitForReply
+	bne error
+
+	; wait for start of data
+	jsr DfiFs_MMC64_WaitForReply
+	cmp #$fe
+	bne error
+
+	; init crc16
+	jsr crc16_init
+
+	; switch to read mode
+	lda #MMCBaseMode|MMC64_Ctrl_Clk8Mhz|MMC64_Ctrl_ReadMode
+	sta MMC64_Ctrl
+	lda MMC64_Data
+
+	ldy #0
+get0:
+	lda MMC64_Data
+	sta DfiFs_MMC64_BlockBuffer,y
+	jsr crc16_update
+	iny
+	bne get0
+get1:
+	lda MMC64_Data
+	sta DfiFs_MMC64_BlockBuffer+$0100,y
+	jsr crc16_update
+	iny
+	bne get1
+
+	; compare crc16
+	lda MMC64_Data
+	jsr crc16_update
+	lda MMC64_Data
+	jsr crc16_update
+
+	lda #MMCBaseMode|MMC64_Ctrl_nCS|MMC64_Ctrl_Clk8Mhz
+	sta MMC64_Ctrl
+
+	lda crc16_value
+	ora crc16_value+1
+	bne crc_error
+
+	clc
+	rts
+
+crc_error:
+	inc DfiFs_MMC64_RetryCnt
+	bne retry
+crc_failed:
+	inc $d020
+	jmp crc_failed
+
+error:
+	sec
+	rts
+    .)
+
+
+;--------------------------------------
+; DfiFs_MMC64_WriteSector
+;
+; Write a sector
+;
+; Parameter:
+;   DfiFs_MMC64_Sector: number of the sector to write
+;   DfiFs_MMC64_BlockBuffer :  sector data
+;
+; Return:
+;   Carry :                    clear = ok
+;                              set   = write error
+;
+
+DfiFs_MMC64_WriteSector:
+    .(
+	lda #0
+	sta DfiFs_MMC64_RetryCnt
+
+retry:
+	; init bus
+	lda #MMC_IdleByte
+	sta MMC64_Data
+
+	; select card
+	lda #MMCBaseMode|MMC64_Ctrl_Clk8Mhz
+	sta MMC64_Ctrl
+
+	lda #($40|$18)
+	sta MMC64_Data
+	lda DfiFs_MMC64_Sector+2
+	sta MMC64_Data
+	lda DfiFs_MMC64_Sector+1
+	sta MMC64_Data
+	lda DfiFs_MMC64_Sector
+	sta MMC64_Data
+	lda #0			; address lsb
+	sta MMC64_Data
+	lda #MMC_IdleByte	; cmd crc (not used, but must be $ff for some stupid cards)
+	sta MMC64_Data
+
+	; get response for command
+	jsr DfiFs_MMC64_WaitForReply
+	bne error
+
+	; send start block token
+	lda #$fe
+	sta MMC64_Data
+
+	; init crc16
+	jsr crc16_init
+
+	ldy #0
+send0:
+	lda DfiFs_MMC64_BlockBuffer,y
+	sta MMC64_Data
+	iny
+	bne send0
+send1:
+	lda DfiFs_MMC64_BlockBuffer+$0100,y
+	sta MMC64_Data
+	iny
+	bne send1
+
+	; send crc16
+	lda crc16_value
+	sta MMC64_Data
+	lda crc16_value+1
+	sta MMC64_Data
+
+	; get response
+	lda #MMC_IdleByte
+	sta MMC64_Data
+	lda MMC64_Data
+	and #$0f
+	cmp #$05
+	bne write_error
+
+	; wait for write finish
+	jsr DfiFs_MMC64_WaitForWriteFinish
+	bcs error
+
+	lda #MMCBaseMode|MMC64_Ctrl_nCS|MMC64_Ctrl_Clk8Mhz
+	sta MMC64_Ctrl
+
+	clc
+	rts
+
+write_error:
+	inc DfiFs_MMC64_RetryCnt
+	bne retry
+
+crc_failed:
+	inc $d020
+	jmp crc_failed
+
+error:
+	sec
+	rts
+    .)
+
+
+;--------------------------------------
+
+crc16_init:
+    .(
+	lda #0
+	sta crc16_value
+	sta crc16_value+1
+	rts
+    .)
+
+
+crc16_update:
+    .(
+	; crc  = (unsigned char)(crc >> 8) | (crc << 8);
+	ldx crc16_value
+	eor crc16_value+1
+	stx crc16_value+1
+;	sta crc16_value
+	; crc ^= ser_data;
+;	lda crc16_value
+;	eor (LoadPtr),y
+	sta crc16_value
+	; crc ^= (unsigned char)(crc & 0xff) >> 4;
+;	lda crc16_value
+	lsr
+	lsr
+	lsr
+	lsr
+	eor crc16_value
+	sta crc16_value
+	; crc ^= (crc << 8) << 4;
+;	lda crc16_value
+	asl
+	asl
+	asl
+	asl
+	eor crc16_value+1
+	sta crc16_value+1
+	; crc ^= ((crc & 0xff) << 4) << 1;
+	lda crc16_value
+	lsr
+	lsr
+	lsr
+	eor crc16_value+1
+	sta crc16_value+1
+	lda crc16_value
+	asl
+	asl
+	asl
+	asl
+	asl
+	eor crc16_value
+	sta crc16_value
+	rts
+    .)
+
+;--------------------------------------
+; MMC64Plugin_WaitForReply
+;
+; Wait for a response from the MMC.
+;
+; Parameter:
+;   -
+;
+; Return:
+;   Akku: Response byte
+;
+
+DfiFs_MMC64_WaitForReply:
+    .(
+	ldx #0
+wait:
+	lda #MMC_IdleByte
+	sta MMC64_Data
+	lda MMC64_Data
+	cmp #MMC_IdleByte
+	bne gotReply
+	inx
+	bne wait
+gotReply:
+	and #$ff			; set flags according to data byte
+	rts
+    .)
+
+
+DfiFs_MMC64_WaitForWriteFinish:
+    .(
+	; delay counters
+	ldx #0
+	ldy #0
+wait:
+	lda #MMC_IdleByte
+	sta MMC64_Data
+	lda MMC64_Data
+	bne gotReply
+	inx
+	bne wait
+	iny
+	bne wait
+	; timeout
+	sec
+	rts
+
+gotReply:
+	clc
+	rts
+    .)
+
+
+;--------------------------------------
+
+; a: dst page for block
+; x: trk
+; y: sec
+
+DfiFs_MMC64_ReadBlock:
+.defBJL(DfiFs_MMC64_ReadBlock)
+    .(
+	clc
+	adc #>DfiFs_BlockBuffer
+	sta selfmodDstPage+2
+	stx DfiFs_MMC64_Trk
+	sty DfiFs_MMC64_Sec
+
+	jsr DfiFs_MMC64_GetBlockAddress
+	bcs error
+
+	jsr DfiFs_MMC64_ReadSector
+	bcs error
+
+	lda DfiFs_MMC64_Sec
+	lsr
+	lda #>DfiFs_MMC64_BlockBuffer
+	adc #0
+	sta selfmodSrcPage+2
+
+	ldy #0
+copyLoop:
+selfmodSrcPage:
+	lda DfiFs_MMC64_BlockBuffer,y
+selfmodDstPage:
+	sta $ff00,y
+	iny
+	bne copyLoop
+
+	clc
+error:
+	rts
+    .)
+
+
+DfiFs_MMC64_WriteBlock:
+.defBJL(DfiFs_MMC64_WriteBlock)
+    .(
+	clc
+	adc #>DfiFs_BlockBuffer
+	sta selfmodDstPage+2
+	stx DfiFs_MMC64_Trk
+	sty DfiFs_MMC64_Sec
+
+	jsr DfiFs_MMC64_GetBlockAddress
+	bcs error
+
+	jsr DfiFs_MMC64_ReadSector
+	bcs error
+
+	lda DfiFs_MMC64_Sec
+	lsr
+	lda #>DfiFs_MMC64_BlockBuffer
+	adc #0
+	sta selfmodSrcPage+2
+
+	ldy #0
+copyLoop:
+selfmodDstPage:
+	lda $ff00,y
+selfmodSrcPage:
+	sta DfiFs_MMC64_BlockBuffer,y
+	iny
+	bne copyLoop
+
+	jsr DfiFs_MMC64_WriteSector
+	bcs error
+
+	rts
+
+
+error:
+	lda #2
+	sta $d021
+error_stop:
+	inc $d020
+	jmp error_stop
+    .)
+
+
+;--------------------------------------

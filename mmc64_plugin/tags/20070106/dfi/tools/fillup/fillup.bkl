@@ -1,0 +1,46 @@
+<?xml version="1.0" ?>
+
+<makefile>
+	<include file="presets/simple.bkl"/>
+
+
+	<option name="BUILD">
+		<values>debug,release</values>
+		<values-description>Debug,Release</values-description>
+		<default-value>debug</default-value>
+		<description>
+			Type of compiled binaries
+		</description>
+	</option>
+
+	<set var="DEBUGINFO">
+		<if cond="BUILD=='debug'">on</if>
+		<if cond="BUILD=='release'">off</if>
+	</set>
+
+	<set var="OPTIMIZEFLAG">
+		<if cond="BUILD=='debug'">off</if>
+		<if cond="BUILD=='release'">size</if>
+	</set>
+
+	<set var="BUILDDIR">
+		output/$(BUILD)
+	</set>
+
+
+	<exe id="fillup" template="simple">
+		<app-type>console</app-type>
+		<debug-info>$(DEBUGINFO)</debug-info>
+		<optimize>$(OPTIMIZEFLAG)</optimize>
+		<dirname>.</dirname>
+		<sources>
+			fillup.c
+		</sources>
+		<if cond="PLATFORM_WIN32=='1'">
+			<define>__WIN32__</define>
+		</if>
+		<if cond="PLATFORM_UNIX=='1'">
+			<define>__UNIX__</define>
+		</if>
+	</exe>
+</makefile>

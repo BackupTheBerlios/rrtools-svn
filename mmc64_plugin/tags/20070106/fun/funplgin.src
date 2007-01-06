@@ -1,0 +1,519 @@
+;------------------------------------------------------------------------------
+; FLI interlace picture (Funpaint) viewer
+; created 1999 by Tomas Pribyl (dundera@volny.cz)
+; superCPU fixed by Tomas Pribyl
+;
+; For more information on the IDE64 project,
+; please see http://ide64.come.to
+; or mail to: Josef.Soucek@ct.cz
+;------------------------------------------------------------------------------
+
+#segdef "zp", $02-$0100
+#segdef "data", $1800-$2000
+#segdef "code", $1000-$1800
+
+#outfile @, startadr, sort, $00, "code"
+
+;--------------------------------------
+
+	.segment "zp"
+	* = $02
+
+	.segment "data"
+	* = $1800
+
+	.segment "code"
+	* = $1000
+
+;--------------------------------------
+
+; $3ff0 - $3fff FUNPAINT (MT)
+; $4000 - $5fff 8*VideoRam 1
+; $6000 - $73f3 GraficScreen 1
+; $7f40 - $7f47 0
+
+; $7f40 - $7fab informace pro $d021 Line 0-99
+; $7fac - $7fff unused                           
+; $8000 - $83e8 barvy pro COLOR RAM $d800
+
+;tady prijde soubor presmerovat na novou adresu $c000
+
+;($8400 - $92b0 se uklada zobrazovaci rutina)
+
+; $c000 - $dfff 8*VideoRam 2
+; $e000 - $ff3f GraficScreen 2
+; $ff40 - $ffa3 dalsi informace pro $d021 Line 100-199
+
+;Lenth 33692 bytes
+
+
+;format obrazku v souboru
+
+;0,1  start adresa - prijde odstranit
+;$02-$0e  identify TEXT HEADER - "FUNPAINT (MT)"
+;$0f - compress (yes/no)  1/0
+;$10 - compress identify byte
+
+;$11 - $xx - picture datas
+
+
+
+;--------------------------------------
+
+	.segment "zp"
+
+print_ptr0			.DW 0
+loadPtr				.DW 0
+rleDataByte			.DB 0
+rleCnt				.DB 0
+
+;--------------------------------------
+
+	.segment "code"
+
+
+	sei
+	lda #$35
+	sta 1
+
+	; init the plugin variables
+	jsr MMC64Plugin_Init
+
+	jsr MMC64Plugin_OpenFile
+
+;                lda #$00
+;                sta mansign
+                
+;                lda #<utilname_txt
+;                ldy #>utilname_txt
+;                jsr print2screen
+                
+;----------------------------------------------------------------
+;LOAD FILE
+                
+	; discard start address ....
+	jsr MMC64Plugin_GetByte
+	jsr MMC64Plugin_GetByte
+                
+                
+	ldy #0
+readFunpaintHeader:
+	jsr MMC64Plugin_GetByte
+	sta $3ff0,y
+	iny
+	cpy #$10
+	bne readFunpaintHeader
+
+                
+	ldx #$0d
+i1157:
+	lda $3ff0,x   ;test identify head
+	cmp funpaintKiddie,x
+	bne i11cf     ;bad picture, close file
+	dex
+	bpl i1157
+	lda $3ffe     ;kompresni byte????
+	bne load_compressed
+	beq load_noncompres
+
+                
+;--------------------------------------------------------------
+;no valid indentification head detected
+i11cf:
+;	lda #<novalid_txt
+;	ldy #>novalid_txt
+;	jsr print2screen
+	jmp end_of_prg
+
+;---------------------------------------------------------------
+; LOAD STORED (noncompression) PICTURE 
+
+load_noncompres:
+;	lda #<noncompres_txt
+;	ldy #>noncompres_txt
+;	jsr print2screen
+                
+	ldy #<$4000
+	sty loadPtr
+	lda #>$4000
+	sta loadPtr+1
+
+i1167:
+	jsr MMC64Plugin_GetByte
+	bcs i11c0
+	dec $01				; #$34
+	sta (loadPtr),y
+	ldx #$35
+	inc $01				; #$35
+	sta $d020
+
+i117d:
+	jsr i120b     ;inkrement a pripadne presmerovani
+	bcc i1167
+	bcs i11c0
+
+;-------------------------------------------------------------                
+; DEPACKING comprimated picture
+
+load_compressed:
+	ldy #<$4000
+	sty loadPtr
+	lda #>$4000
+	sta loadPtr+1
+                
+rle_depack:
+	jsr MMC64Plugin_GetByte
+	bcs rle_eof
+	cmp $3fff			; is the byte the RLE Magic?
+	bne rle_store			; no -> just store the byte
+
+	jsr MMC64Plugin_GetByte
+	bcs rle_eof
+	tax				; get RLE counter (how many times to write the RLE Data)
+	beq rle_eof0			; special magic RLEByte, $00 == EOF
+
+	jsr MMC64Plugin_GetByte		; get RLE Databyte
+	bcs rle_eof
+	jmp rle_loop
+
+rle_store:
+	ldx #1				; store just one byte
+rle_loop:
+	sta $d020
+	sta rleDataByte
+	dec 1		; #$34
+	stx rleCnt
+rle_loop0:
+	lda rleDataByte
+	sta (loadPtr),y
+	jsr i120b
+	dec rleCnt
+	bne rle_loop0
+	inc 1		; #$35
+	bne rle_depack	; bra
+
+rle_eof:
+;	lsr
+;	bcs load_error
+rle_eof0:
+
+;-------------------------------END of DECOMPRESSION
+
+i11c0:
+	lda     #0
+	sta     $d020
+
+	jsr     store_code   ;priprava zobrazovaci rutiny
+                
+                jsr     set_new_irq  ;nastaveni zobrazovaciho IRQ + barvy
+               
+
+press_key       lda     $dc00        ;wait until keypressed
+                and     $dc01
+                and     #$10
+                bne     press_key
+                
+
+
+;-------------RESTORE ORIGINAL CONFIGURATION
+                
+	sei
+	ldx #$ff
+	stx $d011
+	inx
+	stx $d01a
+	lda $d019
+	sta $d019
+                
+	lda #%00000011			; switch to bank 0
+	sta $dd00
+	lda #%00010101			; screen at $0400
+	sta $d018      
+	lda #%00001000			; textmode
+	sta $d016
+
+end_of_prg:
+	; turn screen off
+	lda #$ff
+	sta $d011
+
+	; go back to MMC64 browser
+	jmp MMC64Plugin_Exit
+
+;ÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛ
+
+;               s u b r o u t i n e
+; inkrementuje STORE ADRESU
+; pokud se doladovalo do $83e8, pak presmeruje pointer na
+; $c000 a laduje se dale.
+; Pokud soubor presahne adresu $ffa4, nastavuje se CY=1
+
+i120b           inc  loadPtr
+                bne  i1211
+                inc  loadPtr+1
+
+i1211           lda  loadPtr
+                ldx  loadPtr+1
+                cpx  #$83 ; $83e8
+                bne  i1225
+                cmp  #$e8 ;
+                bne  i1223
+                sty  loadPtr  ; $00
+                lda  #$c0 ; $c0
+                sta  loadPtr+1
+
+i1223           clc
+                rts
+;ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+i1225           cpx     #$ff
+                bne     i1223
+                cmp     #$a4 ;$ffa4
+                bne     i1223
+                sec     
+                rts     
+; end of function i120b
+
+
+;ÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛ
+;               s u b r o u t i n e
+; ulozi na $8400 - $92a0 rozbaleny zobrazovaci kod pro obsluhu $d021
+;
+
+
+store_code      lda #$3b
+                sta at8400+1
+                
+                lda #8
+                sta i129b+1      ;(grafika-stranka)
+                
+                lda #$40
+                sta i12a0+1
+                
+                lda #$7f 
+                sta i12a0+2      ;$7f40-$7fab
+                
+                lda #<$8400
+                sta loadPtr
+                lda #>$8400
+                sta loadPtr+1
+                
+                ldx #$d0
+                
+i124d           ldy #$11
+i124f           lda at8400,y ;presunuti bloku dat na $8400
+                sta (loadPtr),y
+                dey
+                bpl i124f 
+                
+                clc       ;inkrement store adresy o $12
+                lda loadPtr   ;$00
+                adc #$12
+                sta loadPtr   ;$12
+                bcc i1262   ;pricte #$12
+                inc loadPtr+1
+                          
+i1262           clc
+                lda at8400+1
+                adc #1
+                and #%00000111
+                ora #%00111000
+                sta at8400+1
+                
+                lda i129b+1
+                adc #$10
+                and #%01111111
+                sta i129b+1
+                
+                inc i12a0+1   ;zvetseni adresy, odkud se bere barva
+                
+                dex           ;konec kopirovani, uloz RTS
+                beq i128f
+                
+                cpx #$64
+                bne i124d
+                
+                lda #$40      ;presmerovani na $ff40-$ffa3
+                sta i12a0+1
+                lda #$ff
+                sta i12a0+2
+                bne i124d
+;-----------------------------------                
+
+i128f           ldy #0
+                lda #$60         ;tohle je kod instrukce pro RTS
+                sta (loadPtr),y
+                rts     
+                
+
+; end of function store_code
+
+
+;ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+at8400          lda     #%00111011 ;jemna grafika, vicebarevny text
+                                ; ($3b)
+                sta     $d011
+
+i129b           lda     #%00001000 ;pocatek grafiky + $2000 <-sem se ulozi
+                sta     $d018
+
+i12a0           lda     $ffa4   ;<- sem se ulozi spravna adresa ($7f40)
+                sta     $d021   ;prepne barvu !!!!! neco duleziteho
+                bit     $d3   
+;------------------------------------------------------------------                
+
+
+;ÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛ
+
+;               s u b r o u t i n e
+
+set_new_irq     lda     $d011     ;test preteceni rasterline
+                bpl     set_new_irq
+                
+                sei     
+                lda     #%01101011 ;vypnuta obrazovka, jemna grafika,barevny
+                sta     $d011      ;text
+                
+                lda     #$35 
+                sta     $01
+                
+                ldx     #0
+i12b9           lda     $8000,x    ;presune barvy
+                sta     $d800,x
+                lda     $8100,x
+                sta     $d900,x
+                lda     $8200,x
+                sta     $da00,x
+                lda     $8300,x
+                sta     $db00,x
+                inx     
+                bne     i12b9
+                
+                lda     #%00000000  ;nastaveni videobanky $c000-$ffff
+                sta     $dd00
+                
+                lda     #%00111000  ;screen $cc00/grafix $e000
+                sta     $d018
+                
+                lda     #%00011001  ;40sl, barvevny mod
+                sta     $d016
+                
+                lda     #%01111111  ;casovac CIA1
+                sta     $dc0d
+                lda     $dc0d
+                
+                lda     #%00000001  ;maskovaci registr IRQ
+                sta     $d01a
+                sta     $d019       ;prerusovaci registr IRQ,
+                                    ;povoleni pro rastr
+                
+                lda     #<i1317  ;irq vector
+                sta     $fffe
+                lda     #>i1317
+                sta     $ffff
+                
+                lda     #$2f
+                sta     $d012    ;nastaveni rasterline
+
+i1302           lda     $d011    ;test znamenkoveho bitu rasterregistru
+                bpl     i1302      
+                
+                lda     #%00111011  ;25 radek, jemna grafika
+                sta     $d011
+                cli     
+                rts
+
+
+;ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+i130e           pla
+                sta $01
+                pla     
+                tay     
+                pla     
+                tax     
+                pla     
+                rti     
+
+;ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+; obsluha zobrazeni  (IRQ)   ;pri rastru #$2f
+
+i1317           pha      ;zaloha A              3cyk
+                lda $01  ;                      3cyk
+                sta $fc  ;zaloha $01            3cyk
+                                                
+                lda #$35 ; '5'                  2cyk
+                sta $01  ;                      3cyk
+                
+                lda #<i1339 ;IRQ pro dalsi frame  2cyk
+                sta $fffe ;                     4cyk
+                
+                lda #$30  ;                     2cyk
+                sta $d012 ; cislo rasterline    4cyk
+                
+                dec $d019 ;                     6cyk
+                cli       ;                     2cyk
+                nop     
+                nop     
+                nop     
+                nop     
+                nop     
+                nop     
+                nop     
+                nop     
+                nop     
+                nop     
+                nop                             ;22 cyks
+                                                ;celkem 56 cyklu
+                                                
+;------------------------------------------------                     
+i1339           nop     
+                nop     
+                nop     
+                nop     
+                nop     ;10 taktu
+                     
+                pla     ;vynda adresu1         ;4cyk
+                pla     ;vynda adresu2         ;4cyk
+                pla     ;vynda status          ;4cyk
+                
+                txa     ;ulozi X
+                pha     
+                tya     ;ulozi Y
+                pha     
+                lda $fc   ;ulozi $01 do zasobniku pro pozdejsi obnovu
+                pha
+                     
+                jsr $8400  ;zobrazeni, nastaveni barev pro cely screen
+                dec $d019
+                
+                lda $d016
+                eor #%00000001
+                sta $d016 ;zarolovani ve smeru osy X (posuv pro interlace)
+                
+                lda $dd00
+                eor #%00000010 ;prepnuti mezi 1/3 videostrankou
+                sta $dd00      ;nastaveni VIDEO banky
+                
+                lda #$2f       ;
+                sta $d012      ;cislo puvodni rasterline
+                
+                lda #<i1317    ;puvodni IRQ
+                sta $fffe
+                lda #>i1317
+                sta $ffff
+                
+                jmp i130e  ;return from IRQ
+
+;ÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛ
+
+funpaintKiddie:
+	.pet "funpaint (mt) "
+
+
+
+#include "mmc64_plugin/mmc64_plugin.src"
+
+
+
+

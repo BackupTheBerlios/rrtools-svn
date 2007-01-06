@@ -1,0 +1,35 @@
+/*-------------------------------------
+This file defines the data source and
+actions of the browser.
+
+The browsable data is organized in levels.
+Each level can have several items which may
+represent a new level, just like a tree.
+-------------------------------------*/
+
+; include your sources here
+
+#include "mylene_dfi.src"
+
+;--------------------------------------
+
+	.segment "code"
+
+.level_def_start(levels_dfi, dfi_read_root_dir)
+
+.levels_start
+	.level_entry(0, 2)
+.levels_end
+
+; level 0 : root directory
+.level_actions_start(0)
+	.level_action(FileEntry_Del,		0, $0f, 0,		0,		0)
+	.level_action(FileEntry_Seq,		0, $8f, 0,		0,		0)
+	.level_action(FileEntry_Prg,		0, $8f, 0,		dfi_load_file,	0)
+	.level_action(FileEntry_Usr,		0, $8f, 0,		0,		0)
+	.level_action(FileEntry_Rel,		0, $8f, 0,		0,		0)
+.level_actions_end(0)
+
+.level_def_end
+
+;--------------------------------------

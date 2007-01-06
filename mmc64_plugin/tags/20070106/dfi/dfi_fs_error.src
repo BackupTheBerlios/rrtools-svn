@@ -1,0 +1,331 @@
+
+;--------------------------------------
+
+DfiFs_ErrorMsg_Buffer			.DSB 40	; buffer for error messages
+
+DfiFs_ErrorMsg_Len			.DB 0
+DfiFs_ErrorMsg_Pos			.DB 0
+
+DfiFs_ErrorIdx				.DB 0
+DfiFs_ErrorTrk				.DB 0
+DfiFs_ErrorSec				.DB 0
+
+DfiFs_Err_PrintDez_SkipLeading0		.DB 0
+
+;--------------------------------------
+
+DfiFs_Err_ReadCommandChannel:
+.defBJL(DfiFs_Err_ReadCommandChannel)
+    .(
+	ldy DfiFs_ErrorMsg_Pos
+	lda DfiFs_ErrorMsg_Buffer,y
+	sta DfiFsZp_ByteBuffer
+
+	iny
+	cpy DfiFs_ErrorMsg_Len
+	sty DfiFs_ErrorMsg_Pos
+	bcc notEof
+
+	; generate new message
+	lda #Err_00_Ok
+	jsr DfiFs_SetError_NoBlock
+
+	lda #$40	; EOF
+	sta $90
+
+notEof:
+	lda DfiFsZp_ByteBuffer
+	clc
+	rts
+    .)
+
+;--------------------------------------
+
+DfiFs_Err_Print:
+    .(
+	sty smod0+1
+
+	ldy DfiFs_ErrorMsg_Len
+	sta DfiFs_ErrorMsg_Buffer,y
+	inc DfiFs_ErrorMsg_Len
+smod0:
+	ldy #0
+	rts
+    .)
+
+;--------------------------------------
+
+ComLib_DezByteOutTab0Lo:
+	.DB 10, 100
+
+DfiFs_Err_PrintDez:
+    .(
+	ldy #0
+	sty DfiFs_Err_PrintDez_SkipLeading0
+	iny
+
+DezByteOut0:
+	ldx #'0'
+DezByteOut1:
+	cmp ComLib_DezByteOutTab0Lo,y
+	bcc DezByteOut2
+	sbc ComLib_DezByteOutTab0Lo,y
+	inx
+	bne DezByteOut1	; bra
+
+DezByteOut2:
+	pha
+	txa
+	ldx DfiFs_Err_PrintDez_SkipLeading0
+	bne DezByteOut3
+	cmp #'0'
+	beq DezByteOut4
+DezByteOut3:
+	jsr DfiFs_Err_Print
+	sta DfiFs_Err_PrintDez_SkipLeading0
+DezByteOut4:
+	pla
+	dey
+	bpl DezByteOut0
+	ora #'0'
+	jmp DfiFs_Err_Print
+    .)
+
+;--------------------------------------
+
+; A: error nr
+; X: error trk
+; Y: error sec
+
+DfiFs_SetError_NoBlock:
+.defBJL(DfiFs_SetError_NoBlock)
+	ldx #0
+	ldy #0
+DfiFs_SetError:
+.defBJL(DfiFs_SetError)
+    .(
+	stx DfiFs_ErrorTrk
+	sty DfiFs_ErrorSec
+
+	; search the error
+	ldx #err_msg_len-1
+searchError:
+	cmp err_msg,x
+	beq foundError
+	dex
+	bpl searchError
+
+	; unknown error, should never happen
+stop:
+	inc $d020
+	jmp stop
+
+foundError:
+	stx DfiFs_ErrorIdx
+
+	; init message len and pos
+	ldy #0
+	sty DfiFs_ErrorMsg_Pos
+	sty DfiFs_ErrorMsg_Len
+
+	tay
+	lsr
+	lsr
+	lsr
+	lsr
+	ora #'0'
+	jsr DfiFs_Err_Print
+	tya
+	and #$0f
+	ora #'0'
+	jsr DfiFs_Err_Print
+
+	lda #','
+	jsr DfiFs_Err_Print
+
+	; print the error message
+	lda err_msg_str_lo,x
+	sta smodMe0+1
+	lda err_msg_str_hi,x
+	sta smodMe0+2
+	ldy #0
+smodMe0:
+	lda $ffff,y
+	beq msgEnd
+	jsr DfiFs_Err_Print
+	iny
+	bne smodMe0	; bra
+
+msgEnd:
+	lda #','
+	jsr DfiFs_Err_Print
+
+	; print the track
+	lda DfiFs_ErrorTrk
+	jsr DfiFs_Err_PrintDez
+
+	lda #','
+	jsr DfiFs_Err_Print
+
+	; print the sector
+	lda DfiFs_ErrorSec
+	jsr DfiFs_Err_PrintDez
+
+	lda #$0d
+	jmp DfiFs_Err_Print
+    .)
+
+
+;--------------------------------------
+
+err_msg:
+	.DB $00		; ok
+	.DB $01		; files scratched
+	.DB $20		; read error
+	.DB $21		; read error
+	.DB $22		; read error
+	.DB $23		; read error
+	.DB $24		; read error
+	.DB $25		; write error
+	.DB $26		; write protect on
+	.DB $27		; read error
+	.DB $28		; write error
+	.DB $30		; syntax error
+	.DB $31		; syntax error
+	.DB $32		; syntax error
+	.DB $33		; syntax error
+	.DB $34		; syntax error
+	.DB $39		; file not found
+	.DB $50		; record not present
+	.DB $51		; overflow in record
+	.DB $52		; file too large
+	.DB $60		; write file open
+	.DB $61		; file not open
+	.DB $62		; file not found
+	.DB $63		; file exists
+	.DB $64		; file type mismatch
+	.DB $65		; no block
+	.DB $66		; illegal track or sector
+	.DB $67		; illegal track or sector
+	.DB $70		; no channel
+	.DB $71		; dir error
+	.DB $72		; disk full
+	.DB $73		; dos message
+	.DB $74		; drive not ready
+err_msg_len = * - err_msg
+
+err_msg_str_lo:
+	.DB <err_str_ok
+	.DB <err_str_files_scratched
+	.DB <err_str_read_error
+	.DB <err_str_read_error
+	.DB <err_str_read_error
+	.DB <err_str_read_error
+	.DB <err_str_read_error
+	.DB <err_str_write_error
+	.DB <err_str_write_protect_on
+	.DB <err_str_read_error
+	.DB <err_str_write_error
+	.DB <err_str_syntax_error
+	.DB <err_str_syntax_error
+	.DB <err_str_syntax_error
+	.DB <err_str_syntax_error
+	.DB <err_str_syntax_error
+	.DB <err_str_file_not_found
+	.DB <err_str_record_not_present
+	.DB <err_str_overflow_in_record
+	.DB <err_str_file_too_large
+	.DB <err_str_write_file_open
+	.DB <err_str_file_not_open
+	.DB <err_str_file_not_found
+	.DB <err_str_file_exists
+	.DB <err_str_file_type_mismatch
+	.DB <err_str_no_block
+	.DB <err_str_illegal_track_or_sector
+	.DB <err_str_illegal_track_or_sector
+	.DB <err_str_no_channel
+	.DB <err_str_dir_error
+	.DB <err_str_disk_full
+	.DB <err_str_dos_msg
+	.DB <err_str_drive_not_ready
+
+err_msg_str_hi:
+	.DB >err_str_ok
+	.DB >err_str_files_scratched
+	.DB >err_str_read_error
+	.DB >err_str_read_error
+	.DB >err_str_read_error
+	.DB >err_str_read_error
+	.DB >err_str_read_error
+	.DB >err_str_write_error
+	.DB >err_str_write_protect_on
+	.DB >err_str_read_error
+	.DB >err_str_write_error
+	.DB >err_str_syntax_error
+	.DB >err_str_syntax_error
+	.DB >err_str_syntax_error
+	.DB >err_str_syntax_error
+	.DB >err_str_syntax_error
+	.DB >err_str_file_not_found
+	.DB >err_str_record_not_present
+	.DB >err_str_overflow_in_record
+	.DB >err_str_file_too_large
+	.DB >err_str_write_file_open
+	.DB >err_str_file_not_open
+	.DB >err_str_file_not_found
+	.DB >err_str_file_exists
+	.DB >err_str_file_type_mismatch
+	.DB >err_str_no_block
+	.DB >err_str_illegal_track_or_sector
+	.DB >err_str_illegal_track_or_sector
+	.DB >err_str_no_channel
+	.DB >err_str_dir_error
+	.DB >err_str_disk_full
+	.DB >err_str_dos_msg
+	.DB >err_str_drive_not_ready
+
+; all errormessages
+
+err_str_ok:
+	.PET "ok", 0
+err_str_read_error:
+	.PET "read error", 0
+err_str_file_too_large:
+	.PET "file too large", 0
+err_str_record_not_present:
+	.PET "record not present", 0
+err_str_overflow_in_record:
+	.PET "overflow in record", 0
+err_str_write_error:
+	.PET "write error", 0
+err_str_write_protect_on:
+	.PET "write protect on", 0
+err_str_syntax_error:
+	.PET "syntax error", 0
+err_str_write_file_open:
+	.PET "write file open", 0
+err_str_file_exists:
+	.PET "file exists", 0
+err_str_file_type_mismatch:
+	.PET "file type mismatch", 0
+err_str_no_block:
+	.PET "no block", 0
+err_str_illegal_track_or_sector:
+	.PET "illegal track or sector", 0
+err_str_file_not_open:
+	.PET "file not open", 0
+err_str_file_not_found:
+	.PET "file not found", 0
+err_str_files_scratched:
+	.PET "files scratched", 0
+err_str_no_channel:
+	.PET "no channel", 0
+err_str_dir_error:
+	.PET "dir error", 0
+err_str_disk_full:
+	.PET "disk full", 0
+err_str_dos_msg:
+	.PET "drm dos v0.1 mmc64", 0
+err_str_drive_not_ready:
+	.PET "drive not ready", 0
+

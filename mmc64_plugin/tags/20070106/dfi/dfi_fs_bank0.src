@@ -1,0 +1,407 @@
+
+	.segment "bank0"
+
+    .(
+
+;--------------------------------------
+
+	.align $100
+; *** the buffers must be page aligned ***
+DfiFs_BlockBuffer		.DSB $100*DfiFs_Cfg_NumberOfBuffers	; the channel buffer
+DfiFs_DirBuffer			.DSB 256				; buffer for directory operations
+DfiFs_BamBuffer			.DSB 256				; buffer for 256 BAM Bytes
+DfiFs_SystemBuffer		.DSB 256				; the internal buffer
+
+;DfiFs_MMC64_FATBuffer		.DSB 256				; buffer for 256 FAT bytes
+
+DfiFs_ChannelToBufferTab	.DSB 16					; convert a channel to buffer number ($ff = free)
+
+DfiFs_BufferToChannelTab	.DSB DfiFs_Cfg_NumberOfBuffers		; convert a buffer to channel number ($ff = free)
+DfiFs_BufferTrkTab		.DSB DfiFs_Cfg_NumberOfBuffers		; current track for the channel
+DfiFs_BufferSecTab		.DSB DfiFs_Cfg_NumberOfBuffers		; current sector for the channel
+DfiFs_BufferMode		.DSB DfiFs_Cfg_NumberOfBuffers		; current mode for the channels
+DfiFs_BufferModeState		.DSB DfiFs_Cfg_NumberOfBuffers		; state info for the current modes
+
+sectorLink_trk			.DB 0					; tmp zp for setSectorLink
+sectorLink_sec			.DB 0					; tmp zp for setSectorLink
+
+DfiFs_Bam			.DW 0		; bam trk/sec
+DfiFs_Tracks			.DB 0		; number of tracks
+DfiFs_FreeBlocks		.DW 0		; number of free blocks
+
+DfiFs_BlockUsed			.DSB DfiFs_Cfg_NumberOfBuffers		; how many bytes of the block are used
+
+;--------------------------------------
+
+	.setBank(0, BankCfg_0_Rom)
+
+#include "dfi_fs_rom.src"
+
+;--------------------------------------
+
+	.setBank(0, BankCfg_0_Ram)
+
+DfiFs_ReadBlock:
+.defBJL(DfiFs_ReadBlock)
+	jmp $ffff
+
+DfiFs_WriteBlock:
+.defBJL(DfiFs_WriteBlock)
+	jmp $ffff
+
+#include "dfi_fs_reu.src"
+#include "dfi_fs_mmc64.src"
+
+; replace the read and write routines to
+; use some other media
+
+;--------------------------------------
+
+#include "dfi_fs_bam.src"
+#include "dfi_fs_dir.src"
+#include "dfi_fs_error.src"
+
+;--------------------------------------
+
+DfiFs_Init:
+.defBJL(DfiFs_Init)
+    .(
+	; must be before calling 'DfiFs_ReadFreeBlocks'
+	lda #1
+	sta DfiFs_InitFlag
+
+	; read the first block (dfi information)
+	ldx #1
+	ldy #0
+	lda #DfiFs_Cfg_SysBufferIdx
+	jsr DfiFs_ReadBlock
+	bcs error
+
+	; get the root dir trk/sec
+	lda DfiFs_SystemBuffer+$1c
+	sta DfiFs_Tracks
+	lda DfiFs_SystemBuffer+$1d
+	ora DfiFs_SystemBuffer+$1e
+	ora DfiFs_SystemBuffer+$1f
+	bne error	; bad header, too many tracks
+
+	; get the root dir offset
+	ldx DfiFs_SystemBuffer+$20
+	ldy DfiFs_SystemBuffer+$21
+	.bankJsr(L_DfiFs_InitBank1)
+
+	; get the bam offset
+	lda DfiFs_SystemBuffer+$22
+	sta DfiFs_Bam
+	lda DfiFs_SystemBuffer+$23
+	sta DfiFs_Bam+1
+
+	; init the dir buffers
+	jsr DfiFs_Dir_Init
+	bcs error
+
+	; read the bam
+	jsr DfiFs_Bam_Init
+	bcs error
+
+	; all channels are closed
+	ldx #DfiFs_Cfg_NumberOfBuffers-1
+initModes:
+	lda #DfiFs_BufferMode_Closed
+	sta DfiFs_BufferMode,x
+	lda #$ff
+	sta DfiFs_BufferToChannelTab,x
+	lda #0
+	sta DfiFs_BufferTrkTab,x
+	sta DfiFs_BufferSecTab,x
+	dex
+	bpl initModes
+
+	; no buffers are assigned
+	ldx #16-1
+	lda #$ff
+initBufferToChannelTab:
+	sta DfiFs_ChannelToBufferTab,x
+	dex
+	bpl initBufferToChannelTab
+
+	; set dos message
+	lda #Err_73_DosMismatch
+	jsr DfiFs_SetError_NoBlock
+
+	clc
+	rts
+
+error:
+	sec
+	rts
+    .)
+
+
+;--------------------------------------
+
+DfiFs_SetChannelMode:
+.defBJL(DfiFs_SetChannelMode)
+    .(
+	; save regs
+	sty setChannelMode_selfMod_Y+1
+
+	; get buffer index
+	ldy DfiFs_ChannelBufferIdx
+	; set new mode
+	sta DfiFs_BufferMode,y
+
+	; restore regs
+setChannelMode_selfMod_Y:
+	ldy #0
+	rts
+    .)
+
+
+getFreeBuffer:
+.defBJL(getFreeBuffer)
+    .(
+	ldx #DfiFs_Cfg_NumberOfBuffers-1
+lookForFreeBuffer:
+	lda DfiFs_BufferToChannelTab,x
+	bmi foundFreeBuffer
+	dex
+	bpl lookForFreeBuffer
+
+	; nothing free found
+	sec
+	rts
+
+foundFreeBuffer:
+	; get channel nr
+	lda $b9
+	and #$0f
+	tay
+
+	; write buffer number to ChannelToBuffer translation table
+	txa
+	sta DfiFs_ChannelToBufferTab,y
+
+	; write channel number to BufferToChannel translation table
+	tya
+	sta DfiFs_BufferToChannelTab,x
+    .)
+; NOTE: fallthrough to 'setChannelBuffer', don't move functions
+setChannelBuffer:
+    .(
+	; check for command channel
+	lda $b9
+	and #$0f
+	cmp #$0f
+	bne normalChannel
+
+	; set buffer for command channel
+	lda #DfiFs_Cfg_SysBufferIdx
+	bne setBuffer	; bra
+
+normalChannel:
+	tax
+	lda DfiFs_ChannelToBufferTab,x
+	bmi noBuffer
+
+setBuffer:
+	sta DfiFs_ChannelBufferIdx
+	clc
+	adc #>DfiFs_BlockBuffer
+	sta DfiFsZp_BufPtr+1
+	lda #0
+	sta DfiFsZp_BufPtr
+	clc
+	rts
+
+noBuffer:
+	lda #Err_70_NoChannel
+	jsr DfiFs_SetError_NoBlock
+	sec
+	rts
+    .)
+
+
+
+releaseBuffer:
+.defBJL(releaseBuffer)
+    .(
+	lda $b9
+	and #$0f
+	tay
+	ldx DfiFs_ChannelToBufferTab,y
+	bmi noBuffer
+
+	lda #$ff
+	; free element in channel tab
+	sta DfiFs_ChannelToBufferTab,y
+	; free element in buffer tab
+	sta DfiFs_BufferToChannelTab,x
+
+	clc
+	rts
+
+noBuffer:
+	lda #Err_70_NoChannel
+	jsr DfiFs_SetError_NoBlock
+	sec
+	rts
+    .)
+
+
+;--------------------------------------
+
+
+writeFileByte:
+.defBJL(writeFileByte)
+    .(
+	; set the channel buffer
+	jsr setChannelBuffer
+	bcs error
+
+	; get buffer index
+	ldx DfiFs_ChannelBufferIdx
+	ldy DfiFs_BlockPtr,x
+
+	; still space left in current block?
+	lda $95
+	sta (DfiFsZp_BufPtr),y
+	iny
+	tya
+	bne spaceLeft
+
+	; link new sector to file
+	.bankJsr(L_writeFileByte_linkNewBlock)
+	bcs error
+
+	lda #2
+spaceLeft:
+	ldx DfiFs_ChannelBufferIdx
+	sta DfiFs_BlockPtr,x
+	clc
+	rts
+
+error:
+	sec
+	rts
+    .)
+
+;-------------------------------------
+;
+; setSectorLink
+;
+; Set the link bytes for the sector in the buffer.
+;
+; Parameters:
+;   X: link track
+;   Y: link sector
+;
+; Returns:
+;   -
+;
+setSectorLink:
+.defBJL(setSectorLink)
+    .(
+	; save link
+	stx sectorLink_trk
+	sty sectorLink_sec
+
+	jsr setChannelBuffer
+	bcs error
+
+	ldy #0
+	lda sectorLink_trk
+	sta (DfiFsZp_BufPtr),y		; set link sector
+	iny
+	lda sectorLink_sec
+	sta (DfiFsZp_BufPtr),y		; set link track
+
+	; ok
+	; carry is clear now
+error:
+	rts
+    .)
+
+
+;-------------------------------------
+;
+; getSectorLink
+;
+; Get the link bytes for the sector in the buffer.
+;
+; Parameters:
+;   -
+;
+; Returns:
+;   X: link track
+;   Y: link sector
+;
+getSectorLink:
+.defBJL(getSectorLink)
+    .(
+	jsr setChannelBuffer
+	bcs error
+
+	ldy #0
+	lda (DfiFsZp_BufPtr),y		; set link sector
+	tax
+	iny
+	lda (DfiFsZp_BufPtr),y		; set link track
+	tay
+
+	; ok
+	; carry is clear now
+error:
+	rts
+    .)
+
+
+readFileNewBlock:
+.defBJL(readFileNewBlock)
+    .(
+	txa
+	bne validLink
+
+	; end of file...
+	ldy DfiFs_ChannelBufferIdx
+	lda #$ff
+	sta DfiFs_BlockPtr,y
+	lda #$40	; EOF
+	sta $90
+	clc
+	rts
+
+validLink:
+	; read next file block
+	lda DfiFs_ChannelBufferIdx
+	jsr DfiFs_ReadBlock
+	bcs error
+
+	; get number of bytes in this block
+	ldy #0
+	ldx #$ff
+	lda (DfiFsZp_BufPtr),y
+	bne fullBlock
+	iny
+	lda (DfiFsZp_BufPtr),y
+	tax
+fullBlock:
+	ldy DfiFs_ChannelBufferIdx
+	txa
+	sta DfiFs_BlockUsed,y
+	; skip the first two linkbytes
+	lda #2
+	sta DfiFs_BlockPtr,y
+
+	clc
+	rts
+
+error:
+	sec
+	rts
+    .)
+
+
+
+    .)
+

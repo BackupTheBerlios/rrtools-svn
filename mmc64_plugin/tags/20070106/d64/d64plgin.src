@@ -1,0 +1,801 @@
+;--------------------------------------
+; D64 Plugin for MMC64
+;
+; by Doc Bacardi/DRM
+;--------------------------------------
+
+#segdef "zp", $26-$71
+#segdef "data", $6e00-$7c00
+#segdef "code", $4000-$6e00
+#segdef "dirbuffer", $0c00-$4000
+
+#outfile @, startadr, sort, $00, "code"
+
+;--------------------------------------
+
+	.segment "zp"
+	* = $26
+
+	.segment "data"
+	* = $6e00
+
+	.segment "code"
+	* = $4000
+
+;--------------------------------------
+
+ToggleEGDelay = $00
+
+;--------------------------------------
+
+	.segment "zp"
+
+
+LoadPtr				.DW 0
+HexdumpPtr			.DW 0
+
+	.segment "data"
+
+DebugMode			.DB 0
+FirstDataBlock			.DSB 3
+BootPrgBlock			.DW 0
+BlockLength			.DB 0
+crc_value			.DW 0
+unmappedPage			.DB 0
+
+scanFileZp			.DSB 3
+scanFile_ClusterCmp		.DW 0
+scanFile_WriteRoutine		.DW 0
+scanFile_MaxMem			.DW 0
+
+scanFile_BufModeAvailable	.DB 0
+scanFile_CntModeAvailable	.DB 0
+
+fileStartAdr			.DW 0
+fileEndAdr			.DW 0
+
+dfi_rootDir			.DW 0
+dfi_fileDir			.DW 0
+
+flag_retroReplay_present	.DB 0
+
+magic_buffer			.DSB $18
+
+writeTrk			.DB 0
+writeSec			.DB 0
+blockLength			.DB 0
+
+;--------------------------------------
+; start with code which does not run after booting the file.
+; no need to save this area
+
+	.segment "code"
+
+startPlugin:
+	sei
+	lda #$35
+	sta 1
+
+	; init the plugin variables
+	jsr MMC64Plugin_Init
+
+	; bring back Basic env
+	jsr MMC64Plugin_InitKernel
+	cli
+
+	; is right-shift down -> enter debug mode
+	jsr getRightShift
+	sta DebugMode
+
+	lda #<Msg_Hello
+	ldy #>Msg_Hello
+	jsr $ab1e
+
+	lda DebugMode
+	beq noDebug0
+	lda #<Msg_HelloDebug
+	ldy #>Msg_HelloDebug
+	jsr $ab1e
+noDebug0:
+
+	; dump bios parameter at $cf80
+	lda DebugMode
+	beq noDebug1
+	lda #<Msg_BiosParams
+	ldy #>Msg_BiosParams
+	jsr $ab1e
+	ldx #13
+	lda #<$cf80
+	ldy #>$cf80
+	jsr dumpMemory
+	jsr debugStep
+noDebug1:
+
+	lda #<Msg_OpenFile
+	ldy #>Msg_OpenFile
+	jsr $ab1e
+	jsr debugStep
+	jsr MMC64Plugin_OpenFile
+	bcc openOk
+	lda #<Err_Read
+	ldy #>Err_Read
+	jsr $ab1e
+	jmp quitPlugin
+openOk:
+	; check filesize, must not exceed 16M
+	lda MMC64Plugin_FileSize
+	cmp #1
+	lda MMC64Plugin_FileSize+1
+	sbc #0
+	lda MMC64Plugin_FileSize+2
+	sbc #0
+	lda MMC64Plugin_FileSize+3
+	sbc #1
+	bcc fileSizeOk
+	lda #<Err_FileSize
+	ldy #>Err_FileSize
+	jsr $ab1e
+	jmp quitPlugin
+fileSizeOk:
+
+	jsr romCheck
+	bcs quitPlugin
+
+	; open the image
+	jsr openImage
+	bcs quitPlugin
+
+	; show the filebrowser
+	jsr selectFile
+	bcs quitPlugin
+
+	jsr writeAllFiles
+
+	jmp MMC64Plugin_Exit
+
+
+
+quitPlugin:
+	lda #<Msg_Exit
+	ldy #>Msg_Exit
+	jsr $ab1e
+	jsr debugStep
+	
+	; go back to MMC64 browser
+	jmp MMC64Plugin_Exit
+
+;--------------------------------------
+
+; X: number of bytes
+; A: startadr lo
+; Y: startadr hi
+dumpMemory:
+    .(
+	sta HexdumpPtr
+	sty HexdumpPtr+1
+	ldy #0
+dumpLoop:
+	tya
+	and #7
+	bne noStartOfLine
+	tya
+	clc
+	adc HexdumpPtr
+	sta HexdumpPtr
+	bcc noInc
+	inc HexdumpPtr+1
+noInc: 
+	lda #$0d
+	jsr $ffd2
+	lda HexdumpPtr+1
+	ldy HexdumpPtr
+	jsr hexWordOut
+	lda #':'
+	jsr $ffd2
+	lda #' '
+	jsr $ffd2
+	ldy #0
+noStartOfLine:
+	lda #' '
+	jsr $ffd2
+	lda (HexdumpPtr),y
+	jsr hexOut
+	iny
+	dex
+	bne dumpLoop
+	lda #13
+	jmp $ffd2
+    .)
+
+
+hexWordOut:
+	jsr hexOut
+	tya
+hexOut:
+	pha
+	lsr
+	lsr
+	lsr
+	lsr
+	jsr hexOut0
+	pla
+	and #$0f
+hexOut0:
+	ora #$30
+	cmp #$3a
+	bcc hexOut1
+	adc #6
+hexOut1:
+	jmp $ffd2
+
+
+getRightShift:
+    .(
+	sei
+	lda #$bf
+	sta $dc00
+deflKey:
+	lda $dc01
+	cmp $dc01
+	bne deflKey
+	eor #$10
+	and #$10
+	lsr
+	lsr
+	lsr
+	lsr
+	cli
+	rts
+    .)
+
+
+debugStep:
+    .(
+	pha
+	lda DebugMode
+	beq noDebugMode
+waitForSpace:
+	inc $d020
+	jsr $ffe4
+	dec $d020
+	cmp #' '
+	bne waitForSpace
+noDebugMode:
+	pla
+	rts
+    .)
+
+;--------------------------------------
+
+writeAllFiles:
+    .(
+	jsr Entry_GetHeaderPtr
+	lda EntryZp_FirstPtr
+	sta EntryZp_ActEntry
+	lda EntryZp_FirstPtr+1
+	sta EntryZp_ActEntry+1
+
+findFiles:
+	lda EntryZp_ActEntry
+	cmp EntryZp_LastPtr
+	lda EntryZp_ActEntry+1
+	sbc EntryZp_LastPtr+1
+	bcs endOfList
+	jsr Entry_GetPtr
+
+	; is the entry selected
+	bit Entry_EBuf+DirE_Typ
+	bpl notSelected
+
+	; show filename
+	ldy #0
+printName:
+	lda Entry_EBuf+DirE_Name,y
+	jsr $ffd2
+	iny
+	cpy #$18
+	bcc printName
+
+	jsr writeOneFile
+	bcs error
+
+	lda #13
+	jsr $ffd2
+
+notSelected:
+	lda EntryZp_ActEntry
+	clc
+	adc #DirE_len
+	sta EntryZp_ActEntry
+	lda EntryZp_ActEntry+1
+	adc #0
+	sta EntryZp_ActEntry+1
+	jmp findFiles
+
+endOfList:
+	clc
+	rts
+
+error:
+	sec
+	rts
+    .)
+
+
+writeOneFile:
+    .(
+	; copy track / sector
+	lda Entry_EBuf+DirE_UserData
+	sta writeTrk
+	lda Entry_EBuf+DirE_UserData+1
+	sta writeSec
+
+	; open dst file
+	lda #2
+	ldx #8
+	ldy #$61
+	jsr $ffba
+	lda #16
+	ldx #<(Entry_EBuf+DirE_Name+1)
+	ldy #>(Entry_EBuf+DirE_Name+1)
+	jsr $ffbd
+
+	jsr $f3d5	; open file
+	lda $ba
+	jsr $ed0c	; listen
+	lda $b9
+	jsr $edb9	; sec listen
+
+	lda $90
+	bne error
+
+writeLoop:
+	; show dot
+	lda #'.'
+	jsr $ffd2
+
+	; load block
+	ldx writeTrk
+	ldy writeSec
+	jsr dfi_seek_sector
+	bcs error
+
+	; last block?
+	jsr MMC64Plugin_GetByte
+	bcs read_error
+	sta writeTrk
+	jsr MMC64Plugin_GetByte
+	bcs read_error
+	sta writeSec
+
+	ldx #$ff
+	lda writeTrk
+	bne notLast
+	ldx writeSec
+notLast:
+	stx blockLength
+
+	; copy one block
+	ldy #1
+copyBlock:
+	iny
+	jsr MMC64Plugin_GetByte
+	bcs read_error
+	jsr $eddd
+	cpy blockLength
+	bne copyBlock
+
+	lda writeTrk
+	bne writeLoop
+
+	jsr $f63f
+	clc
+	rts
+
+error:
+read_error:
+	sec
+	rts
+    .)
+
+;--------------------------------------
+
+romCheck:
+    .(
+	; init the results
+	lda #0
+	sta flag_retroReplay_present
+
+	; detect retro replay style hardware, other modules might crash :(
+	jsr detectRetroReplay
+	bcs noRR
+	jmp initRetroReplay
+
+noRR:
+	; no known cart found, look for rom at $8000
+	jsr check
+	beq ram8000
+	; rom at 8000
+	lda #<Err_UnknownRom
+	ldy #>Err_UnknownRom
+	jsr $ab1e
+
+getKeyRom:
+	jsr $ffe4
+	cmp #'y'
+	beq ram8000
+	cmp #'n'
+	bne getKeyRom
+
+	ldx #160
+	lda #<$8000
+	ldy #>$8000
+	jsr dumpMemory
+	jsr debugStep
+;romCheckError:
+	sec
+	rts
+
+ram8000:
+	clc
+	rts
+
+check:
+	lda $8000
+	eor #$ff
+	sta $8000
+	cmp $8000
+	rts
+    .)
+
+
+detectRetroReplay:
+    .(
+	; configure rr: reu mem map, no freeze, allow banking
+	lda #%01000110
+	sta $de01
+
+	; write values to all banks, c64 val is special
+	lda #$22
+	jsr detectRR_switcher
+	lda #$a0
+	sta $9eff
+
+	ldy #1
+detectRR0:
+	lda detectRR_bankTab,y
+	jsr detectRR_switcher
+	tya
+	ora #$a0
+	sta $deff
+	iny
+	cpy #detectRR_bankTab_len
+	bcc detectRR0
+
+	lda #13
+	jsr $ffd2
+
+	; read values back
+	ldy #0
+detectRR1:
+	lda detectRR_bankTab,y
+	jsr detectRR_switcher
+	tya
+	ora #$a0
+	cmp $9eff
+	bne detectRR_miss
+	iny
+	cpy #detectRR_bankTab_len
+	bcc detectRR1
+
+	; ok, retro replay found!
+	lda #$22
+	jsr detectRR_switcher
+	clc
+	rts
+
+detectRR_miss:
+	; no retro replay
+	sec
+	rts
+
+
+detectRR_bankTab:
+	.DB %00100010
+	.DB %00100000
+	.DB %00101000
+	.DB %00110000
+	.DB %00111000
+detectRR_bankTab_len = * - detectRR_bankTab
+
+detectRR_switcher:
+	sta $de00
+	ldx #ToggleEGDelay
+detectRR_switcher1:
+	inx
+	bne detectRR_switcher1
+	rts
+    .)
+
+
+initRetroReplay:
+    .(
+	; scan file and write map to rr ram
+	; rr can access 4*$fe bytes at $df00. max sizes are:
+	;
+	; Sec per cluster | bytes per cluster | max image size
+	;-----------------+-------------------+------------------
+	; $01             | $0200             | $0003f800 (~256K)
+	; $02             | $0400             | $0007f000 (~512K)
+	; $04             | $0800             | $000fe000 (~1M)
+	; $08             | $1000             | $001fc000 (~2M)
+	; $10             | $2000             | $003f8000 (~4M)
+	; $20             | $4000             | $007f0000 (~8M)
+	;-----------------+-------------------+------------------
+
+	lda #1
+	sta flag_retroReplay_present
+
+	lda #<(4*$fe+1)
+	sta scanFile_MaxMem
+	lda #>(4*$fe+1)
+	sta scanFile_MaxMem+1
+	lda #<rrRamWrite
+	sta scanFile_WriteRoutine
+	lda #>rrRamWrite
+	sta scanFile_WriteRoutine+1
+
+	lda #<Msg_RomRR
+	ldy #>Msg_RomRR
+	jsr $ab1e
+
+	clc
+	rts
+
+;romCheckError:
+;	sec
+;	rts
+
+
+rrRamWrite:
+	pha
+selfmodBank:
+	ldx #0
+	lda bankTab,x
+	sta $de00
+
+	ldx #ToggleEGDelay
+bankswitch0:
+	inx
+	bne bankswitch0
+	; x is 0 now
+
+	pla
+writeBytes:
+selfmodIdx:
+	ldx #0
+	sta $de02,x
+	inx
+	tya
+	sta $de02,x
+	inx
+	cpx #$fe
+	bcc noBankChange
+	inc selfmodBank+1
+	ldx #0
+noBankChange:
+	stx selfmodIdx+1
+
+	lda #$22
+	sta $de00
+
+	ldx #ToggleEGDelay
+bankswitch1:
+	inx
+	bne bankswitch1
+
+	rts
+
+bankTab:
+	.DB %00100010
+	.DB %00101010
+	.DB %00110010
+	.DB %00111010
+    .)
+
+
+;--------------------------------------
+
+openImage:
+    .(
+	; check archive magic
+;TODO: check d64 filesize
+
+
+	clc
+	rts
+
+read_error:
+	lda #<Err_Read
+	ldy #>Err_Read
+	jsr $ab1e
+	sec
+	rts
+
+    .)
+
+;--------------------------------------
+
+selectFile:
+    .(
+	; start filebrowser
+	jsr Mylene
+	bcc selectionOk
+	tay
+	beq nothing_selected
+	bne read_error
+
+selectionOk:
+	; selected entry is in Entry_EBuf
+
+;TODO: write files
+
+	; ok
+	clc
+	rts
+
+nothing_selected:
+	sec
+	rts
+
+read_error:
+	lda #<Err_Read
+	ldy #>Err_Read
+	jsr $ab1e
+	sec
+	rts
+
+seek_error:
+	lda #<Err_Seek
+	ldy #>Err_Seek
+	jsr $ab1e
+	sec
+	rts
+    .)
+
+;--------------------------------------
+
+Mylene_Start = *
+#include "browser.src"
+#print "Mylene Size:", *-Mylene_Start
+
+;--------------------------------------
+
+MMC64Plugin_Start = *
+#include "mmc64_plugin/mmc64_plugin.src"
+#print "MMC64 Plugin Size:", *-MMC64Plugin_Start
+
+;--------------------------------------
+; some strings for debugging
+
+	;     0         1         2         3
+	;     0123456789012345678901234567890123456789
+Msg_Hello:
+	.PET 147
+	.PET "d64 browser v0.1 by doc bacardi and", 13
+	.PET "uncle tom/drm", 13
+	.PET "hit-man war ooch dabei (hat er gesagt)", 13, 0
+
+Msg_HelloDebug:
+	.PET "debug mode enabled", 13, 0
+
+Msg_BiosParams:
+	.PET 13
+	.PET "bios parameter:", 0
+
+Msg_OpenFile:
+	.PET "opening image...", 13, 0
+
+Msg_DfiParams:
+	.PET 13
+	.PET "generated dfi parameter:", 0
+
+Msg_EnterApplication:
+	.PET "enter application...", 13, 0
+
+Msg_Exit:
+	.PET "exit to mmc64 browser", 13, 0
+
+Msg_Booting:
+	.PET "booting file ", 0
+
+Msg_BootStartAdr:
+	.PET "start address: ", 0
+
+Msg_BootDone:
+	.PET 13
+	.PET "end address:   ", 0
+
+Msg_Crc:
+	.PET "file crc: ", 0
+
+Msg_Rom8000:
+	.PET "rom at $8000, detecting...", 13, 0
+
+Msg_RomRR:
+	.PET "retro replay found and initialized.", 13, 0
+
+Msg_NoClusterBuffer:
+	.PET "clusterbuffer disabled, not enough ram.", 13, 0
+
+Msg_Scanning:
+	.PET "scanning file...", 13, 0
+
+Msg_ScanOk:
+	.PET "scan done.", 13, 0
+
+Msg_SelectLoaderMode:
+	.PET "available loader modes:", 13, 0
+Msg_SelectLoaderMode_CntAvail:
+	.PET "1: continuous mode", 13, 0
+Msg_SelectLoaderMode_CntNotAvail:
+	.PET "   continuous mode not available", 13, 0
+Msg_SelectLoaderMode_BufAvail:
+	.PET "2: buffered mode", 13, 0
+Msg_SelectLoaderMode_BufNotAvail:
+	.PET "   buffered mode not available", 13, 0
+Msg_SelectLoaderMode_PlainAvail:
+	.PET "3: plain mode", 13, 0
+Msg_SelectLoaderMode_Prompt:
+	.PET "please select >", 0
+
+Msg_SelectLoaderMode_Header:
+	.PET "selected loader mode: ", 0
+Msg_SelectLoaderMode_Cnt:
+	.PET "continuous", 13, 0
+Msg_SelectLoaderMode_Buf:
+	.PET "buffered", 13, 0
+Msg_SelectLoaderMode_Plain:
+	.PET "plain", 13, 0
+
+Msg_ImageTracks:
+	.PET "number of tracks: ", 0
+
+Msg_SelectPluginMode_Header:
+	.PET "use kernal extension or dreamload?", 13
+	.PET "please select (k/d) >", 0
+
+
+Err_FileSize:
+	.PET "file exceeds 16mb!", 13, 0
+
+Err_Seek:
+	.PET "seek error!", 13, 0
+
+Err_Read:
+	.PET "read error!", 13, 0
+
+Err_Type:
+	.PET "error, first directory entry must be a", 13
+	.PET "prg in this beta version. sorry!", 13, 0
+
+Err_Magic:
+	.PET "magic not found, too scared to continue!", 13, 0
+
+Err_BootfileTooLong:
+	.PET "bootfile too long, the data would", 13
+	.PET "overwrite the plugin!", 13, 0
+
+Err_UnknownRom:
+	.PET "unknown rom, can't map out!", 13
+	.PET "continue anyway? (y/n)", 13, 0
+
+Err_Scan:
+	.PET "failed to scan the file!", 13, 0
+
+Err_Kernal_NoCart:
+	.PET "the kernal extension needs an action", 13
+	.PET "replay style cart. none found! sorry...", 13, 0
+
+;--------------------------------------
+

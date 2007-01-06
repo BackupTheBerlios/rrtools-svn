@@ -1,0 +1,286 @@
+
+;--------------------------------------
+;
+; Mylene
+;
+; A portable directory browser.
+; Based on the never-released StereoSID-Player.
+;--------------------------------------
+
+	.segment "dirbuffer"
+	* = $0c00
+EntryMem_Start:
+	.DSB $3000-$0c00
+EntryMem_End:
+
+;--------------------------------------
+
+	.segment "data"
+
+saveCols:
+	.DSB $0200
+
+saveScreen:
+	.DSB $0400
+
+;--------------------------------------
+
+	.segment "code"
+
+;--------------------------------------
+
+#include "mylene/mylene.src"
+
+;--------------------------------------
+
+Mylene:
+	jsr initScreen
+	jsr Entry_ClearAll
+
+	lda #<levels_dfi
+	ldy #>levels_dfi
+	jsr level_init
+
+	; read level 0
+	jsr level_0_init
+
+	php
+	pha
+
+	jsr restoreScreen
+
+	pla
+	plp
+	rts
+
+;--------------------------------------
+
+initScreen:
+    .(
+	; save colors
+	ldx #0
+saveCols0:
+	lda $d800,x
+	and #$0f
+	sta saveCols,x
+	lda $d900,x
+	asl
+	asl
+	asl
+	asl
+	ora saveCols,x
+	sta saveCols,x
+	lda $da00,x
+	and #$0f
+	sta saveCols+$0100,x
+	lda $db00,x
+	asl
+	asl
+	asl
+	asl
+	ora saveCols+$0100,x
+	sta saveCols+$0100,x
+	inx
+	bne saveCols0
+
+	; save screen
+saveScreen0:
+	lda $0400,x
+	sta saveScreen,x
+	lda $0500,x
+	sta saveScreen+$0100,x
+	lda $0600,x
+	sta saveScreen+$0200,x
+	lda $0700,x
+	sta saveScreen+$0300,x
+	inx
+	bne saveScreen0
+
+	; draw a border
+	lda #$70
+	sta SC+ 2*40+2
+	lda #$6e
+	sta SC+ 2*40+36
+	lda #$6d
+	sta SC+22*40+2
+	lda #$7d
+	sta SC+22*40+36
+	ldx #32
+	lda #$40
+drawHBar:
+	sta SC+ 2*40+3,x
+	sta SC+22*40+3,x
+	dex
+	bpl drawHBar
+	ldx #34
+	lda #1
+drawHCol:
+	sta $d800+ 2*40+2,x
+	sta $d800+22*40+2,x
+	dex
+	bpl drawHCol
+
+	lda #<(SC+ 3*40)
+	sta ComLibZp_ScrPtr0
+	lda #>(SC+ 3*40)
+	sta ComLibZp_ScrPtr0+1
+	ldx #18
+drawVBar:
+	lda ComLibZp_ScrPtr0
+	sta ComLibZp_ScrPtr1
+	lda ComLibZp_ScrPtr0+1
+	and #3
+	ora #$d8
+	sta ComLibZp_ScrPtr1+1
+	lda #$5d
+	ldy #2
+	sta (ComLibZp_ScrPtr0),y
+	ldy #36
+	sta (ComLibZp_ScrPtr0),y
+	lda #1
+	ldy #2
+	sta (ComLibZp_ScrPtr1),y
+	ldy #36
+	sta (ComLibZp_ScrPtr1),y
+	lda ComLibZp_ScrPtr0
+	clc
+	adc #40
+	sta ComLibZp_ScrPtr0
+	lda ComLibZp_ScrPtr0+1
+	adc #0
+	sta ComLibZp_ScrPtr0+1
+	dex
+	bpl drawVBar
+
+	jsr ComLib_ClearScreen
+
+	rts
+    .)
+
+
+restoreScreen:
+    .(
+	; restore screen
+	ldx #0
+restoreScreen0:
+	lda saveScreen,x
+	sta $0400,x
+	lda saveScreen+$0100,x
+	sta $0500,x
+	lda saveScreen+$0200,x
+	sta $0600,x
+	lda saveScreen+$0300,x
+	sta $0700,x
+	inx
+	bne restoreScreen0
+
+	; restore colors
+	ldx #0
+restoreCols0:
+	lda saveCols,x
+	and #$0f
+	sta $d800,x
+	lda saveCols,x
+	lsr
+	lsr
+	lsr
+	lsr
+	sta $d900,x
+	lda saveCols+$0100,x
+	and #$0f
+	sta $da00,x
+	lda saveCols+$0100,x
+	lsr
+	lsr
+	lsr
+	lsr
+	sta $db00,x
+	inx
+	bne restoreCols0
+
+	rts
+    .)
+
+;--------------------------------------
+
+GetKey:
+    .(
+	jsr $ffe4
+	beq GetKey
+
+	ldx #DirManBSS_KeyTab_len-1
+GetKey0:
+	cmp DirManBSS_KeyTab,x
+	beq GetKey1
+	dex
+	bpl GetKey0
+	bmi GetKey	; bra
+
+GetKey1:
+	lda DirManBSS_KeyTabLo,x
+	sta LoadZp_Cnt
+	lda DirManBSS_KeyTabHi,x
+	sta LoadZp_Cnt+1
+	jmp (LoadZp_Cnt)
+    .)
+
+;--------------------------------------
+
+Quit:
+    .(
+	; nothing selected
+	lda #0
+	sec
+	rts
+    .)
+
+;--------------------------------------
+
+GotoRootDir:
+	ldx #2
+	jmp GotoLevel
+
+;--------------------------------------
+
+DirManBSS_KeyTab:
+	.DB $91		; cursor up
+	.DB $11		; cursor down
+	.DB $0d		; return
+;	.DP ' '
+	.DP 'q'
+	.DB $03		; run/stop
+;	.DP 'p'
+	.DP '1'
+	.DP 'r'
+;	.DP 'd'
+DirManBSS_KeyTab_len = *-DirManBSS_KeyTab
+
+DirManBSS_KeyTabLo:
+	.DB <MoveListUp
+	.DB <MoveListDown
+	.DB <EntryAction
+;	.DB <SelectEntry
+	.DB <Quit
+	.DB <Quit
+;	.DB <GotoPartDir
+	.DB <GotoPrevDir
+	.DB <GotoRootDir
+;	.DB <GotoDevList
+
+DirManBSS_KeyTabHi:
+	.DB >MoveListUp
+	.DB >MoveListDown
+	.DB >EntryAction
+;	.DB >SelectEntry
+	.DB >Quit
+	.DB >Quit
+;	.DB >GotoPartDir
+	.DB >GotoPrevDir
+	.DB >GotoRootDir
+;	.DB >GotoDevList
+
+;--------------------------------------
+
+_DirManEnd:
+
+

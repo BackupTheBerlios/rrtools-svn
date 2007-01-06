@@ -1,0 +1,153 @@
+;--------------------------------------
+; DFI Filesystem,
+; REU read/write routines
+;--------------------------------------
+
+;--------------------------------------
+; REU Registers
+
+REU_Status		= $df00
+REU_Cmd			= $df01
+REU_C64Adr		= $df02
+REU_ReuAdr		= $df04
+REU_Length		= $df07
+REU_IrqMask		= $df09
+REU_AdrCtrl		= $df0a
+
+DfiFs_REU_Cmd_Read  = %10010001
+DfiFs_REU_Cmd_Write = %10010000
+
+
+;--------------------------------------
+
+; NOTE: this routine must not use bankswitching.
+; It runs in C64 ram before the code is copied
+; to RR Ram.
+
+@0BANK0_DfiFs_REU_Init:
+    .(
+	lda #<DfiFs_REU_ReadBlock
+	sta DfiFs_ReadBlock+1
+	lda #>DfiFs_REU_ReadBlock
+	sta DfiFs_ReadBlock+2
+
+	lda #<DfiFs_REU_WriteBlock
+	sta DfiFs_WriteBlock+1
+	lda #>DfiFs_REU_WriteBlock
+	sta DfiFs_WriteBlock+2
+
+	clc
+	rts
+    .)
+
+
+;--------------------------------------
+; DfiFs_REU_ReadBlock
+;
+; Read Trk/Sec to the blockbuffer
+;
+; Parameter:
+;  A : Bufferindex
+;  X : Track (must not be 0)
+;  Y : Sector
+;
+; Returns:
+;  C : Ok (0)/Error(1)
+;
+DfiFs_REU_ReadBlock:
+    .(
+	cpx #0
+	beq error
+	dex
+	sty REU_ReuAdr+1
+	stx REU_ReuAdr+2
+
+	ldx #0
+	stx REU_C64Adr
+	clc
+	adc #>DfiFs_BlockBuffer
+	sta REU_C64Adr+1
+
+	stx REU_IrqMask		; no irqs
+	stx REU_AdrCtrl		; C64 and REU Adr are not fixed
+	stx REU_ReuAdr
+
+	lda #<$0100
+	sta REU_Length
+	lda #>$0100
+	sta REU_Length+1
+
+	lda #DfiFs_REU_Cmd_Read
+	jsr DfiFs_reuTrans
+
+	clc
+	rts
+
+error:
+	sec
+	rts
+    .)
+
+
+;--------------------------------------
+; DfiFs_REU_WriteBlock
+;
+; Write Trk/Sec to the blockbuffer
+;
+; Parameter:
+;  A : Bufferindex
+;  X : Track (must not be 0)
+;  Y : Sector
+;
+; Returns:
+;  C : Ok (0)/Error(1)
+;
+DfiFs_REU_WriteBlock:
+    .(
+	cpx #0
+	beq error
+	dex
+	sty REU_ReuAdr+1
+	stx REU_ReuAdr+2
+
+	ldx #0
+	stx REU_C64Adr
+	clc
+	adc #>DfiFs_BlockBuffer
+	sta REU_C64Adr+1
+
+	stx REU_IrqMask		; no irqs
+	stx REU_AdrCtrl		; C64 and REU Adr are not fixed
+	stx REU_ReuAdr
+
+	lda #<$0100
+	sta REU_Length
+	lda #>$0100
+	sta REU_Length+1
+
+	lda #DfiFs_REU_Cmd_Write
+	jsr DfiFs_reuTrans
+
+	clc
+	rts
+
+error:
+	sec
+	rts
+    .)
+
+
+;--------------------------------------
+; start REU transfer and wait for transfer finish
+
+DfiFs_reuTrans:
+    .(
+	sta REU_Cmd
+reuWait:
+	bit REU_Status
+	bvc reuWait
+	rts
+    .)
+
+;--------------------------------------
+

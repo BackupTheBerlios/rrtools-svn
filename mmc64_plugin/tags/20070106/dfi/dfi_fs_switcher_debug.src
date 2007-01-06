@@ -1,0 +1,152 @@
+
+;--------------------------------------
+
+	.segment "switcher"
+
+@0DfiFs_Open:
+	jsr switch_rom_bank0_save01
+	jmp BANK0_DfiFs_Open_Rom
+
+
+@0DfiFs_Close:
+	jsr switch_rom_bank0_save01
+	jmp BANK0_DfiFs_Close_Rom
+
+
+@0DfiFs_ChangeKernalInput:
+	jsr switch_rom_bank0_save01
+	jmp BANK0_DfiFs_ChangeKernalInput_Rom
+
+
+@0DfiFs_ChangeKernalOutput:
+	jsr switch_rom_bank0_save01
+	jmp BANK0_DfiFs_ChangeKernalOutput_Rom
+
+
+@0DfiFs_ClearChannels:
+	jsr switch_rom_bank0_save01
+	jmp BANK0_DfiFs_ClearChannels_Rom
+
+
+@0DfiFs_CharIn:
+	jsr switch_rom_bank0_save01
+	jmp BANK0_DfiFs_GetByteKernal_Rom
+
+
+@0DfiFs_CharOut:
+	jsr switch_rom_bank0_save01
+	jmp BANK0_DfiFs_SendByteKernal_Rom
+
+@0DfiFs_GetIn:
+	jsr switch_rom_bank0_save01
+	jmp BANK0_DfiFs_GetInKernal_Rom
+
+
+;DfiFs_ClAll:
+
+@0DfiFs_Load:
+	jsr switch_rom_bank0_save01
+	jmp BANK0_DfiFs_Load_Rom
+
+@0DfiFs_Save:
+	jsr switch_rom_bank0_save01
+	jmp BANK0_DfiFs_Save_Rom
+
+
+readC64Bytes:
+.defBankJumpLabel(readC64Bytes, readC64Bytes, C64, BankCfg_C64)
+readC64Bytes_mod:
+	lda ($00),y
+	rts
+
+switch_rom_bank0_save01:
+	sei
+	php
+	pha
+	lda $01
+	sta DfiFs_Save01
+	lda #$35
+	sta 1
+	.DB $2c
+switch_rom_bank0:
+	php
+	pha
+	pla
+	plp
+	rts
+
+
+exitToRom_Hi:
+	lda $ffff,x
+	pha
+	dex
+	bne exitToRom_Hi
+	tya
+	pha
+exitToRom_saveA:
+	lda #0
+exitToRom_saveX:
+	ldx #0
+exitToRom_saveY:
+	ldy #0
+	plp
+; NOTE: fallthrough to switch_c64_restore01
+
+switch_c64_restore01:
+	php
+	pha
+	lda DfiFs_Save01
+	sta 1
+	pla
+	plp
+	cli
+	rts
+
+switch_c64:
+	rts
+
+DfiFs_SaveA				.DB 0
+DfiFs_SaveX				.DB 0
+DfiFs_SaveY				.DB 0
+DfiFs_Save01				.DB 0
+
+DfiFs_CurrentBank			.DB 0
+
+DfiFs_DeviceAddress			.DB 8		; default device is 8
+
+DfiFs_InitFlag				.DB 0		; was the dfi information initialized
+
+DfiFs_BlockPtr				.DSB DfiFs_Cfg_NumberOfBuffers		; index of the current byte of the buffer
+DfiFs_ChannelBufferIdx			.DB 0		; bufferidx for current channel, set by 'setChannelBuffer'
+
+DfiFs_ExchangeBuffer			.DSB $20
+
+#print "switcher code end:", *
+
+DfiFs_Switcher_len = * - DfiFs_Switcher_Org
+
+;--------------------------------------
+
+.struct_init
+DfiFs_ParamOffs_SearchDir_Name			.struct_elem(16)
+DfiFs_ParamOffs_SearchDir_NameLen		.struct_elem(1)
+DfiFs_ParamOffs_SearchDir_TypLo			.struct_elem(1)
+DfiFs_ParamOffs_SearchDir_TypHi			.struct_elem(1)
+DfiFs_ParamOffs_SearchDir_len			.struct_len
+
+.struct_init
+DfiFs_paramOffs_DirEntry_Reserved00		.struct_elem(2)
+DfiFs_paramOffs_DirEntry_Typ			.struct_elem(1)
+DfiFs_paramOffs_DirEntry_Track			.struct_elem(1)
+DfiFs_paramOffs_DirEntry_Sector			.struct_elem(1)
+DfiFs_paramOffs_DirEntry_Filename		.struct_elem(16)
+DfiFs_paramOffs_DirEntry_SideSectorBlockTrack	.struct_elem(1)
+DfiFs_paramOffs_DirEntry_SideSectorBlockSector	.struct_elem(1)
+DfiFs_paramOffs_DirEntry_RecordLength		.struct_elem(1)
+DfiFs_paramOffs_DirEntry_Reserved18		.struct_elem(4)
+DfiFs_paramOffs_DirEntry_ReplaceTrack		.struct_elem(1)
+DfiFs_paramOffs_DirEntry_ReplaceSector		.struct_elem(1)
+DfiFs_paramOffs_DirEntry_Blocks			.struct_elem(2)
+DfiFs_paramOffs_DirEntry_len			.struct_len
+
+;--------------------------------------

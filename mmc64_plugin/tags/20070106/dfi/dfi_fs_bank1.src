@@ -1,0 +1,707 @@
+
+	.segment "bank1"
+
+    .(
+
+	.setBank(1, BankCfg_1_Ram)
+
+;--------------------------------------
+
+DfiFs_CommandBuf			.DSB 256	; buffer for disk commands
+
+DfiFs_AccessMode			.DB 0		; file access mode (0:read, 1:write, and a/m?)
+DfiFs_FileType				.DB 0		; file type (1=seq, 2=prg, ...)
+
+DfiFs_CurrentDir			.DW 0		; current dir trk/sec
+DfiFs_WorkingDir			.DW 0		; working dir trk/sec
+
+DfiFs_LocalCmdCopy			.DSB DfiFs_ParamOffs_SearchDir_len
+
+;--------------------------------------
+
+DfiFs_SaveFile_DirEntryIdx		.DB 0
+DfiFs_SaveFile_DirEntryTrk		.DB 0
+DfiFs_SaveFile_DirEntrySec		.DB 0
+DfiFs_SaveFile_Trk			.DB 0
+DfiFs_SaveFile_Sec			.DB 0
+DfiFs_SaveFile_Blocks			.DW 0
+
+DfiFs_ScratchFile_Trk			.DB 0
+DfiFs_ScratchFile_Sec			.DB 0
+DfiFs_ScratchFile_DirEntryTrk		.DB 0
+DfiFs_ScratchFile_DirEntrySec		.DB 0
+DfiFs_ScratchFile_DirEntryIdx		.DB 0
+
+writeFile_newBlockZp			.DW 0
+
+DfiFs_RootDir				.DW 0		; root dir trk/sec
+
+;--------------------------------------
+
+#include "dfi_fs_cmd.src"
+
+;--------------------------------------
+
+DfiFs_InitBank1:
+.defBJL(DfiFs_InitBank1)
+    .(
+	; start in root directory
+	stx DfiFs_RootDir
+	stx DfiFs_CurrentDir
+	sty DfiFs_RootDir+1
+	sty DfiFs_CurrentDir+1
+
+	rts
+    .)
+
+;--------------------------------------
+
+DoInitIfNotYet_Bank1:
+    .(
+	lda DfiFs_InitFlag
+	bne initAlreadyDone
+	.bankJsr(L_DfiFs_Init)
+	rts
+
+initAlreadyDone:
+	clc
+	rts
+    .)
+
+;--------------------------------------
+
+DfiFs_OpenFile:
+.defBJL(DfiFs_OpenFile)
+    .(
+	jsr DoInitIfNotYet_Bank1
+	bcs error
+
+	lda $b9
+	and #$0f
+	cmp #$0f
+	beq openCmdChannel
+	; check for channel 0 and 1 (load/save)
+	cmp #2
+	bcc hasDefaultMode
+	; no default mode -> always open in read mode
+	lda #0
+hasDefaultMode:
+	sta DfiFs_AccessMode
+
+	; get free buffer for this channel
+	.bankJsr(L_getFreeBuffer)
+	bcs error
+
+	; set default values
+	lda #2			; default file type is 'prg'
+	sta DfiFs_FileType
+	; copy filename to buffer
+
+	lda #$bb
+	sta readC64Bytes_mod+1
+
+	ldy #0
+	sty DfiFs_CommandPos
+copyFilename:
+	.bankJsr(L_readC64Bytes)
+	sta DfiFs_CommandBuf,y
+	iny
+	cpy $b7
+	bne copyFilename
+	sty DfiFs_CommandLen
+
+	lda DfiFs_CommandBuf
+	cmp #'$'
+	bne notDirectory
+	jmp DfiFs_OpenDir
+
+notDirectory:
+	; parse the filename for [drive_nr][@][path]:filename[,(s|p|u|r)][,(r|w|a|m)]
+	jsr initCounters
+
+	; read one entry
+	jsr parseEntry
+	bcs error
+
+	jsr DfiFs_Cmd_CheckTypeModifier
+	bcs error
+
+	jsr DfiFs_Cmd_CheckModeModifier
+	bcs error
+
+	ldx DfiFs_AccessMode
+	beq openLoadChannel
+	dex
+	beq openSaveChannel
+
+	; other modes are not supported yet
+unsupportedMode:
+	inc $d020
+	jmp unsupportedMode
+
+
+openLoadChannel:
+	; load a normal file
+	jmp DfiFs_OpenFileForReading
+
+
+openSaveChannel:
+	jmp DfiFs_OpenFileForWriting
+
+
+openCmdChannel:
+	jmp DfiFs_OpenCommandChannel
+
+
+error:
+	sec
+	rts
+    .)
+
+
+;--------------------------------------
+
+
+DfiFs_OpenDir:
+    .(
+	lda #Err_00_Ok
+	.bankJsr(L_DfiFs_SetError_NoBlock)
+
+	; set default values
+	lda #'*'
+	sta DfiFs_ExchangeBuffer+DfiFs_ParamOffs_SearchDir_Name
+	lda #1
+	sta DfiFs_ExchangeBuffer+DfiFs_ParamOffs_SearchDir_NameLen
+	lda #$01
+	sta DfiFs_ExchangeBuffer+DfiFs_ParamOffs_SearchDir_TypLo
+	lda #$ff
+	sta DfiFs_ExchangeBuffer+DfiFs_ParamOffs_SearchDir_TypHi
+
+	; more chars behind '$'
+	lda $b7
+	cmp #2
+	bcc noOptions
+
+	; skip '$'
+	lda #1
+	sta DfiFs_CommandPos
+
+	; parse the filename for [drive_nr][path]:[pattern]=[typ]
+	jsr initCounters
+
+	; read one entry
+	jsr parseEntry
+	bcs error
+
+	; check for '=(s|p|u|r)'
+	jsr DfiFs_Cmd_CheckFixedType
+	bcs error
+
+	; get entry
+	ldx #0
+	stx DfiFs_Cmd_Entry_Cnt
+
+	; get the file entry
+	jsr DfiFs_Cmd_GetEntry
+
+noOptions:
+	lda DfiFs_CurrentDir
+	sta DfiFs_WorkingDir
+	lda DfiFs_CurrentDir+1
+	sta DfiFs_WorkingDir+1
+
+readDirectory:
+	lda #DfiFs_BufferMode_ReadDir
+	.bankJsr(L_DfiFs_SetChannelMode)
+
+	; get the header
+	ldx DfiFs_WorkingDir
+	ldy DfiFs_WorkingDir+1
+	.bankJsr(L_readHeaderLine)
+	bcs error
+
+	clc
+	rts
+
+error:
+	sec
+	rts
+
+    .)
+
+
+DfiFs_OpenFileForReading:
+    .(
+	lda #Err_00_Ok
+	.bankJsr(L_DfiFs_SetError_NoBlock)
+
+	lda DfiFs_FileType
+	ora #$80
+	sta DfiFs_ExchangeBuffer+DfiFs_ParamOffs_SearchDir_TypLo
+	clc
+	adc #1
+	sta DfiFs_ExchangeBuffer+DfiFs_ParamOffs_SearchDir_TypHi
+
+	lda DfiFs_CurrentDir
+	sta DfiFs_WorkingDir
+	lda DfiFs_CurrentDir+1
+	sta DfiFs_WorkingDir+1
+
+	; get entry
+	ldx #0
+	stx DfiFs_Cmd_Entry_Cnt
+
+	; get the file entry
+	jsr DfiFs_Cmd_GetEntry
+
+	ldx DfiFs_WorkingDir
+	ldy DfiFs_WorkingDir+1
+	.bankJsr(L_searchDir_init)
+	bcs error
+
+	; find file in directory
+	.bankJsr(L_findNextMatchingDirEntry)
+	bcs error
+	tax
+	bmi fileNotFound
+
+	; read first file block
+	ldx DfiFs_ExchangeBuffer+DfiFs_paramOffs_DirEntry_Track
+	ldy DfiFs_ExchangeBuffer+DfiFs_paramOffs_DirEntry_Sector
+	.bankJsr(L_readFileNewBlock)
+	bcs error
+
+	lda #DfiFs_BufferMode_ReadFile
+	.bankJsr(L_DfiFs_SetChannelMode)
+
+	clc
+	rts
+
+fileNotFound:
+	ldy DfiFs_ChannelBufferIdx
+	lda #$ff
+	sta DfiFs_BlockPtr,y
+	lda #Err_62_FileNotFound
+	.bankJsr(L_DfiFs_SetError_NoBlock)
+	lda #$03	; timeout
+	sta $90
+	clc
+	rts
+
+error:
+	sec
+	rts
+    .)
+
+
+DfiFs_OpenFileForWriting:
+    .(
+	lda #Err_00_Ok
+	.bankJsr(L_DfiFs_SetError_NoBlock)
+
+	lda DfiFs_FileType
+	ora #$80
+	sta DfiFs_ExchangeBuffer+DfiFs_ParamOffs_SearchDir_TypLo
+	clc
+	adc #1
+	sta DfiFs_ExchangeBuffer+DfiFs_ParamOffs_SearchDir_TypHi
+
+	lda DfiFs_CurrentDir
+	sta DfiFs_WorkingDir
+	lda DfiFs_CurrentDir+1
+	sta DfiFs_WorkingDir+1
+
+	; get entry
+	ldx #0
+	stx DfiFs_Cmd_Entry_Cnt
+
+	; get the file entry
+	jsr DfiFs_Cmd_GetEntry
+
+	ldx DfiFs_WorkingDir
+	ldy DfiFs_WorkingDir+1
+	.bankJsr(L_searchDir_init)
+	bcs error
+
+	; test for replace save
+	lda DfiFs_Cmd_Entry_HasAtSign
+	beq noReplace
+
+	; find the file
+	.bankJsr(L_findNextMatchingDirEntry)
+	bcs error
+	; file not found -> normal save
+	cmp #$ff
+	beq filenameDoesNotExist
+
+	; copy the dir entry position
+	sta DfiFs_SaveFile_DirEntryIdx
+	stx DfiFs_SaveFile_DirEntryTrk
+	sty DfiFs_SaveFile_DirEntrySec
+
+	; mark file as open
+	lda DfiFs_ExchangeBuffer+DfiFs_paramOffs_DirEntry_Typ
+	ora #$20
+	sta DfiFs_ExchangeBuffer+DfiFs_paramOffs_DirEntry_Typ
+
+	; allocate first block of the replacement file
+	ldx DfiFs_SaveFile_DirEntryTrk
+	.bankJsr(L_DfiFs_Bam_Alloc)
+	bcs error
+	txa
+	beq error	; disk full
+	stx DfiFs_SaveFile_Trk
+	stx DfiFs_ExchangeBuffer+DfiFs_paramOffs_DirEntry_ReplaceTrack
+	sty DfiFs_SaveFile_Sec
+	sty DfiFs_ExchangeBuffer+DfiFs_paramOffs_DirEntry_ReplaceSector
+
+	lda #DfiFs_BufferMode_ReplaceFile
+	.bankJsr(L_DfiFs_SetChannelMode)
+
+	; Save Dir Entry
+	jmp writeDirEntry
+
+noReplace:
+	; find file in directory
+	.bankJsr(L_findNextMatchingDirEntry)
+	bcs error
+	tax
+	bmi filenameDoesNotExist
+
+	ldy DfiFs_ChannelBufferIdx
+	lda #$ff
+	sta DfiFs_BlockPtr,y
+	lda #Err_63_FileExists
+	.bankJsr(L_DfiFs_SetError_NoBlock)
+	lda #$03	; timeout
+	sta $90
+	clc
+	rts
+
+error:
+	sec
+	rts
+
+filenameDoesNotExist:
+	; get free dir entry
+
+	ldx DfiFs_WorkingDir
+	ldy DfiFs_WorkingDir+1
+	.bankJsr(L_getFreeDirEntry)
+	bcs error
+
+	; copy the dir entry position
+	sta DfiFs_SaveFile_DirEntryIdx
+	stx DfiFs_SaveFile_DirEntryTrk
+	sty DfiFs_SaveFile_DirEntrySec
+
+	; allocate first block of the file
+	ldx DfiFs_SaveFile_DirEntryTrk
+	.bankJsr(L_DfiFs_Bam_Alloc)
+	bcs error
+	txa
+	beq error	; disk full
+	stx DfiFs_SaveFile_Trk
+	sty DfiFs_SaveFile_Sec
+
+	; get entry
+	ldx #0
+	stx DfiFs_Cmd_Entry_Cnt
+
+	; get the file entry
+	jsr DfiFs_Cmd_GetEntry
+	; save the fileentry in local buffer
+	ldx #DfiFs_ParamOffs_SearchDir_len-1
+copySearchDirEntry:
+	lda DfiFs_ExchangeBuffer,x
+	sta DfiFs_LocalCmdCopy,x
+	dex
+	bpl copySearchDirEntry
+
+
+	; create directory entry
+
+	; clear all fields
+	lda #0
+	ldx #$1f
+clearEntry:
+	sta DfiFs_ExchangeBuffer,x
+	dex
+	bpl clearEntry
+
+	; set type, not closed
+	lda DfiFs_FileType
+	sta DfiFs_ExchangeBuffer+DfiFs_paramOffs_DirEntry_Typ
+	; set first track
+	lda DfiFs_SaveFile_Trk
+	sta DfiFs_ExchangeBuffer+DfiFs_paramOffs_DirEntry_Track
+	lda DfiFs_SaveFile_Sec
+	sta DfiFs_ExchangeBuffer+DfiFs_paramOffs_DirEntry_Sector
+	; clear filename
+	lda #$a0
+	ldx #$0f
+clrName:
+	sta DfiFs_ExchangeBuffer+DfiFs_paramOffs_DirEntry_Filename,x
+	dex
+	bpl clrName
+	; copy filename
+	ldx DfiFs_LocalCmdCopy+DfiFs_ParamOffs_SearchDir_NameLen
+setFilename:
+	lda DfiFs_LocalCmdCopy+DfiFs_ParamOffs_SearchDir_Name-1,x
+	sta DfiFs_ExchangeBuffer+DfiFs_paramOffs_DirEntry_Filename-1,x
+	dex
+	bne setFilename
+
+	lda #DfiFs_BufferMode_WriteFile
+	.bankJsr(L_DfiFs_SetChannelMode)
+
+	; write dir entry
+writeDirEntry:
+	; write the modified sector
+	lda DfiFs_SaveFile_DirEntryIdx
+	ldx DfiFs_SaveFile_DirEntryTrk
+	ldy DfiFs_SaveFile_DirEntrySec
+	.bankJsr(L_DfiFs_Dir_WriteDirEntry)
+	bcs error2
+
+	; set buffer pointer for the new file, the first 2 bytes are reserved
+	ldy DfiFs_ChannelBufferIdx
+	lda #2
+	sta DfiFs_BlockPtr,y
+
+	; init the block counter, 1 block is already allocated
+	lda #<1
+	sta DfiFs_SaveFile_Blocks
+	lda #>1
+	sta DfiFs_SaveFile_Blocks+1
+
+	clc
+error2:
+	rts
+    .)
+
+
+DfiFs_OpenCommandChannel:
+    .(
+	lda #Err_00_Ok
+	.bankJsr(L_DfiFs_SetError_NoBlock)
+
+	; test for filename
+	ldy $b7
+	beq noFileName
+
+	; copy the complete command
+	lda #$bb
+	sta readC64Bytes_mod+1
+
+	ldy #0
+copyFilename:
+	.bankJsr(L_readC64Bytes)
+	sta DfiFs_CommandBuf,y
+	iny
+	cpy $b7
+	bne copyFilename
+endOfFilename:
+	jmp DfiFs_Execute_Command
+
+noFileName:
+	; clear command buffer
+	lda #0
+	sta DfiFs_CommandLen
+
+	clc
+error:
+	rts
+    .)
+
+;--------------------------------------
+
+writeFileByte_linkNewBlock:
+.defBJL(writeFileByte_linkNewBlock)
+    .(
+	; no space left, write block and allocate new one
+	ldx DfiFs_SaveFile_Trk
+	.bankJsr(L_DfiFs_Bam_Alloc)
+	bcs error
+	txa
+	beq error_diskFull	; disk full
+	stx writeFile_newBlockZp
+	sty writeFile_newBlockZp+1
+
+	; set link
+	.bankJsr(L_setSectorLink)
+	bcs error
+
+	; write the modified sector
+	ldx DfiFs_SaveFile_Trk
+	ldy DfiFs_SaveFile_Sec
+	lda DfiFs_ChannelBufferIdx
+	.bankJsr(L_DfiFs_WriteBlock)
+	bcs error
+
+	; use new block
+	lda writeFile_newBlockZp
+	sta DfiFs_SaveFile_Trk
+	lda writeFile_newBlockZp+1
+	sta DfiFs_SaveFile_Sec
+
+	; increase filesize
+	inc DfiFs_SaveFile_Blocks
+	bne incFilesize
+	inc DfiFs_SaveFile_Blocks+1
+incFilesize:
+	clc
+	rts
+
+error_diskFull:
+	lda #Err_72_DiskFull
+	.bankJsr(L_DfiFs_SetError_NoBlock)
+error:
+	sec
+	rts
+    .)
+
+
+closeWriteFile:
+.defBJL(closeWriteFile)
+    .(
+	; write last block
+
+	ldx DfiFs_ChannelBufferIdx
+	ldy DfiFs_BlockPtr,x
+
+	; DfiFs_BlockPtr points to the next free buffer address,
+	; so DfiFs_BlockPtr-1 is the last used byte
+	ldx #0
+	dey
+	.bankJsr(L_setSectorLink)
+	bcs error
+
+	; write the modified sector
+	ldx DfiFs_SaveFile_Trk
+	ldy DfiFs_SaveFile_Sec
+	lda DfiFs_ChannelBufferIdx
+	.bankJsr(L_DfiFs_WriteBlock)
+	bcs error
+
+	; now finalize the directory entry
+
+	; first read the old entry
+	lda DfiFs_SaveFile_DirEntryIdx
+	ldx DfiFs_SaveFile_DirEntryTrk
+	ldy DfiFs_SaveFile_DirEntrySec
+	.bankJsr(L_DfiFs_Dir_ReadDirEntry)
+	bcs error
+
+	; finalize the dir entry
+	lda DfiFs_ExchangeBuffer+$02
+	ora #$80
+	sta DfiFs_ExchangeBuffer+$02
+
+	; write filesize
+	lda DfiFs_SaveFile_Blocks
+	sta DfiFs_ExchangeBuffer+$1e
+	lda DfiFs_SaveFile_Blocks+1
+	sta DfiFs_ExchangeBuffer+$1f
+
+	; write the modified sector
+	lda DfiFs_SaveFile_DirEntryIdx
+	ldx DfiFs_SaveFile_DirEntryTrk
+	ldy DfiFs_SaveFile_DirEntrySec
+	.bankJsr(L_DfiFs_Dir_WriteDirEntry)
+	bcs error
+
+	.bankJsr(L_DfiFs_Bam_flushBuffer)
+	bcs error
+
+	.bankJsr(L_DfiFs_Dir_FlushDirBlock)
+	rts
+
+error:
+	rts
+    .)
+
+
+;--------------------------------------
+
+
+closeReplaceFile:
+.defBJL(closeReplaceFile)
+    .(
+	; write last block
+
+	ldx DfiFs_ChannelBufferIdx
+	ldy DfiFs_BlockPtr,x
+
+	; DfiFs_BlockPtr points to the next free buffer address,
+	; so DfiFs_BlockPtr-1 is the last used byte
+	ldx #0
+	dey
+	.bankJsr(L_setSectorLink)
+	bcs error
+
+	; write the modified sector
+	ldx DfiFs_SaveFile_Trk
+	ldy DfiFs_SaveFile_Sec
+	lda DfiFs_ChannelBufferIdx
+	.bankJsr(L_DfiFs_WriteBlock)
+	bcs error
+
+	; now finalize the directory entry
+
+	; first read the old entry
+	lda DfiFs_SaveFile_DirEntryIdx
+	ldx DfiFs_SaveFile_DirEntryTrk
+	ldy DfiFs_SaveFile_DirEntrySec
+	.bankJsr(L_DfiFs_Dir_ReadDirEntry)
+	bcs error
+
+	; scratch the old entry
+	ldx DfiFs_ExchangeBuffer+$03
+	ldy DfiFs_ExchangeBuffer+$04
+	jsr scratchOneFile
+	bcs error
+
+	; finalize the dir entry
+	lda DfiFs_ExchangeBuffer+$02
+	and #$ff-$20
+	sta DfiFs_ExchangeBuffer+$02
+
+	; copy replace trk/sec
+	lda DfiFs_ExchangeBuffer+$1c
+	sta DfiFs_ExchangeBuffer+$03
+	lda DfiFs_ExchangeBuffer+$1d
+	sta DfiFs_ExchangeBuffer+$04
+	lda #0
+	sta DfiFs_ExchangeBuffer+$1c
+	sta DfiFs_ExchangeBuffer+$1d
+
+	; write filesize
+	lda DfiFs_SaveFile_Blocks
+	sta DfiFs_ExchangeBuffer+$1e
+	lda DfiFs_SaveFile_Blocks+1
+	sta DfiFs_ExchangeBuffer+$1f
+
+	; write the modified sector
+	lda DfiFs_SaveFile_DirEntryIdx
+	ldx DfiFs_SaveFile_DirEntryTrk
+	ldy DfiFs_SaveFile_DirEntrySec
+	.bankJsr(L_DfiFs_Dir_WriteDirEntry)
+	bcs error
+
+	.bankJsr(L_DfiFs_Bam_flushBuffer)
+	bcs error
+
+	.bankJsr(L_DfiFs_Dir_FlushDirBlock)
+	rts
+
+error:
+	rts
+    .)
+
+;--------------------------------------
+
+
+    .)
+
+

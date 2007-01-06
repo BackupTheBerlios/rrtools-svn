@@ -1,0 +1,446 @@
+
+;--------------------------------------
+
+FileEntry_Del			= 0
+FileEntry_Seq			= 1
+FileEntry_Prg			= 2
+FileEntry_Usr			= 3
+FileEntry_Rel			= 4
+FileEntry_Cbm			= 5
+FileEntry_Dir			= 6
+
+;--------------------------------------
+
+	.segment "zp"
+
+mylene_dfi_current_dir_trk	.DB 0
+mylene_dfi_current_dir_sec	.DB 0
+
+mylene_dfi_trk			.DB 0
+mylene_dfi_sec			.DB 0
+
+mylene_dfi_link_trk		.DB 0
+mylene_dfi_link_sec		.DB 0
+
+readDirCnt			.DB 0
+
+;--------------------------------------
+
+	.segment "code"
+
+;--------------------------------------
+
+sectorsPerTrack:
+	.DB 0	; 0
+	.DB 21	; 1
+	.DB 21	; 2
+	.DB 21	; 3
+	.DB 21	; 4
+	.DB 21	; 5
+	.DB 21	; 6
+	.DB 21	; 7
+	.DB 21	; 8
+	.DB 21	; 9
+	.DB 21	; 10
+	.DB 21	; 11
+	.DB 21	; 12
+	.DB 21	; 13
+	.DB 21	; 14
+	.DB 21	; 15
+	.DB 21	; 16
+	.DB 21	; 17
+	.DB 19	; 18
+	.DB 19	; 19
+	.DB 19	; 20
+	.DB 19	; 21
+	.DB 19	; 22
+	.DB 19	; 23
+	.DB 19	; 24
+	.DB 18	; 25
+	.DB 18	; 26
+	.DB 18	; 27
+	.DB 18	; 28
+	.DB 18	; 29
+	.DB 18	; 30
+	.DB 17	; 31
+	.DB 17	; 32
+	.DB 17	; 33
+	.DB 17	; 34
+	.DB 17	; 35
+
+trackOffset_lo:
+	.DB <$0000	; 0
+	.DB <$0000	; 1
+	.DB <$0015	; 2
+	.DB <$002a	; 3
+	.DB <$003f	; 4
+	.DB <$0054	; 5
+	.DB <$0069	; 6
+	.DB <$007e	; 7
+	.DB <$0093	; 8
+	.DB <$00a8	; 9
+	.DB <$00bd	; 10
+	.DB <$00d2	; 11
+	.DB <$00e7	; 12
+	.DB <$00fc	; 13
+	.DB <$0111	; 14
+	.DB <$0126	; 15
+	.DB <$013b	; 16
+	.DB <$0150	; 17
+	.DB <$0165	; 18
+	.DB <$0178	; 19
+	.DB <$018b	; 20
+	.DB <$019e	; 21
+	.DB <$01b1	; 22
+	.DB <$01c4	; 23
+	.DB <$01d7	; 24
+	.DB <$01ea	; 25
+	.DB <$01fc	; 26
+	.DB <$020e	; 27
+	.DB <$0220	; 28
+	.DB <$0232	; 29
+	.DB <$0244	; 30
+	.DB <$0256	; 31
+	.DB <$0267	; 32
+	.DB <$0278	; 33
+	.DB <$0289	; 34
+	.DB <$029a	; 35
+
+trackOffset_hi:
+	.DB >$0000	; 0
+	.DB >$0000	; 1
+	.DB >$0015	; 2
+	.DB >$002a	; 3
+	.DB >$003f	; 4
+	.DB >$0054	; 5
+	.DB >$0069	; 6
+	.DB >$007e	; 7
+	.DB >$0093	; 8
+	.DB >$00a8	; 9
+	.DB >$00bd	; 10
+	.DB >$00d2	; 11
+	.DB >$00e7	; 12
+	.DB >$00fc	; 13
+	.DB >$0111	; 14
+	.DB >$0126	; 15
+	.DB >$013b	; 16
+	.DB >$0150	; 17
+	.DB >$0165	; 18
+	.DB >$0178	; 19
+	.DB >$018b	; 20
+	.DB >$019e	; 21
+	.DB >$01b1	; 22
+	.DB >$01c4	; 23
+	.DB >$01d7	; 24
+	.DB >$01ea	; 25
+	.DB >$01fc	; 26
+	.DB >$020e	; 27
+	.DB >$0220	; 28
+	.DB >$0232	; 29
+	.DB >$0244	; 30
+	.DB >$0256	; 31
+	.DB >$0267	; 32
+	.DB >$0278	; 33
+	.DB >$0289	; 34
+	.DB >$029a	; 35
+
+;--------------------------------------
+; x: track (1-35)
+; y: sector (depends on track)
+
+dfi_seek_sector:
+    .(
+	txa
+	beq error
+	cpx #36
+	bcs error
+
+	lda #0
+	sta MMC64Plugin_SeekPos
+	sta MMC64Plugin_SeekPos+3
+
+	lda trackOffset_lo,x
+	sta MMC64Plugin_SeekPos+1
+	lda trackOffset_hi,x
+	sta MMC64Plugin_SeekPos+2
+
+	tya
+	cmp sectorsPerTrack,x
+	bcs error
+	adc MMC64Plugin_SeekPos+1
+	sta MMC64Plugin_SeekPos+1
+	bcc noCarry
+	inc MMC64Plugin_SeekPos+2
+	bne noCarry
+	inc MMC64Plugin_SeekPos+3
+noCarry:
+	jmp MMC64Plugin_Seek
+
+error:
+	sec
+	rts
+    .)
+;--------------------------------------
+; this is a keyboard action, call 'dfi_read_dir'
+
+dfi_read_root_dir:
+    .(
+	lda #$12
+	sta mylene_dfi_current_dir_trk
+	lda #0
+	sta mylene_dfi_current_dir_sec
+
+	; create new header for the device table
+	jsr Entry_AddNewHeader
+
+	; read dir header
+	ldx mylene_dfi_current_dir_trk
+	ldy mylene_dfi_current_dir_sec
+	jsr dfi_seek_sector
+	bcs psy_seek_error
+
+	; get track/sector of the first dir sector
+	jsr MMC64Plugin_GetByte
+	bcs psy_read_error
+	sta mylene_dfi_trk
+	jsr MMC64Plugin_GetByte
+	bcs read_error
+	sta mylene_dfi_sec
+
+	; skip 141 bytes
+	ldx #141
+skip01:
+	jsr MMC64Plugin_GetByte
+	bcs read_error
+	dex
+	bne skip01
+
+	jsr Entry_ClearBuffer
+
+readDirName:
+	jsr MMC64Plugin_GetByte
+	bcs read_error
+	sta Entry_EBuf+DirE_Name+1,x
+	inx
+	cpx #$17
+	bcc readDirName
+
+	lda #'"'
+	sta Entry_EBuf+DirE_Name
+	sta Entry_EBuf+DirE_Name+17
+
+	; add the new entry
+	jsr Entry_AddNewEntry
+
+readNextDirSec:
+	ldx mylene_dfi_trk
+	ldy mylene_dfi_sec
+	jsr dfi_seek_sector
+psy_seek_error:
+	bcs seek_error
+
+	; read link bytes
+	jsr MMC64Plugin_GetByte
+psy_read_error:
+	bcs read_error
+	sta mylene_dfi_link_trk
+	jsr MMC64Plugin_GetByte
+	bcs read_error
+	sta mylene_dfi_link_sec
+
+	; read the entries
+	lda #8
+	sta readDirCnt
+readBlock:
+	jsr readEntry
+	bcs error
+
+	; more entries?
+	dec readDirCnt
+	beq noMoreEntries
+	jsr MMC64Plugin_GetByte
+	bcs read_error
+	jsr MMC64Plugin_GetByte
+	bcc readBlock
+
+read_error:
+seek_error:
+	lda #1
+error:
+	sec
+	rts
+
+
+noMoreEntries:
+	lda mylene_dfi_link_sec
+	sta mylene_dfi_sec
+	lda mylene_dfi_link_trk
+	beq endOfDir
+	sta mylene_dfi_trk
+	jmp readNextDirSec
+
+endOfDir:
+	; write header
+	lda #DirHFlag_NoBFreeLine
+	sta EntryZp_HBuf+DirH_Flags
+	lda Level
+	sta EntryZp_HBuf+DirH_Level
+	lda Entry_LastTyp
+	sta EntryZp_HBuf+DirH_Typ
+	jsr Entry_WriteHeader
+	jmp ShowDirTop
+
+    .)
+
+
+readEntry:
+    .(
+	jsr Entry_ClearBuffer
+
+	; get the type byte
+	jsr MMC64Plugin_GetByte
+	bcs psy_read_error1
+	tax
+	bne entryValid
+
+	ldx #29
+skipEntry0:
+	jsr MMC64Plugin_GetByte
+	bcs psy_read_error1
+	dex
+	bne skipEntry0
+	jmp nextEntry
+
+
+entryValid:
+	cmp #$c0
+	ldx #' '
+	bcc notProtected
+	ldx #'>'
+notProtected:
+	stx Entry_EBuf+DirE_Name+$13
+
+	cmp #$80
+	ldx #' '
+	bcs closed
+	ldx #'*'
+closed:
+	stx Entry_EBuf+DirE_Name+$17
+
+	and #$3f
+	sta Entry_EBuf+DirE_Typ
+	tax
+	cpx #suffixtab_len
+	bcc suffixidxok
+	ldx #suffixtab_len-1
+suffixidxok:
+	lda suffixtab0,x
+	sta Entry_EBuf+DirE_Name+$14
+	lda suffixtab1,x
+	sta Entry_EBuf+DirE_Name+$15
+	lda suffixtab2,x
+	sta Entry_EBuf+DirE_Name+$16
+
+	; get track/sector
+	jsr MMC64Plugin_GetByte
+psy_read_error1:
+	bcs psy_read_error0
+	sta Entry_EBuf+DirE_UserData
+	jsr MMC64Plugin_GetByte
+	bcs psy_read_error0
+	sta Entry_EBuf+DirE_UserData+1
+
+	; start filename
+	lda #'"'
+	sta Entry_EBuf+DirE_Name
+	lda #' '
+	sta Entry_EBuf+DirE_Name+17
+	sta Entry_EBuf+DirE_Name+18
+	ldx #0
+getName0:
+	jsr MMC64Plugin_GetByte
+	bcs psy_read_error0
+	cmp #$a0
+	beq getName1
+	sta Entry_EBuf+DirE_Name+1,x
+	inx
+	cpx #16
+	bcc getName0
+	lda #'"'
+	sta Entry_EBuf+DirE_Name+1,x
+	bne skipBytes	; bra
+
+getName1:
+	lda #'"'
+	bne getName3
+
+getName2:
+	jsr MMC64Plugin_GetByte
+psy_read_error0:
+	bcs read_error
+	cmp #$a0
+	bne getName3
+	lda #' '
+getName3:
+	sta Entry_EBuf+DirE_Name+1,x
+	inx
+	cpx #16
+	bcc getName2
+
+skipBytes:
+	ldx #8
+skip:
+	jsr MMC64Plugin_GetByte
+	bcs read_error
+	dex
+	bpl skip
+
+	; get blocks
+	jsr MMC64Plugin_GetByte
+	bcs read_error
+	sta Entry_EBuf+DirE_Blocks
+	jsr MMC64Plugin_GetByte
+	bcs read_error
+	sta Entry_EBuf+DirE_Blocks+1
+
+	ldx Entry_EBuf+DirE_Typ
+	jsr level_action_find
+	stx Entry_EBuf+DirE_ActionIdx
+	lda LevelAction+level_action_color_flag
+	and #$7f
+	bcc getColor
+	lda LevelBuf+level_entry_col_unknown
+getColor:
+	sta Entry_EBuf+DirE_Color
+
+	; add the new entry
+	jsr Entry_AddNewEntry
+
+nextEntry:
+	clc
+	rts
+
+read_error:
+	lda #1
+	sec
+	rts
+
+
+suffixtab0:
+	.PET "dspurcd?"
+suffixtab_len = * - suffixtab0
+suffixtab1:
+	.PET "eersebi?"
+suffixtab2:
+	.PET "lqgrlmr?"
+    .)
+
+;--------------------------------------
+
+dfi_load_file:
+    .(
+	clc
+	rts
+    .)
+
+;--------------------------------------

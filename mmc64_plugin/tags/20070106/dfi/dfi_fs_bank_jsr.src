@@ -1,0 +1,66 @@
+
+
+;--------------------------------------
+
+	.segment "bankjsr"
+
+
+bankJsr:
+    .(
+	pha				; make stackspace for bank save
+	php				; save status
+	sei
+
+	; save regs
+	pha
+	txa
+	pha
+	tya
+	pha
+
+	; save current bank
+	tsx				; stack pointer for all stackframe operations
+	lda DfiFs_CurrentBank		; get current bank
+	sta $0105,x			; save in stackframe
+
+	; get address of parameterbyte after the jsr and correct the return
+	; address
+	clc
+	lda $0106,x
+	sta bankJsr_Hi_selfMod_Get+1
+	adc #1
+	sta $0106,x
+	lda $0107,x
+	sta bankJsr_Hi_selfMod_Get+2
+	adc #0
+	sta $0107,x
+
+	; get the parameter byte
+	ldy #1
+	; switch to the destination bank
+	lda DfiFs_CurrentBank
+	and #$80
+	jmp bankJsr_Hi
+
+;--------------------------------------
+
+	.segment "bankjsr_bank"
+
+@0jumpTable_Bank:
+
+;--------------------------------------
+
+	.segment "bankjsr_lo"
+
+@0jumpTable_Lo:
+
+;--------------------------------------
+
+	.segment "bankjsr_hi"
+
+@0jumpTable_Hi:
+
+    .)
+
+
+
