@@ -82,9 +82,11 @@ DfiFs_OpenFile:
 	beq openCmdChannel
 	; check for channel 0 and 1 (load/save)
 	cmp #2
-	bcs noDefaultMode
+	bcc hasDefaultMode
+	; no default mode -> always open in read mode
+	lda #0
+hasDefaultMode:
 	sta DfiFs_AccessMode
-noDefaultMode:
 
 	; get free buffer for this channel
 	.bankJsr(L_getFreeBuffer)
