@@ -98,7 +98,7 @@ searchLoop:
 	beq foundChar
 	cmp #','
 	beq foundChar
-	cmp #','
+	cmp #'='
 	beq foundChar
 	iny
 	bne searchLoop	; bra
@@ -302,11 +302,8 @@ noAtSign:
 	jsr testFor8BitNum
 	bcc foundDeviceNr
 
-	; strange things before colon
-	lda #Err_34_SyntaxError
-	.bankJsr(L_DfiFs_SetError_NoBlock)
-	sec
-	rts
+	; strange things before colon, but ignore them
+	lda #0
 
 foundDeviceNr:
 	; dev number must be 0
