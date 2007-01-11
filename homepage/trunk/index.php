@@ -80,7 +80,7 @@ function ShowPageMain()
 	print("</font><p>");
 
 	print("<strong>Links<strong><font size=-1><br>\n");
-	print("&nbsp;&nbsp;&nbsp;<a href=\"http://rrforum.ath.cx/\">RR-Forum</a><br>\n");
+	print("&nbsp;&nbsp;&nbsp;<a href=\"http://retrohackers.org\">Retrohackers</a><br>\n");
 	print("&nbsp;&nbsp;&nbsp;<a href=\"http://www.c64.sk/\">C64.sk</a><br>\n");
 	print("&nbsp;&nbsp;&nbsp;<a href=\"http://noname.c64.org/csdb/\">CSDB</a><br>\n");
 	print("&nbsp;&nbsp;&nbsp;<a href=\"http://www.the-dreams.de/\">The&nbsp;Dreams</a><br>\n");
