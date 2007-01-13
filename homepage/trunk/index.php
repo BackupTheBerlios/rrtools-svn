@@ -139,9 +139,9 @@ function ShowPageMain()
 		print str_replace(' ', '&nbsp;', $home_attr['name']);
 		print "</a><br>\n";
 	}
-	print "&nbsp;&nbsp;&nbsp;<a href=\"http://developer.berlios.de/projects/rrtools\">Project&nbsp;Page</a><br>\n";
-	print "&nbsp;&nbsp;&nbsp;<a href=\"http://developer.berlios.de/project/showfiles.php?group_id=$BERLIOS_GROUP_ID\">All&nbsp;Downloads</a><br>\n";
-	print "&nbsp;&nbsp;&nbsp;<a href=\"http://developer.berlios.de/mail/?group_id=$BERLIOS_GROUP_ID\">All&nbsp;Mailinglists</a><br>\n";
+	print "&nbsp;&nbsp;&nbsp;<a href=\"$PROTO://developer.berlios.de/projects/rrtools\">Project&nbsp;Page</a><br>\n";
+	print "&nbsp;&nbsp;&nbsp;<a href=\"$PROTO://developer.berlios.de/project/showfiles.php?group_id=$BERLIOS_GROUP_ID\">All&nbsp;Downloads</a><br>\n";
+	print "&nbsp;&nbsp;&nbsp;<a href=\"$PROTO://developer.berlios.de/mail/?group_id=$BERLIOS_GROUP_ID\">All&nbsp;Mailinglists</a><br>\n";
 	print "</font><p>\n";
 
 	print("<strong>Projects<strong><font size=-1><br>\n");
