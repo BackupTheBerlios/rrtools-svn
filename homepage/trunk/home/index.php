@@ -3,7 +3,7 @@
 
 function ShowTD()
 {
-	print("background=\"home/prost.gif\"");
+	print("background=\"home/prost.png\"");
 }
 
 
