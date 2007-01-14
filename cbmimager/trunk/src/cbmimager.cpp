@@ -762,7 +762,7 @@ void CBMImager::OnMenufileopenClick( wxCommandEvent& event )
 	//}
 	//window->Destroy();
 
-	wxFileDialog dialog(this, _T("Open an Image"), _T(""), _T(""), _T("D64 files (*.d64)|*.d64|DFI Files (*.dfi)|*.dfi|All Files (*.*)|*.*"), 0);
+	wxFileDialog dialog(this, _T("Open an Image"), _T(""), _T(""), _T("All Images (*.d64;*.dfi)|*.d64;*.dfi|D64 files (*.d64)|*.d64|DFI Files (*.dfi)|*.dfi|All Files (*.*)|*.*"), 0);
 	if (dialog.ShowModal() == wxID_OK)
 	{
 		if (dialog.GetPath().IsEmpty())
@@ -1554,8 +1554,8 @@ void CBMImager::OnEvent(wxCommandEvent& event)
 			{
 				CCbmDirectoryEntry *entry = m_FileList->GetEntry(sel);
 				wxString str;
-				str.Printf(wxT("%s.%s"), entry->GetFileName(), entry->GetFileType());
-				fileDlg = new wxFileDialog(this, _T("Add File(s)"), _T(""), str, _T("All Files (*.*)|*.*"),
+				str.Printf(wxT("%s.%s"), entry->GetFileName(), entry->GetFileTypeString());
+				fileDlg = new wxFileDialog(this, _T("Extract File"), _T(""), str, _T("All Files (*.*)|*.*"),
 					wxSAVE);
 				if (fileDlg->ShowModal() == wxID_OK)
 				{
