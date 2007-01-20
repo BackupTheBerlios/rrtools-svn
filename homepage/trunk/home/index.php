@@ -9,12 +9,8 @@ function ShowTD()
 
 function ShowPage()
 {
-	global $BERLIOS_GROUP_ID;
 	global $subpages;
 
-
-	// link to the news headers (including some lines)
-	$newsfile = sprintf("projnews.php\?group_id=%d\&limit=10\&flat=0\&show_summaries=1", $BERLIOS_GROUP_ID);
 
 	print("<p><br><center><h2>Welcome to the home of the Retro Replay Tools!</h2></center><br><br>\n");
 	print("You'll find the latest versions of our projects and some related files here.\n");
