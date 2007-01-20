@@ -246,11 +246,11 @@ function ShowLinks($strPre, $strPost)
 
 
 	// show all links in
-	foreach($links as $link_name=>$link_url)
+	foreach($links as $link_name=>$link_attr)
 	{
 		print $strPre;
 		print '<a href="';
-		print $link_url;
+		print $link_attr['link'];
 		print '">';
 		print str_replace(' ', '&nbsp;', $link_name);
 		print '</a>';
