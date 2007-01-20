@@ -188,9 +188,9 @@ function ShowPageMain()
 	}
 	print("</font><p>");
 
-	print '<p><strong>Quick Links<strong><font size=-1><br>';
+	print '<strong>Quick Links<strong><font size=-1><br>';
 	ShowLinks('&nbsp;&nbsp;&nbsp;', "<br>\n");
-	print '</font></p>';
+	print '</font><p><br>';
 
 	print "</td><td background=\"br4.gif\" width=8><img src=\"br4.gif\"></td><td width=2><img src=\"blk2x2.gif\"></td>\n";
 	print '<td valign=top rowspan=2 width=9999* ';
@@ -233,7 +233,7 @@ function ShowPageMain()
 		print "<a href=\"$PROTO://developer.berlios.de\"><img src=\"$PROTO://developer.berlios.de/bslogo.php?group_id=$BERLIOS_GROUP_ID\" width=\"124\" height=\"32\" border=\"0\" alt=\"BerliOS Logo\"/></a><br>\n";
 	}
 	print "for hosting us!</font></center>\n";
-	print '<p><br><font size=-2>Contact: <img src="contact2.png" alt="baccy_drm*berlios.de"></font><br>';
+	print '<p><br><center><font size=-2>Contact: <img src="contact.png" alt="baccy_drm*berlios.de"></font></center><br>';
 	print "</td><td background=\"br4.gif\" width=8><img src=\"br4.gif\"></td><td width=2><img src=\"blk2x2.gif\"></td>\n";
 
 	print "<tr><td><img src=\"br5.gif\"></td><td background=\"br6.gif\"><img src=\"br6.gif\"></td><td><img src=\"br7.gif\"></td><td width=2><img src=\"blk2x2.gif\"></td><td width=6000><img src=\"blk2x2.gif\"></td></tr></tbody></table></font></body></html>";
