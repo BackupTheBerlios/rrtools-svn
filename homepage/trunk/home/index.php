@@ -23,8 +23,8 @@ function ShowPage()
 
 	foreach($subpages as $section=>$ar_attr)
 	{
-		// is this the 'home' page?
-		if( $section!='home' )
+		// show the section?
+		if( isset($ar_attr['dsc']) )
 		{
 			print '<h3>';
 			print $ar_attr['name'];
