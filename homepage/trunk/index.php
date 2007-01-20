@@ -45,10 +45,11 @@ Mylene is used in the dfi and lnx plugins for the MMC64.'),
 
 
 $links = array(
-	'Retrohackers'	=> 'http://retrohackers.org',
-	'C64.sk'	=> 'http://www.c64.sk',
-	'CSDB'		=> 'http://noname.c64.org/csdb',
-	'The Dreams'	=> 'http://www.the-dreams.de'
+	'Retrohackers'		=> 'http://retrohackers.org',
+	'Individual Computers'	=> 'http://ami.ga',
+	'C64.sk'		=> 'http://www.c64.sk',
+	'CSDB'			=> 'http://noname.c64.org/csdb',
+	'The Dreams'		=> 'http://www.the-dreams.de'
 );
 
 
