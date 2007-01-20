@@ -6,8 +6,9 @@
 // area name, page path and page description
 // NOTE: if the description is not set, the entry is not shown in the projects list
 $subpages = array(
-	// 'home' is special, it should only appear in the main menu
+	// 'home' and 'links' are special, they should only appear in the main menu
 	'home'		=> array(name=>'Home', 'path'=>'home/index.php'),
+	'links'		=> array(name=>'Links', 'path'=>'links/index.php'),
 
 	'cbmimager'	=> array(name=>'CBMImager', 'path'=>'cbmimager/index.php', 'dsc'=>
 'CBMImager is a tool to create and edit disk images for the Commodore C64 and compatible computers.
@@ -45,11 +46,20 @@ Mylene is used in the dfi and lnx plugins for the MMC64.'),
 
 
 $links = array(
-	'Retrohackers'		=> 'http://retrohackers.org',
-	'Individual Computers'	=> 'http://ami.ga',
-	'C64.sk'		=> 'http://www.c64.sk',
-	'CSDB'			=> 'http://noname.c64.org/csdb',
-	'The Dreams'		=> 'http://www.the-dreams.de'
+	'Retrohackers'		=> array(link=>'http://retrohackers.org', 'dsc'=>
+'Meet the developers: Retrohackers is the community for Retro Replay, RR-Net and equivalents where we discuss our projects.'),
+
+	'Individual Computers'	=> array(link=>'http://ami.ga', 'dsc'=>
+'Producer of the Retro Replay and other cool hardware for your C64 and Amiga.'),
+
+	'C64.sk'		=> array(link=>'http://www.c64.sk', 'dsc'=>
+'Open C64 scene news: new software, demos, games and parties'),
+
+	'CSDB'			=> array(link=>'http://noname.c64.org/csdb', 'dsc'=>
+'The C64 Scene Database, a site dedicated to gathering as much information as possible about the productions, the groups, the sceners and the events in the Commodore 64 scene.'),
+
+	'The Dreams'		=> array(link=>'http://www.the-dreams.de', 'dsc'=>
+'Weird guys...')
 );
 
 
@@ -139,21 +149,28 @@ function ShowPageMain()
 	print '</head>';
 	print '<body bgcolor="#000000" text="#eeeeee" alink="#33ccff" vlink="#3366ff" link="#3333ff">';
 	print "<font face=\"Arial,Helvetica\">\n";
-	print("<table border=0 cellpadding=0 cellspacing=0 width=100%><tbody>\n");
-	print("<tr><td><img src=\"br0.gif\"></td><td background=\"br1.gif\"><img src=\"br1.gif\"></td><td><img src=\"br2.gif\"></td><td width=2><img src=\"blk2x2.gif\"></td><td width=6000><img src=\"blk2x2.gif\"></td></tr>\n");
-	print("<tr><td background=\"br3.gif\" width=8><img src=\"br3.gif\"></td><td bgcolor=\"#222222\" valign=top>\n");
+	print "<table border=0 cellpadding=0 cellspacing=0 width=100%><tbody>\n";
+	print "<tr><td><img src=\"br0.gif\"></td><td background=\"br1.gif\"><img src=\"br1.gif\"></td><td><img src=\"br2.gif\"></td><td width=2><img src=\"blk2x2.gif\"></td><td width=9999*><img src=\"blk2x2.gif\"></td></tr>\n";
+	print "<tr><td background=\"br3.gif\" width=8><img src=\"br3.gif\"></td><td bgcolor=\"#222222\" valign=top>\n";
 
 	print "<strong>Menu<strong><font size=-1><br>\n";
 	if( isset($subpages['home']) )
 	{
-		$home_attr = $subpages['home'];
+		$attr = $subpages['home'];
 		print '&nbsp;&nbsp;&nbsp;<a href="index.php?area=home">';
-		print str_replace(' ', '&nbsp;', $home_attr['name']);
+		print str_replace(' ', '&nbsp;', $attr['name']);
 		print "</a><br>\n";
 	}
 	print "&nbsp;&nbsp;&nbsp;<a href=\"$PROTO://developer.berlios.de/projects/rrtools\">Project&nbsp;Page</a><br>\n";
 	print "&nbsp;&nbsp;&nbsp;<a href=\"$PROTO://developer.berlios.de/project/showfiles.php?group_id=$BERLIOS_GROUP_ID\">All&nbsp;Downloads</a><br>\n";
 	print "&nbsp;&nbsp;&nbsp;<a href=\"$PROTO://developer.berlios.de/mail/?group_id=$BERLIOS_GROUP_ID\">All&nbsp;Mailinglists</a><br>\n";
+	if( isset($subpages['links']) )
+	{
+		$attr = $subpages['links'];
+		print '&nbsp;&nbsp;&nbsp;<a href="index.php?area=links">';
+		print str_replace(' ', '&nbsp;', $attr['name']);
+		print "</a><br>\n";
+	}
 	print "</font><p>\n";
 
 	print("<strong>Projects<strong><font size=-1><br>\n");
@@ -171,10 +188,31 @@ function ShowPageMain()
 	}
 	print("</font><p>");
 
-	print("<strong>Links<strong><font size=-1><br>\n");
+	print '<p><strong>Quick Links<strong><font size=-1><br>';
 	ShowLinks('&nbsp;&nbsp;&nbsp;', "<br>\n");
-	print '</font><p><br>';
+	print '</font></p>';
 
+	print "</td><td background=\"br4.gif\" width=8><img src=\"br4.gif\"></td><td width=2><img src=\"blk2x2.gif\"></td>\n";
+	print '<td valign=top rowspan=2 width=9999* ';
+	if( function_exists("ShowTD") )
+	{
+		// insert table cell attributes like background etc.
+		ShowTD();
+	}
+	print ">\n";
+
+	if( function_exists('ShowPage') )
+	{
+		ShowPage();
+	}
+	else
+	{
+		print "Page $area does not exist yet.";
+	}
+
+	print '</td></tr>';
+
+	print "<tr><td background=\"br3.gif\" width=8><img src=\"br3.gif\"></td><td bgcolor=\"#222222\" valign=bottom>\n";
 	// show some banners
 	print '<center><font size=-2>';
 	foreach($banners as $code)
@@ -194,27 +232,11 @@ function ShowPageMain()
 	{
 		print "<a href=\"$PROTO://developer.berlios.de\"><img src=\"$PROTO://developer.berlios.de/bslogo.php?group_id=$BERLIOS_GROUP_ID\" width=\"124\" height=\"32\" border=\"0\" alt=\"BerliOS Logo\"/></a><br>\n";
 	}
-	print("for hosting us!</font></center>\n");
+	print "for hosting us!</font></center>\n";
+	print '<p><br><font size=-2>Contact: <img src="contact2.png" alt="baccy_drm*berlios.de"></font><br>';
+	print "</td><td background=\"br4.gif\" width=8><img src=\"br4.gif\"></td><td width=2><img src=\"blk2x2.gif\"></td>\n";
 
-	print("</td><td background=\"br4.gif\" width=8><img src=\"br4.gif\"></td><td width=2><img src=\"blk2x2.gif\"></td>\n");
-	print("<td valign=top width=6000 ");
-	if( function_exists("ShowTD") )
-	{
-		// insert table cell attributes like background etc.
-		ShowTD();
-	}
-	print(">\n");
-
-	if( function_exists("ShowPage") )
-	{
-		ShowPage();
-	}
-	else
-	{
-		printf("Page %s does not exist yet.", $ARGV["area"]);
-	}
-
-	print("</td></tr><tr><td><img src=\"br5.gif\"></td><td background=\"br6.gif\"><img src=\"br6.gif\"></td><td><img src=\"br7.gif\"></td><td width=2><img src=\"blk2x2.gif\"></td><td width=6000><img src=\"blk2x2.gif\"></td></tr></tbody></table></font></body></html>");
+	print "<tr><td><img src=\"br5.gif\"></td><td background=\"br6.gif\"><img src=\"br6.gif\"></td><td><img src=\"br7.gif\"></td><td width=2><img src=\"blk2x2.gif\"></td><td width=6000><img src=\"blk2x2.gif\"></td></tr></tbody></table></font></body></html>";
 }
 
 
