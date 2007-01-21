@@ -5,6 +5,46 @@
 	.segment "bankjsr"
 
 
+jsrToRom:
+    .(
+	; save flags and registers
+	php
+	php
+	php
+	sta exitToRom_saveA+1
+	stx exitToRom_saveX+1
+	sty exitToRom_saveY+1
+
+	; get the return address
+	tsx
+	lda #<(switch_rom_bank0_save01-1)
+	sta $0102,x
+	lda #>(switch_rom_bank0_save01-1)
+	sta $0103,x
+
+	clc
+	lda $0104,x
+	sta exitToRom_Hi+1
+	adc #2
+	sta $0104,x
+	lda $0105,x
+	sta exitToRom_Hi+2
+	adc #0
+	sta $0105,x
+
+	; correct the stack pointer
+	pla
+	tay
+
+	; get the word behind the calling jsr
+	ldx #2
+	jmp exitToRom_Hi
+    .)
+
+
+;--------------------------------------
+
+
 bankJsr:
     .(
 	pha				; make stackspace for bank save
@@ -41,6 +81,7 @@ bankJsr:
 	lda DfiFs_CurrentBank
 	and #$80
 	jmp bankJsr_Hi
+
 
 ;--------------------------------------
 

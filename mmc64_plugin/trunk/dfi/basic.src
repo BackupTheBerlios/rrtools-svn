@@ -1,0 +1,500 @@
+
+;--------------------------------------
+; The Basic routines
+
+TokenZp_Cnt = $02
+
+Petscii2Tokens:
+	jsr GetBasicLine
+	stx $7a
+	sty $7b
+	jsr $0073.2
+	tax
+	beq Petscii2Tokens
+	ldx #$ff
+	stx $3a
+	bcs Tokens
+	jsr jsrToRom
+	.DW $a49c-1
+	rts
+
+Tokens:
+	ldx #0
+	stx TokenZp_Cnt
+Tokens0:
+	ldy #0
+Tokens1:
+	lda Token_Text,x		;get next char from tokenlist
+	bpl Tokens2			;>=$80 -> it is a 'new token' marker
+	cpy #1				;did any chars match before
+	bcs Tokens4
+	inc TokenZp_Cnt
+	and #$7f			;clear bit 7
+	beq Tokens4			;was it $80 -> end of Tab marker
+
+Tokens2:
+	inx
+	cmp ($7a),y
+	bne Tokens3
+	iny
+	bne Tokens1	;bra
+
+Tokens3:
+	lda Token_Text,x
+	bmi Tokens0
+	inx
+	bne Tokens3	;bra
+
+Tokens4:
+	tya
+	clc
+	adc $7a
+	sta $7a
+	bcc Tokens5
+	inc $7b
+Tokens5:
+	ldx TokenZp_Cnt
+	lda Token_RHi,x
+	pha
+	lda Token_RLo,x
+	pha
+	rts
+
+Token_Text:
+	.DB '%'
+	.DB '/'|$80
+	.DB '&'|$80
+	.DB $5c|$80			;Pound Sign
+	.DB $4d|$80,$4f,$4e		;mon
+	.DB $80				;End Of Tab
+
+Token_RLo:
+	.DB <(Token_LoadAndRun-1)
+	.DB <(Token_Load-1)
+	.DB <(Token_Verify-1)
+	.DB <(Token_Save-1)
+	.DB <($a579-1)
+	.DB <($a579-1)
+
+Token_RHi:
+	.DB >(Token_LoadAndRun-1)
+	.DB >(Token_Load-1)
+	.DB >(Token_Verify-1)
+	.DB >(Token_Save-1)
+	.DB >($a579-1)
+	.DB >($a579-1)
+
+
+Token_LoadAndRun:
+	sei
+	ldx #Token_LoadAndRunTxt_len
+	stx $c6
+Token_LoadAndRun0:
+	lda Token_LoadAndRunTxt-1,x
+	sta $0277-1,x
+	dex
+	bne Token_LoadAndRun0
+	cli
+	jmp Token_Load
+
+Token_LoadAndRunTxt:
+	.PET "rU:",$0d
+Token_LoadAndRunTxt_len = * - Token_LoadAndRunTxt
+
+
+Token_Save:
+	jsr Token_GetName
+	jsr jsrToRom
+	.DW $e159-1
+	rts
+
+Token_Verify:
+	lda #1
+	.DB $2c
+Token_Load:
+	lda #0
+	sta $0a
+	jsr Token_GetName
+	jsr jsrToRom
+	.DW $e16f-1
+	rts
+
+Token_GetName:
+	jsr $0079.2
+	cmp #$22
+	bne Token_GetName0
+	jsr $0073.2
+Token_GetName0:
+	ldx $7a
+Token_GetName1:
+	jsr $0073.2
+	tay
+	beq Token_GetName2
+	cmp #$22
+	bne Token_GetName1
+
+Token_GetName2:
+	txa
+	sec
+	eor #$ff
+	adc $7a
+	ldy #2
+	jsr $ffbd
+	lda #0
+	ldx $ba
+	ldy #1
+	jmp $ffba
+
+
+GetBasicLine:
+	ldx #$00
+GetBasicLine0:
+	jsr CharIn
+	cmp #$0d
+	beq GetBasicLine1
+	sta $0200,x
+	inx
+	cpx #$59
+	bcc GetBasicLine0
+	ldx #$17
+	jsr jsrToRom			;This one never returns
+	.DW $a437-1
+GetBasicLine1:
+	jmp $aaca
+
+CharIn:
+	lda $d3				;Save start column of input
+	sta $ca
+	lda $d6				;Save start row of input
+	sta $c9
+
+	tya
+	pha
+	txa
+	pha
+	lda $d0
+	beq CharIn0
+	jmp $e63a
+
+CharIn0:
+	ldx #WaitForKey_len-1
+CharInCopy0:
+	lda WaitForKey_Org,x
+	sta WaitForKey,x
+	dex
+	bpl CharInCopy0
+
+	ldx #$10|$22			; bank2, ram, c64 mode
+	ldy #0
+	cli
+
+	jsr WaitForKey
+
+;	sei
+	lda $cf
+	beq CharIn1
+	lda $ce
+	ldx $0287
+	ldy #0
+	sty $cf
+	jsr $ea13
+
+CharIn1:
+	jsr $e5b4
+	cmp #$0d
+	beq CharIn3
+
+	ldx #8
+CharIn2:
+	cmp SpecialKeys0,x
+	beq CharIn4
+	dex
+	bpl CharIn2
+
+	jsr $e716
+	jmp CharIn0
+
+CharIn3:
+	jmp $e602
+
+CharIn4:
+	ldy SpecialKeys1,x
+	lda SpecialKey0,y
+	bmi CharIn6
+CharIn4a:
+	lda SpecialKeys1+1,x
+	sta $c6
+	ldx #0
+CharIn5:
+	lda SpecialKey0,y
+	sta $0277,x
+	inx
+	iny
+	cpy $c6
+	bcc CharIn5
+	stx $c6
+	bcs CharIn0	;bra
+
+CharIn6:
+	cmp #$80			;is it the magic for "Load and Run"?
+	bne CharIn7
+	lda #'%'
+	bne CharIn8
+
+CharIn7:
+	cmp #$81			;is it the Magic for "Load"?
+	bne CharIn10
+	lda #'/'
+CharIn8:
+	sta $0277
+	ldx #4
+	ldy #6
+	sty $c6
+	dey
+	lda ($d1),y
+	dey
+	cmp #$22
+	beq CharIn9
+	ldy #9
+CharIn9:
+	lda LoadTexts,y
+	sta $0278,x
+	dey
+	dex
+	bpl CharIn9
+	bmi CharIn15
+
+CharIn10:
+	cmp #$82			;is it the Magic for "Next Device"?
+	bne CharIn4a
+
+	ldx $ba				;get a correct starting device
+	stx $bc
+	jsr ValidDev			;so that the compare will match
+	stx $bb
+CharIn11:
+	inx
+	jsr ValidDev
+	stx $ba
+
+	lda #0
+	sta $90
+	txa
+	jsr $ed0c
+	lda #$ff
+	jsr $edb9
+	lda $90
+	bpl CharIn16
+
+	ldx $ba
+	cpx $bb
+	bne CharIn11
+	lda $bc
+	sta $ba
+	bcs CharIn15
+
+CharIn16:
+	jsr $edfe
+	lda $ba
+	jsr $ed0c
+	lda #$ef
+	jsr $f651
+	lda #$40			;"@"
+	sta $0277
+	lda #'#'
+	sta $0278
+
+	ldx #'0'
+	lda $ba
+CharIn12:
+	cmp #10
+	bcc CharIn13
+	sbc #10
+	inx
+	bne CharIn12
+CharIn13:
+	ldy #2
+	cpx #'0'
+	beq CharIn14
+	stx $0279
+	iny
+CharIn14:
+	ora #$30
+	sta $0277,y
+	lda #$0d
+	iny
+	sta $0277,y
+	iny
+	sty $c6
+CharIn15:
+	jmp CharIn0
+
+WaitForKey_Org:
+    .PSEUDOPC($0210)
+WaitForKey:
+	lda $c6
+	sta $cc
+	beq WaitForKey
+	sei
+	stx $de00
+WaitForKeyDl0:
+	iny
+	bne WaitForKeyDl0
+	rts
+    .REALPC
+WaitForKey_len = *-WaitForKey_Org
+
+ValidDev:
+	cpx #8
+	bcc ValidDev0
+	cpx #31
+	bcc ValidDev1
+ValidDev0:
+	ldx #8
+ValidDev1:
+	rts
+
+
+
+SpecialKeys0:
+	.DB $85				;F1
+	.DB $89				;F2
+	.DB $86				;F3
+	.DB $8a				;F4
+	.DB $87				;F5
+	.DB $8b				;F6
+	.DB $88				;F7
+	.DB $8c				;F8
+	.DB $83				;Run
+SpecialKeys1:
+	.DB 0
+	.DB SpecialKey1-SpecialKey0	;F1
+	.DB SpecialKey2-SpecialKey0	;F2
+	.DB SpecialKey3-SpecialKey0	;F3
+	.DB SpecialKey4-SpecialKey0	;F4
+	.DB SpecialKey5-SpecialKey0	;F5
+	.DB SpecialKey6-SpecialKey0	;F6
+	.DB SpecialKey7-SpecialKey0	;F7
+	.DB SpecialKey8-SpecialKey0	;F8
+	.DB SpecialKey9-SpecialKey0	;Run
+
+SpecialKey0:
+	.DB $80
+SpecialKey1:
+	.DB $81
+SpecialKey2:
+	.PET "@$",$0d
+SpecialKey3:
+	.DB $82
+SpecialKey4:
+	.PET "lI",$0d
+SpecialKey5:
+	.PET "mon",$0d
+SpecialKey6:
+	.PET "rU:",$0d
+SpecialKey7:
+	.PET "mon",$0d
+SpecialKey8:
+	.DB $80
+SpecialKey9:
+
+
+LoadTexts:
+	.PET "    ",$d
+	.PET "0:*",0,0
+
+;--------------------------------------
+
+GetBasicToken:
+	lda #0
+	sta $0d
+	jsr $0073.2
+	bcs NoDigit
+	jsr jsrToRom
+	.DW $bcf3-1
+	rts
+NoDigit:
+	cmp #'$'
+	bne NoHex
+
+	lda #0
+	sta $63
+	sta $62
+
+	ldy #3
+GetHex0:
+	jsr $0073.2
+	bcc GetHex1
+	cmp #$41		;"a"
+	bcc GetHex3
+	cmp #$47		;"g"
+	bcs GetHex3
+	sbc #6
+GetHex1:
+	and #$0f
+
+	ldx #3
+GetHex2:
+	asl $63
+	rol $62
+	dex
+	bpl GetHex2
+	ora $63
+	sta $63
+
+	dey
+	bpl GetHex0
+	jsr $0073.2
+GetHex3:
+	ldx #$90
+	sec
+	jsr jsrToRom
+	.DW $bc49-1
+	rts
+
+NoHex:
+	jsr jsrToRom
+	.DW $ae92-1
+	rts
+
+
+;--------------------------------------
+;Die folgenden Routinen laufen, wenn Bank0 ab $e000 eingeblendet wird
+;	.PhaseToHighRom
+;--------------------------------------
+/*
+	.(
+;    .PSEUDOPC($de10)
+
+@0Vect_0302:
+	lda #%00000000 | BasicMode
+	jsr SetBank
+	jsr Petscii2Tokens
+	lda #%00000010 | BasicMode
+	jsr SetBank
+	jmp $a7e1
+
+@0Vect_030A:
+	lda #%00000000 | BasicMode
+	jsr SetBank
+	jsr GetBasicToken
+	lda #%00000010 | BasicMode
+;	jsr SetBank
+;	rts
+
+SetBank:
+	sta $de00
+	txa
+	ldx #ToggleEGDelay
+SetBank0:
+	inx
+	bne SetBank0
+	tax
+	cli
+	rts
+
+	.)
+
+;    .REALPC
+*/
+;--------------------------------------

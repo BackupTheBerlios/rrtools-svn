@@ -10,53 +10,40 @@ DfiFs_Switcher_Org = $de02
 	* = DfiFs_Switcher_Org
 
 @0DfiFs_Open:
-	jsr switch_rom_bank0_save01
-	jmp BANK0_DfiFs_Open_Rom
-
+	jsr demux_vectors_switcher
 
 @0DfiFs_Close:
-	jsr switch_rom_bank0_save01
-	jmp BANK0_DfiFs_Close_Rom
-
+	jsr demux_vectors_switcher
 
 @0DfiFs_ChangeKernalInput:
-	jsr switch_rom_bank0_save01
-	jmp BANK0_DfiFs_ChangeKernalInput_Rom
-
+	jsr demux_vectors_switcher
 
 @0DfiFs_ChangeKernalOutput:
-	jsr switch_rom_bank0_save01
-	jmp BANK0_DfiFs_ChangeKernalOutput_Rom
-
+	jsr demux_vectors_switcher
 
 @0DfiFs_ClearChannels:
-	jsr switch_rom_bank0_save01
-	jmp BANK0_DfiFs_ClearChannels_Rom
-
+	jsr demux_vectors_switcher
 
 @0DfiFs_CharIn:
-	jsr switch_rom_bank0_save01
-	jmp BANK0_DfiFs_GetByteKernal_Rom
-
+	jsr demux_vectors_switcher
 
 @0DfiFs_CharOut:
-	jsr switch_rom_bank0_save01
-	jmp BANK0_DfiFs_SendByteKernal_Rom
+	jsr demux_vectors_switcher
 
 @0DfiFs_GetIn:
-	jsr switch_rom_bank0_save01
-	jmp BANK0_DfiFs_GetInKernal_Rom
-
+	jsr demux_vectors_switcher
 
 ;DfiFs_ClAll:
 
 @0DfiFs_Load:
-	jsr switch_rom_bank0_save01
-	jmp BANK0_DfiFs_Load_Rom
+	jsr demux_vectors_switcher
 
 @0DfiFs_Save:
+	jsr demux_vectors_switcher
+
+demux_vectors_switcher:
 	jsr switch_rom_bank0_save01
-	jmp BANK0_DfiFs_Save_Rom
+	jmp BANK0_DfiFs_Demux_Vectors
 
 
 readC64Bytes:

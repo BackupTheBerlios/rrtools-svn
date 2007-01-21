@@ -1,6 +1,7 @@
 
 ;--------------------------------------
 
+
 exitToRom:
     .(
 	; save flags and registers
@@ -27,48 +28,10 @@ exitToRom:
 	jmp exitToRom_Hi
     .)
 
-;--------------------------------------
-
-jsrToRom:
-    .(
-	; save flags and registers
-	php
-	php
-	php
-	sta exitToRom_saveA+1
-	stx exitToRom_saveX+1
-	sty exitToRom_saveY+1
-
-	; get the return address
-	tsx
-	lda #<(switch_rom_bank0_save01-1)
-	sta $0102,x
-	lda #>(switch_rom_bank0_save01-1)
-	sta $0103,x
-
-	clc
-	lda $0104,x
-	sta exitToRom_Hi+1
-	adc #2
-	sta $0104,x
-	lda $0105,x
-	sta exitToRom_Hi+2
-	adc #0
-	sta $0105,x
-
-	; correct the stack pointer
-	pla
-	tay
-
-	; get the word behind the calling jsr
-	ldx #2
-	jmp exitToRom_Hi
-    .)
 
 ;--------------------------------------
 
 DfiFs_Open_Rom:
-@0BANK0_DfiFs_Open_Rom:
     .(
 	lda $ba
 	cmp DfiFs_DeviceAddress
@@ -116,7 +79,6 @@ channelLeft:
 
 
 DfiFs_Close_Rom:
-@0BANK0_DfiFs_Close_Rom:
     .(
 	sta DfiFs_SaveA
 	jsr Kernal_f314	; checked, ok!
@@ -146,7 +108,6 @@ closeDfi:
 
 
 DfiFs_ChangeKernalInput_Rom:
-@0BANK0_DfiFs_ChangeKernalInput_Rom:
     .(
 	; find open channel
 	jsr Kernal_f30f	; checked, ok!
@@ -174,7 +135,6 @@ change_done:
 
 
 DfiFs_ChangeKernalOutput_Rom:
-@0BANK0_DfiFs_ChangeKernalOutput_Rom:
     .(
 	; find open channel
 	jsr Kernal_f30f	; checked, ok!
@@ -201,7 +161,6 @@ change_done:
 ;--------------------------------------
 
 DfiFs_ClearChannels_Rom:
-@0BANK0_DfiFs_ClearChannels_Rom:
     .(
 	; no untalk needed for mmc
 	ldx $9a
@@ -225,7 +184,6 @@ noMmcInput:
 ;--------------------------------------
 
 DfiFs_Load_Rom:
-@0BANK0_DfiFs_Load_Rom:
     .(
 	sta $93
 	lda #0
@@ -345,7 +303,6 @@ loadError:
 ;--------------------------------------
 
 DfiFs_Save_Rom:
-@0BANK0_DfiFs_Save_Rom:
     .(
 	lda $ba
 	cmp DfiFs_DeviceAddress
@@ -462,7 +419,6 @@ error:
 ;--------------------------------------
 
 DfiFs_GetByteKernal_Rom:
-@0BANK0_DfiFs_GetByteKernal_Rom:
 	lda $99
 	cmp DfiFs_DeviceAddress
 	beq getByte_dfi
@@ -473,7 +429,6 @@ getByte_dfi:
 	jmp switch_c64_restore01
 
 DfiFs_GetInKernal_Rom:
-@0BANK0_DfiFs_GetInKernal_Rom:
 	lda $99
 	cmp DfiFs_DeviceAddress
 	beq getByte_dfi
@@ -547,7 +502,6 @@ exit:
 ;--------------------------------------
 
 DfiFs_SendByteKernal_Rom:
-@0BANK0_DfiFs_SendByteKernal_Rom:
 	pha
 	lda $9a
 	cmp DfiFs_DeviceAddress
@@ -682,6 +636,48 @@ bufferHasMoreBytes:
 error:
 	rts
     .)
+
+;--------------------------------------
+
+@0BANK0_DfiFs_Demux_Vectors:
+	; save the status and all regs
+	php
+	pha
+	txa
+	pha
+	tya
+	pha
+
+	; get the lo byte of the return address
+	tsx
+	ldy $0105,x
+	; get the lo byte of the destination address
+	lda demux_vectors_jsr_table-4,y
+	sta $0105,x
+	; get the hi byte of the destination address
+	lda demux_vectors_jsr_table-3,y
+	sta $0106,x
+
+	; restore all regs and the status
+	pla
+	tay
+	pla
+	tax
+	pla
+	plp
+	rts
+
+demux_vectors_jsr_table:
+	.DT (DfiFs_Open_Rom-1).3
+	.DT (DfiFs_Close_Rom-1).3
+	.DT (DfiFs_ChangeKernalInput_Rom-1).3
+	.DT (DfiFs_ChangeKernalOutput_Rom-1).3
+	.DT (DfiFs_ClearChannels_Rom-1).3
+	.DT (DfiFs_GetByteKernal_Rom-1).3
+	.DT (DfiFs_SendByteKernal_Rom-1).3
+	.DT (DfiFs_GetInKernal_Rom-1).3
+	.DT (DfiFs_Load_Rom-1).3
+	.DT (DfiFs_Save_Rom-1).3
 
 ;--------------------------------------
 
