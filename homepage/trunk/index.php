@@ -67,7 +67,7 @@ $links = array(
 // Don't forget to escape any ticks in the banner code itself. :)
 $banners = array(
 	// c64.sk
-'<a href="http://www.c64.sk"><img src="banner/c64sk90x30.gif" alt="C64.sk Logo" border="0" align="middle"><br><small>C64 News</small></a>',
+'<a href="http://www.c64.sk"><img src="banner/c64sk90x30.gif" alt="C64.sk Logo" border="0"><br><small>C64 News</small></a>',
 
 	// Small "Defective By Design" badge from http://www.defectivebydesign.org/promo/button
 '<a href="http://www.defectivebydesign.org/join/button">
@@ -136,6 +136,7 @@ function ShowPageMain()
 		}
 	}
 
+	print '<?xml version="1.0" encoding="ISO-8859-1"?>';
 	print '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">';
 	print '<html><head>';
 	print '<meta name="Keywords" content="rrtools,c64,retro replay,mmc64,rrnet">';
