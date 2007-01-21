@@ -11,7 +11,7 @@ function ShowPage()
 		$idx = $ARGV["idx"];
 		if( $idx>1 )
 		{
-			$link = sprintf("<a href=\"index.php?area=sodom&idx=%d\">Vorige Seite</a>", $idx-1);
+			$link = sprintf("<a href=\"index.php?area=sodom&amp;idx=%d\">Vorige Seite</a>", $idx-1);
 		}
 		else
 		{
@@ -20,7 +20,7 @@ function ShowPage()
 		$link .= " - <a href=\"index.php?area=sodom\">Zur&uuml;ck</a> - ";
 		if( $idx<18 )
 		{
-			$link .= sprintf("<a href=\"index.php?area=sodom&idx=%d\">N&auml;chste Seite</a>", $idx+1);
+			$link .= sprintf("<a href=\"index.php?area=sodom&amp;idx=%d\">N&auml;chste Seite</a>", $idx+1);
 		}
 		else
 		{
@@ -44,9 +44,8 @@ function ShowPage()
 	}
 	else
 	{
-		print "<p>Leider verh&auml;lt sich ein Rechner nicht immer so logisch, klar und nachvollziehbar, wie man es von einem\n";
-		print "elektronischen Ger&auml;et erwartet. Oft verst&ouml;sst er sogar gegen s&auml;mtliche Gesetze der menschlichen Logik,\n";
-		print "sodass man glauben mag, nicht vor einer Maschiene, sondern einem kleinen Kobold zu sitzen.</p>\n";
+		print "<p>Leider verh&auml;lt sich ein Rechner nicht immer so logisch und nachvollziehbar, wie man es von einem\n";
+		print "elektronischen Ger&auml;et erwartet. Oft mag man sogar glauben, nicht vor einer Maschiene, sondern einem kleinen Kobold zu sitzen.</p>\n";
 
 		print "<p>&Uuml;ber dieses Thema scheinen sich auch Kirchenm&auml;nner Gedanken zu machen, besonders aber solche,\n";
 		print "die es gerne w&auml;ren. Das wurde mir klar, als meine Oma an einem stinknormalen deutschen Wallfahrtsort\n";
@@ -58,23 +57,23 @@ function ShowPage()
 		print "dass diese Jungs mal anerkannt waren. Andererseits hatten sie eine Erkl&auml;rung f&uuml;r all diese Abst&uuml;rze...\n";
 		print "Naja, man kann in dieser Welt wohl nicht alles haben.</p>\n";
 
-		print '<p><br><br><table align="center"><tbody><tr>';
+		print '<p><br><br><div style="text-align: center"><table style="margin: 0 auto"><tbody><tr>';
 		for($cnt=1; $cnt<17; $cnt++)
 		{
-			printf("<td><a href=\"index.php?area=sodom&idx=%d\"><img src=\"sodom/Sodom_t%02d.jpg\" alt=\"Seite %d\" title=\"Seite %d\"></a></td>\n",$cnt,$cnt,$cnt,$cnt);
+			printf("<td><a href=\"index.php?area=sodom&amp;idx=%d\"><img src=\"sodom/Sodom_t%02d.jpg\" alt=\"Seite %d\" title=\"Seite %d\"></a></td>\n",$cnt,$cnt,$cnt,$cnt);
 			if( $cnt%4==0 && $cnt<16)
 			{
 				print("</tr><tr>\n");
 			}
 		}
-		print "</tr></tbody></table></p>\n";
+		print "</tr></tbody></table></div><p>\n";
 		print "Jau, so stehts also um den Computer. Wer nach diesen ersch&uuml;tternden Erkenntnissen ein auf Papier gedrucktes Exemplar vorzieht, fordere dieses bitte mit der unten abgebildeten Postkarte kostenlos an.\n";
 		print "Ich kann Euch auch die angebotene wundert&auml;tige Medallie sehr empfehlen! (kleiner Nachteil: seitdem sie an meinem PC h&auml;ngt, l&auml;sst sich Windows nicht mehr starten)\n";
 		print "Und seid vorsichtig, wenn Ihr das n&auml;chste mal Euren Rechner aufschraubt. Wer wei&szlig;, wer darin auf Euch wartet....\n";
 		print "<p style=\"text-align: center\"><br>\n";
-		print "<a href=\"index.php?area=sodom&idx=17\"><img src=\"sodom/Sodom_tPost1.jpg\" alt=\"Postkarte Vorderseite\"></a>\n";
-		print "<a href=\"index.php?area=sodom&idx=18\"><img src=\"sodom/Sodom_tPost2.jpg\" alt=\"Postkarte R&uuml;ckseite\"></a>\n";
-		print "</p><br><br>\n";
+		print "<a href=\"index.php?area=sodom&amp;idx=17\"><img src=\"sodom/Sodom_tPost1.jpg\" alt=\"Postkarte Vorderseite\"></a>\n";
+		print "<a href=\"index.php?area=sodom&amp;idx=18\"><img src=\"sodom/Sodom_tPost2.jpg\" alt=\"Postkarte R&uuml;ckseite\"></a>\n";
+		print "<p><br><br>\n";
 	}
 }
 
