@@ -233,7 +233,7 @@ function ShowPageMain()
 	}
 	else
 	{
-		print "<a href=\"$PROTO://developer.berlios.de\"><img src=\"$PROTO://developer.berlios.de/bslogo.php?group_id=$BERLIOS_GROUP_ID\" width=\"124\" height=\"32\" border=\"0\" alt=\"BerliOS Logo\"/></a><br>\n";
+		print "<a href=\"$PROTO://developer.berlios.de\"><img class=banner src=\"$PROTO://developer.berlios.de/bslogo.php?group_id=$BERLIOS_GROUP_ID\" width=\"124\" height=\"32\" alt=\"BerliOS Logo\"/></a><br>\n";
 	}
 	print "for hosting us!</p>\n";
 	print '<p><br>';
