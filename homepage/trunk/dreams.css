@@ -1,0 +1,127 @@
+body {
+	background-color: #000000;
+	color: #eeeeee;
+	font-family: sans-serif
+}
+
+a:link {
+	color: #3333ff;
+}
+
+a:visited {
+	color: #3366ff;
+}
+
+a:active {
+	color: #33ccff;
+}
+
+.menu_ul {
+	height: 8px;
+	width: 8px;
+	font-size: 1px;
+	line-height: 1%;
+	background-image: url(br0.gif);
+	background-repeat: no-repeat
+}
+
+.menu_u {
+	height: 8px;
+	font-size: 1px;
+	line-height: 1%;
+	background-image: url(br1.gif);
+	background-repeat: repeat-x
+}
+
+.menu_ur {
+	height: 8px;
+	width: 8px;
+	font-size: 1px;
+	line-height: 1%;
+	background-image: url(br2.gif);
+	background-repeat: no-repeat
+}
+
+.menu_l {
+	width: 8px;
+	font-size: 1px;
+	line-height: 1%;
+	background-image: url(br3.gif);
+	background-repeat: repeat-y
+}
+
+.menu_cu {
+	background-color: #222222;
+	vertical-align: top
+}
+
+.menu_cb {
+	background-color: #222222;
+	vertical-align: bottom
+}
+
+.menu_r {
+	width: 8px;
+	font-size: 1px;
+	line-height: 1%;
+	background-image: url(br4.gif);
+	background-repeat: repeat-y
+}
+
+.menu_bl {
+	height: 8px;
+	width: 8px;
+	font-size: 1px;
+	line-height: 1%;
+	background-image: url(br5.gif);
+	background-repeat: no-repeat
+}
+
+.menu_b {
+	height: 8px;
+	font-size: 1px;
+	line-height: 1%;
+	background-image: url(br6.gif);
+	background-repeat: repeat-x
+}
+
+.menu_br {
+	height: 8px;
+	width: 8px;
+	font-size: 1px;
+	line-height: 1%;
+	background-image: url(br7.gif);
+	background-repeat: no-repeat
+}
+
+.menu_g {
+	height: 8px;
+	width: 2px;
+	font-size: 1px;
+	line-height: 1%;
+}
+
+.parea_u {
+	height: 8px;
+	font-size: 1px;
+	line-height: 1%;
+	width: 99%;
+}
+
+.menuitem {
+	font-size: small
+}
+
+p.banner {
+	text-align: center;
+	font-size: x-small;
+}
+
+img.banner {
+	border: none;
+}
+
+p.contact {
+	text-align: center;
+	font-size: x-small
+}

@@ -3,7 +3,7 @@
 
 function ShowTD()
 {
-	print("background=\"home/prost.png\"");
+	print("style=\"background-image: url(home/prost.png)\"");
 }
 
 
@@ -12,7 +12,7 @@ function ShowPage()
 	global $subpages;
 
 
-	print("<p><br><center><h2>Welcome to the home of the Retro Replay Tools!</h2></center><br><br>\n");
+	print("<p><br><h2 style=\"text-align: center\">Welcome to the home of the Retro Replay Tools!</h2><br><br>\n");
 	print("You'll find the latest versions of our projects and some related files here.\n");
 	print("<p><br>\n");
 

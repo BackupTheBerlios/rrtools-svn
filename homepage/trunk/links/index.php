@@ -6,7 +6,7 @@ function ShowPage()
 	global $links;
 
 
-	print "<p><br><center><h2>Links</h2></center><br><br>\n";
+	print "<p><br><h2 style=\"text-align: center\">Links</h2><br><br>\n";
 	print "On this page you'll find some links (more or less) related to the RRTools project.<br>\n";
 	print "Of course we are not responsible for all the disgusting things you'll find there. ;)\n";
 	print '<p><br>';
