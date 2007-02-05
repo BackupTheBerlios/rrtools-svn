@@ -322,7 +322,7 @@ void CTrackEditor::EnableButtons()
 	// link to valid next sector ?
 	track = currentSector->GetRawSector()[0];
 	sector = currentSector->GetRawSector()[1];
-	if (!(track > 0 && track <= cbmImage->GetNumTracks() && (sector + 1) < CCbmImageBase::GetSectorCount(track, cbmImage->GetImageType())))
+	if (!(track > 0 && track <= cbmImage->GetNumTracks() && sector < CCbmImageBase::GetSectorCount(track, cbmImage->GetImageType())))
 		btnNextLinked->Enable(false);
 	// search link to current sector
 	track = 1;

@@ -46,12 +46,11 @@ CCbmDirectoryEntry::CCbmDirectoryEntry()
 /// <param name="startOffset">Offset in the Sector-Data, where the Directory-Entry starts</param>
 CCbmDirectoryEntry::CCbmDirectoryEntry(CCbmImageBase *image, CCbmSector *sectorData, int startOffset)
 {
-	int track, sector;
+	int track, sector, lastTrack = 0, lastSector = 0;
 	bool cont = true;
-	int offset;
+	int offset, lastValidOffset = -1;
 
 	Init();
-
 
 	diskImage = image;
 	dirTrack = sectorData->GetTrack();
@@ -65,6 +64,7 @@ CCbmDirectoryEntry::CCbmDirectoryEntry(CCbmImageBase *image, CCbmSector *sectorD
 	startSector = sectorData->GetRawSector()[startOffset + 2];
 	blocksUsed = sectorData->GetRawSector()[startOffset + 28] + (sectorData->GetRawSector()[startOffset + 29] << 8);
 	memcpy(fileName, sectorData->GetRawSector() + startOffset + 3, 16);
+	fileName[16] = 0;
 
 	// Get "real" number of used blocks by traversing the file-sectors
 	track = startTrack;
@@ -75,16 +75,42 @@ CCbmDirectoryEntry::CCbmDirectoryEntry(CCbmImageBase *image, CCbmSector *sectorD
 	while (track > 0 && cont)
 	{
 		sectorArray.Add((track << 16) + sector);
-		offset = image->GetSectorOffset(track, sector);
-		track =  image->GetRawImage()[offset + 0];
+		try
+		{
+			offset = image->GetSectorOffset(track, sector);
+		}
+		catch (char*)
+		{
+			if (track == startTrack && sector == startSector)							// first link illegal ?
+			{
+				image->GetHeaderInfo(NULL, NULL, &startTrack, &startSector);			// set to directory-start
+				image->GetRawImage()[offsetInImage + 1] = (unsigned char)startTrack;
+				image->GetRawImage()[offsetInImage + 2] = (unsigned char)startSector;
+				errorDescription.Printf(wxT("First Track/Sector changed to %d/%d"), startTrack, startSector);
+			}
+			hasBadSectors = true;
+			blocksUsedReal = 0;
+			if (lastValidOffset >= 0)
+			{
+				image->GetRawImage()[lastValidOffset + 0] = 0;
+				image->GetRawImage()[lastValidOffset + 1] = 255;						// "repair" link
+				errorDescription.Printf(wxT("Link at %d/%d (pointing to %d/%d) changed to 0/255"), lastTrack, lastSector, track, sector);
+			}
+			return;
+		}
+		lastTrack = track;
+		lastSector = sector;
+		lastValidOffset = offset;														// remember last valid offset
+		track =  image->GetRawImage()[offset + 0];										// (points to last valid Track/Sector in image)
 		sector = image->GetRawImage()[offset + 1];
-		if (sectorArray.Index((track << 16) + sector) != wxNOT_FOUND)	// circular link encountered
+		if (sectorArray.Index((track << 16) + sector) != wxNOT_FOUND)					// circular link encountered
 		{
 			cont = false;
 			circularLinked = true;					// mark file as bad
 			// Fix the Link to prevent freezing when deleting or extracting the file
 			image->GetRawImage()[offset + 0] = 0;	// next Track
 			image->GetRawImage()[offset + 1] = 255; // next Sector
+			errorDescription.Printf(wxT("Link at %d/%d (pointing to %d/%d) changed to 0/255"), lastTrack, lastSector, track, sector);
 		}
 		blocksUsedReal++;
 	}
@@ -100,6 +126,7 @@ void CCbmDirectoryEntry::Init(void)
 	closedProperly = true;
 	scratchProtected = false;
 	circularLinked = false;
+	hasBadSectors = false;
 	fileType = NULL;
 	fileName[0] = 0;
 
@@ -420,3 +447,16 @@ bool CCbmDirectoryEntry::WasCircularLinked()
 {
 	return circularLinked;
 }
+
+
+bool CCbmDirectoryEntry::HasBadSectors()
+{
+	return hasBadSectors;
+}
+
+
+wxString CCbmDirectoryEntry::GetErrorDescription()
+{
+	return errorDescription;
+}
+

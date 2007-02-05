@@ -1096,7 +1096,7 @@ void CBMImager::OnODListDrag(wxCommandEvent& event)
 
 			fileName.Assign(sTempDir, str, ext);
 			wxString fname = fileName.GetFullPath().Trim();
-			ExtractFile(entry, fileName.GetFullPath().Trim());
+			ExtractFile(entry, fileName.GetFullPath().Trim(), false);
 			fData.AddFile(fname);
 			// Add the Filename to the list of temporary files. The files will be deleted, when the Program terminates
 			for (i = 0; i < (int)usedTempFiles.Count(); i++)
@@ -1207,7 +1207,9 @@ void CBMImager::ReadCbmDirectory()
 {
 	const unsigned char *pcString;
 	int iCnt;
-	wxArrayString badFiles;						// for storing the names of "bad" files
+	wxArrayString circularFiles;				// for storing the names of "bad" (circular linked) files 
+	wxArrayString errorFiles;					// stores the names of Files with illegal Track/Sectors
+	wxString errorMsg;
 	int iEntryCnt;
 	int i;
 
@@ -1282,32 +1284,63 @@ void CBMImager::ReadCbmDirectory()
 		// Check for bad files and store their names
 		if (entry->WasCircularLinked())
 		{
-			badFiles.Add(wxString::FromAscii((char*)entry->GetFileName()));
+			errorMsg.Printf(wxT("%s -> %s"), wxString::FromAscii((char*)entry->GetFileName()), entry->GetErrorDescription());
+			circularFiles.Add(errorMsg);
+		}
+		// Check for Files with illegal Track/Sector
+		if (entry->HasBadSectors())
+		{
+			errorMsg.Printf(wxT("%s -> %s"), wxString::FromAscii((char*)entry->GetFileName()), entry->GetErrorDescription());
+			errorFiles.Add(errorMsg);
 		}
 	}
 	str.Printf(wxT("%d BLOCKS FREE"), cbmImage->GetBlocksFree());
 	m_FileList->AddItem(str, NULL);
 
 	// Display a message, when bad files were encountered
-	if (badFiles.Count() > 0)
+	if (circularFiles.Count() > 0)
 	{
 		wxString msg;
 		msg.Printf(wxT("WARNING: Circular link detected in following File(s) :"));
-		for (i = 0; i < (int)badFiles.Count(); i++)
+		for (i = 0; i < (int)circularFiles.Count(); i++)
 		{
 #ifdef __WXMSW__
 			msg.Append(wxString::FromAscii("\r\n"));		// Newline
 #else
 			msg.Append(wxString::FromAscii("\n"));			// is this correct ?
 #endif
-			msg.Append(badFiles[i]);
+			msg.Append(circularFiles[i]);
 		}
 #ifdef __WXMSW__
-		msg.Append(wxString::FromAscii("\r\n"));		// Newline
+		msg.Append(wxString::FromAscii("\r\n\r\n"));		// Newline
 #else
-		msg.Append(wxString::FromAscii("\n"));			// is this correct ?
+		msg.Append(wxString::FromAscii("\n\n"));			// is this correct ?
 #endif
 		msg.Append(wxT("This may be a corrupted Image. The error is fixed, you should re-save this file"));
+		wxMessageDialog* dialog = new wxMessageDialog(this, msg, wxT(CBMIMAGER_APPLICATION_NAME), wxOK | wxICON_WARNING);
+		dialog->ShowModal();
+		dialog->Destroy();
+	}
+
+	if (errorFiles.Count() > 0)
+	{
+		wxString msg;
+		msg.Printf(wxT("WARNING: The following File(s) have illegal Track/Sectors :"));
+		for (i = 0; i < (int)errorFiles.Count(); i++)
+		{
+#ifdef __WXMSW__
+			msg.Append(wxString::FromAscii("\r\n"));		// Newline
+#else
+			msg.Append(wxString::FromAscii("\n"));			// is this correct ?
+#endif
+			msg.Append(errorFiles[i]);
+		}
+#ifdef __WXMSW__
+		msg.Append(wxString::FromAscii("\r\n\r\n"));		// Newline
+#else
+		msg.Append(wxString::FromAscii("\n\n"));			// is this correct ?
+#endif
+		msg.Append(wxT("These File(s) are corrupt and can't be restored automatically, you should check with the Disk-Monitor"));
 		wxMessageDialog* dialog = new wxMessageDialog(this, msg, wxT(CBMIMAGER_APPLICATION_NAME), wxOK | wxICON_WARNING);
 		dialog->ShowModal();
 		dialog->Destroy();
@@ -1434,7 +1467,7 @@ void CBMImager::AddFile(wxString& filename)
 }
 
 
-void CBMImager::ExtractFile(CCbmDirectoryEntry *entry, wxString& fileName)
+void CBMImager::ExtractFile(CCbmDirectoryEntry *entry, wxString& fileName, bool showError)
 {
 	CCbmSector *sec = NULL;
 	int track = entry->GetFileStartTrack();
@@ -1458,10 +1491,13 @@ void CBMImager::ExtractFile(CCbmDirectoryEntry *entry, wxString& fileName)
 		}
 		catch (char *text)
 		{
-			wxMessageDialog* dialog = new wxMessageDialog(this,
-				wxString::FromAscii(text), wxT(CBMIMAGER_APPLICATION_NAME), wxOK | wxICON_ERROR);
-			dialog->ShowModal();
-			dialog->Destroy();
+			if (showError)
+			{
+				wxMessageDialog* dialog = new wxMessageDialog(this,
+					wxString::FromAscii(text), wxT(CBMIMAGER_APPLICATION_NAME), wxOK | wxICON_ERROR);
+				dialog->ShowModal();
+				dialog->Destroy();
+			}
 			break;
 		}
 		catch (...) 

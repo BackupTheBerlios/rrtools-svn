@@ -203,7 +203,12 @@ wxIcon CBamEditor::GetIconResource( const wxString& name )
 void CBamEditor::OnClose(wxCloseEvent& event)
 {
 	if (cbmDir != NULL)
+	{
 		delete cbmDir;
+		cbmDir = NULL;
+	}
+	this->Destroy();
+
 	wxUnusedVar(event);
 }
 
@@ -303,7 +308,7 @@ void CBamEditor::ReadCbmDirectory()
 	}
 	catch (char* text)
 	{
-		wxMessageDialog* dialog = new wxMessageDialog(NULL, wxString::FromAscii(text), wxT(CBMIMAGER_APPLICATION_NAME), wxOK);
+		wxMessageDialog* dialog = new wxMessageDialog(NULL, wxString::FromAscii(text), wxT(CBMIMAGER_APPLICATION_NAME), wxOK | wxICON_ERROR);
 		dialog->ShowModal();
 		dialog->Destroy();
 		return;
@@ -351,7 +356,8 @@ void CBamEditor::ReadCbmDirectory()
 
 void CBamEditor::OnFileSelected(wxCommandEvent& event)
 {
-	unsigned long *fileSectors;
+	unsigned long *fileSectors = NULL;
+	int numSectors;
 
 	int sel = m_FileList->GetSelection();
 	if (sel != wxNOT_FOUND)
@@ -359,13 +365,24 @@ void CBamEditor::OnFileSelected(wxCommandEvent& event)
 		CCbmDirectoryEntry *entry = m_FileList->GetEntry(sel);
 		if (entry != NULL)
 		{
-			int numSectors = GetFileSectors(entry, &fileSectors);
+			try
+			{
+				numSectors = GetFileSectors(entry, &fileSectors);
+			}
+			catch (char *text)
+			{
+				wxMessageDialog* dialog = new wxMessageDialog(NULL, wxString::FromAscii(text), wxT(CBMIMAGER_APPLICATION_NAME), wxOK | wxICON_ERROR);
+				dialog->ShowModal();
+				dialog->Destroy();
+				return;
+			}
 			m_BamList->ClearFileSectors();					// Clear old Sectors
 			for (int i = 0; i < numSectors; i++)
 			{
 				m_BamList->AddFileSector(fileSectors[i]);
 			}
-			delete fileSectors;
+			if (fileSectors != NULL)
+				delete fileSectors;
 			m_BamList->Refresh();
 			return;
 		}
@@ -394,6 +411,9 @@ void CBamEditor::OnSectorSelected(wxCommandEvent& event)
 
 int CBamEditor::GetFileSectors(CCbmDirectoryEntry *entry, unsigned long **buffer)
 {
+	if (entry->GetBlocksUsedReal() == 0)
+		return 0;
+
 	unsigned long *fileSectors = new unsigned long[entry->GetBlocksUsedReal()];		// Allocate list
 	int i = 0, track, sector;
 	track = entry->GetFileStartTrack();

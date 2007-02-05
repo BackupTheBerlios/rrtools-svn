@@ -172,7 +172,7 @@ public:
 	void OpenImage(wxString& fileName);
 	void ReadCbmDirectory();
 	void AddFile(wxString& filename);
-	void ExtractFile(CCbmDirectoryEntry *entry, wxString& fileName);
+	void ExtractFile(CCbmDirectoryEntry *entry, wxString& fileName, bool showError = true);
 	CbmImageType GetCurrentImageType();
 	bool IsDragSource();
 	void SetItemUnderCursor(int index);

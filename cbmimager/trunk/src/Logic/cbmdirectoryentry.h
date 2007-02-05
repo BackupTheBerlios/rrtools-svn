@@ -138,6 +138,10 @@ public:
 
 	bool WasCircularLinked();
 
+	bool HasBadSectors();
+
+	wxString GetErrorDescription();
+
 private:
 	void Init(void);
 
@@ -147,6 +151,8 @@ private:
 	bool closedProperly;
 	bool scratchProtected;
 	bool circularLinked;
+	bool hasBadSectors;
+	wxString errorDescription;		// contains a description, if an error in the entry was encountered
 	int offsetInImage;				// Offset in the D64 Image, where the current Entry begins
 	int startTrack, startSector;	// Track / Sector of File
 	int dirTrack, dirSector;		// Track / Sector of the Directory, where this entry resides
