@@ -1,6 +1,6 @@
 //{{NO_DEPENDENCIES}}
 // Microsoft Visual C++ generated include file.
-// Used by TestWXApp.rc
+// Used by CBMImager.rc
 //
 
 // Next default values for new objects
