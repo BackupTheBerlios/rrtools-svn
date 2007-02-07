@@ -63,6 +63,7 @@ CD64Image::CD64Image(void) : CCbmImageBase()
 				FreeSector(track, sector);
 		}
 	}
+	SetDirty(false);
 }
 
 CD64Image::~CD64Image(void)
@@ -94,6 +95,8 @@ bool CD64Image::Load(wxString &fileName)
 	imagePath = fileName;
 
 	InitImage();
+
+	SetDirty(false);
 
 	return true;
 }
@@ -211,6 +214,7 @@ bool CD64Image::AllocateSector(int track, int sector)
 	bitmask ^= 255;										// invert bitmask (0 means "Sector is used")
 	bam->GetRawSector()[offset] &= bitmask;				// clear bit in BAM
 	WriteSector(bam);									// Write back to Image
+	SetDirty(true);
 	return true;
 }
 
@@ -231,6 +235,7 @@ bool CD64Image::FreeSector(int track, int sector)
 	}
 	bam->GetRawSector()[offset] |= bitmask;				// clear bit in BAM (1 means "Sector is free")
 	WriteSector(bam);									// Write back to Image
+	SetDirty(true);
 	return true;
 }
 

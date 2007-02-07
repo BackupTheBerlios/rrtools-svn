@@ -30,6 +30,7 @@
 CD16Image::CD16Image(void) : CCbmImageBase()
 {
 	imageType = D16;
+	SetDirty(false);
 }
 
 CD16Image::~CD16Image(void)
@@ -65,6 +66,7 @@ bool CD16Image::Load(wxString &fileName)
 
 	imagePath = fileName;
 
+	SetDirty(false);
 	return true;
 }
 

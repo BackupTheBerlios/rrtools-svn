@@ -30,6 +30,7 @@ CCbmImageBase::CCbmImageBase(void)
 {
 	image = NULL;
 	bam = NULL;
+	dirty = false;
 }
 
 CCbmImageBase::~CCbmImageBase(void)
@@ -172,6 +173,7 @@ void CCbmImageBase::WriteSector(CCbmSector *sector)
 //		int i = 0;
     int offset = GetSectorOffset(sector->GetTrack(), sector->GetSector());		// Get offset of Sector
 	memcpy(image + offset, sector->GetRawSector(), 256);						// Write data to Image
+	SetDirty(true);
 }
 
 
@@ -180,10 +182,42 @@ CbmImageType CCbmImageBase::GetImageType()
 	return imageType;
 }
 
+bool CCbmImageBase::IsDirty()
+{
+	return dirty;
+}
 
+void CCbmImageBase::SetDirty(bool dirty)
+{
+	this->dirty = dirty;
+}
+
+/*
 byte* CCbmImageBase::GetRawImage()
 {
 	return image;
+}
+*/
+byte CCbmImageBase::ReadByte(int offset)
+{
+	return image[offset];
+}
+
+void CCbmImageBase::ReadContent(byte *dest, int startOffset, int length)
+{
+	memcpy(dest, &image[startOffset], length);
+}
+
+void CCbmImageBase::WriteByte(byte value, int offset)
+{
+	image[offset] = value;
+	SetDirty(true);
+}
+
+void CCbmImageBase::WriteContent(byte *data, int startOffset, int length)
+{
+	memcpy(&image[startOffset], data, length);
+	SetDirty(true);
 }
 
 

@@ -718,6 +718,23 @@ void CBMImager::OnMenuextrasEditBam(wxCommandEvent& event)
 
 void CBMImager::OnMenufilenewClick( wxCommandEvent& event )
 {
+	// Check, whether the image was modified and allow the user to save it before closing
+	if (cbmImage != NULL && cbmImage->IsDirty())
+	{
+		wxMessageDialog *dlg = new wxMessageDialog(this, wxT("The current Image has been modified, do you want to save it ?"), wxT("Warning"),
+			wxYES_NO | wxCANCEL | wxYES_DEFAULT | wxICON_QUESTION);
+		int result = dlg->ShowModal();
+		if (result == wxID_CANCEL)
+		{
+			return;
+		}
+		if (result == wxID_YES)
+		{
+			wxCommandEvent cmd;
+			OnMenufilesaveClick(cmd);
+		}
+	}
+	
 	CNewImage dialog(this);
 	if (dialog.ShowModal() == wxID_OK)
 	{
@@ -756,11 +773,22 @@ void CBMImager::OnMenufilenewClick( wxCommandEvent& event )
 
 void CBMImager::OnMenufileopenClick( wxCommandEvent& event )
 {
- //   SelectImage* window = new SelectImage(this, ID_SELECTIMAGE, _("Select Image"));
-	//if (window->ShowModal() == wxID_OK )
-	//{
-	//}
-	//window->Destroy();
+	// Check, whether the image was modified and allow the user to save it before closing
+	if (cbmImage != NULL && cbmImage->IsDirty())
+	{
+		wxMessageDialog *dlg = new wxMessageDialog(this, wxT("The current Image has been modified, do you want to save it ?"), wxT("Warning"),
+			wxYES_NO | wxCANCEL | wxYES_DEFAULT | wxICON_QUESTION);
+		int result = dlg->ShowModal();
+		if (result == wxID_CANCEL)
+		{
+			return;
+		}
+		if (result == wxID_YES)
+		{
+			wxCommandEvent cmd;
+			OnMenufilesaveClick(cmd);
+		}
+	}
 
 	wxFileDialog dialog(this, _T("Open an Image"), _T(""), _T(""), _T("All Images (*.d64;*.dfi)|*.d64;*.dfi|D64 files (*.d64)|*.d64|DFI Files (*.dfi)|*.dfi|All Files (*.*)|*.*"), 0);
 	if (dialog.ShowModal() == wxID_OK)
@@ -815,8 +843,13 @@ void CBMImager::OnMenufilesaveClick( wxCommandEvent& event )
 				wxFFile f(fileDlg->GetPath(), wxT("wb"));
 				if (f.IsOpened())
 				{
-					f.Write(cbmImage->GetRawImage(), cbmImage->GetImageLength());
+					int length = cbmImage->GetImageLength();
+					unsigned char *buffer = (unsigned char*)malloc(length);
+					cbmImage->ReadContent(buffer, 0, length);
+					f.Write(buffer, length);
 					f.Close();
+					free(buffer);
+					cbmImage->SetDirty(false);
 				}
 			}
 			fileDlg->Destroy();
@@ -861,8 +894,13 @@ void CBMImager::OnMenufilesaveasClick( wxCommandEvent& event )
 				wxFFile f(fileDlg->GetPath(), wxT("wb"));
 				if (f.IsOpened())
 				{
-					f.Write(cbmImage->GetRawImage(), cbmImage->GetImageLength());
+					int length = cbmImage->GetImageLength();
+					unsigned char *buffer = (unsigned char*)malloc(length);
+					cbmImage->ReadContent(buffer, 0, length);
+					f.Write(buffer, length);
 					f.Close();
+					free(buffer);
+					cbmImage->SetDirty(false);
 				}
 			}
 			fileDlg->Destroy();
@@ -891,7 +929,7 @@ void CBMImager::OnMenufilesearchClick( wxCommandEvent& event)
 
 void CBMImager::OnMenufileexitClick( wxCommandEvent& event )
 {
-	Close(true);
+	Close(false);
 	event.Skip();
 }
 
@@ -1148,6 +1186,27 @@ void CBMImager::SetItemUnderCursor(int index)
 
 void CBMImager::OnClose(wxCloseEvent& event)
 {
+	// Check, whether the image was modified and allow the user to save it before closing
+	if (cbmImage != NULL && cbmImage->IsDirty())
+	{
+		wxMessageDialog *dlg = new wxMessageDialog(this, wxT("The current Image has been modified, do you want to save it ?"), wxT("Warning"),
+			wxYES_NO | wxCANCEL | wxYES_DEFAULT | wxICON_QUESTION);
+		int result = dlg->ShowModal();
+		if (result == wxID_CANCEL)
+		{
+			if (event.CanVeto())
+			{
+				event.Veto();
+				return;
+			}
+		}
+		if (result == wxID_YES)
+		{
+			wxCommandEvent cmd;
+			OnMenufilesaveClick(cmd);
+		}
+	}
+
 	if (cbmImage != NULL)
 		delete cbmImage;
 	if (cbmDir != NULL)
@@ -1197,9 +1256,15 @@ void CBMImager::OpenImage(wxString& fileName)
 	else
 		cbmImage = new CD16Image();
 	if (cbmImage->Load(fileName))
+	{
 		ReadCbmDirectory();
-
-	m_StatusBar->SetStatusText(fileName);
+		m_StatusBar->SetStatusText(fileName);
+	}
+	else
+	{
+		wxMessageDialog dlg(this, wxT("Failed to load image. This is possibly not a valid image file."), wxT("Error"), wxOK | wxICON_ERROR);
+		dlg.ShowModal();
+	}
 }
 
 

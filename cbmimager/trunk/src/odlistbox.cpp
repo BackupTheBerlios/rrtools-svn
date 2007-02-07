@@ -355,6 +355,8 @@ int CODListBox::CreateSelectionBitmap(wxColor& foreground, wxColor& background)
 // This method should be called from the function OnDrawItem()
 int CODListBox::IsSpecialSelection(int row, int col)
 {
+	wxUnusedVar(row);
+	wxUnusedVar(col);
 	throw "Must be implemented in derived class";
 }
 

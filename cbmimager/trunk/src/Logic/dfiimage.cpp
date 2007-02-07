@@ -57,6 +57,8 @@ CDFIImage::CDFIImage(void) : CCbmImageBase()
 
     SetDiskName(CCbmImageBase::ASCII2PET("NEW DISK        ", 16, buffer));
     SetDiskID(CCbmImageBase::ASCII2PET("UT 2A", 5, buffer));
+	
+	SetDirty(false);
 }
 
 CDFIImage::~CDFIImage(void)
@@ -92,6 +94,8 @@ bool CDFIImage::Load(wxString &fileName)
     lastTrack = image[0x1c];
 
 	imagePath = fileName;
+
+	SetDirty(false);
 
 	return true;
 }
@@ -180,6 +184,7 @@ bool CDFIImage::FreeSector(int track, int sector)
         return false;
     bitmask ^= 255;
     image[bamStart + offset] &= bitmask;
+	SetDirty(true);
 	return true;
 }
 
@@ -195,6 +200,7 @@ bool CDFIImage::AllocateSector(int track, int sector)
     if ((image[bamStart + offset] & bitmask) == bitmask)// was already used ?
         return false;
     image[bamStart + offset] |= bitmask;
+	SetDirty(true);
 	return true;
 }
 
@@ -306,6 +312,7 @@ int CDFIImage::AppendTrack()
 	imageLength = 256 * 256 * image[0x1c];
     for (int i = 0; i < 255; i++)
         FreeSector(image[0x1c], i);				// Free the Track in BAM
+	SetDirty(true);
     return image[0x1c];
 }
 

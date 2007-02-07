@@ -64,7 +64,13 @@ public:
 	CCbmSector *GetSector(int track, int sector);
 	void WriteSector(CCbmSector *sector);
 	CbmImageType GetImageType();
-	byte* GetRawImage();
+	//byte* GetRawImage();
+	bool IsDirty();
+	void SetDirty(bool dirty);
+	byte ReadByte(int offset);
+	void ReadContent(byte *dest, int startOffset, int length);
+	void WriteByte(byte value, int offset);
+	void WriteContent(byte *data, int startOffset, int length);
 	CCbmSector *GetBam();
 	wxString GetImagePath();
 
@@ -82,6 +88,7 @@ protected:
 	CCbmSector *bam;					// BAM of the D64 Image (only used with .D64-Images)
 	int bamStart;                       // Offset in Image to the start of the BAM (only used with D16 and DFI)
 	int lastTrack;                      // last Track in actual Image
+	bool dirty;							// was modified ?
 
 	char msg[600];						// Buffer for internal use (Error messages etc)
 };

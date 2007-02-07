@@ -255,23 +255,25 @@ void CFileSearcher::OnButtonsearchClick( wxCommandEvent& event )
 			{
 				image = new CD64Image();
 			}
-			image->Load(filenames[i]);
-			try
+			if (image->Load(filenames[i]))
 			{
-				dir = new CCbmDirectory(image);
+				try
+				{
+					dir = new CCbmDirectory(image);
+				}
+				catch (...)
+				{
+					if (dir != NULL)
+						delete dir;
+					if (image != NULL)
+						delete image;
+					image = NULL;
+					dir = NULL;
+					continue;
+				}
+				if (dir->SearchFile(image, (char*)CCbmImageBase::ASCII2PET(m_searchText->GetValue().mb_str(), 16, buffer), !m_exactSearch->IsChecked()))
+					m_resultsList->Append(filenames[i]);
 			}
-			catch (...)
-			{
-				if (dir != NULL)
-					delete dir;
-				if (image != NULL)
-					delete image;
-				image = NULL;
-				dir = NULL;
-				continue;
-			}
-			if (dir->SearchFile(image, (char*)CCbmImageBase::ASCII2PET(m_searchText->GetValue().mb_str(), 16, buffer), !m_exactSearch->IsChecked()))
-				m_resultsList->Append(filenames[i]);
 			delete dir;
 			delete image;
 			image = NULL;

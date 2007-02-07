@@ -84,16 +84,20 @@ CCbmDirectoryEntry::CCbmDirectoryEntry(CCbmImageBase *image, CCbmSector *sectorD
 			if (track == startTrack && sector == startSector)							// first link illegal ?
 			{
 				image->GetHeaderInfo(NULL, NULL, &startTrack, &startSector);			// set to directory-start
-				image->GetRawImage()[offsetInImage + 1] = (unsigned char)startTrack;
-				image->GetRawImage()[offsetInImage + 2] = (unsigned char)startSector;
+				//image->GetRawImage()[offsetInImage + 1] = (unsigned char)startTrack;
+				image->WriteByte((unsigned char)startTrack, offsetInImage + 1);
+				//image->GetRawImage()[offsetInImage + 2] = (unsigned char)startSector;
+				image->WriteByte((unsigned char)startSector, offsetInImage + 2);
 				errorDescription.Printf(wxT("First Track/Sector changed to %d/%d"), startTrack, startSector);
 			}
 			hasBadSectors = true;
 			blocksUsedReal = 0;
 			if (lastValidOffset >= 0)
 			{
-				image->GetRawImage()[lastValidOffset + 0] = 0;
-				image->GetRawImage()[lastValidOffset + 1] = 255;						// "repair" link
+				//image->GetRawImage()[lastValidOffset + 0] = 0;
+				image->WriteByte(0, lastValidOffset + 0);
+				//image->GetRawImage()[lastValidOffset + 1] = 255;						// "repair" link
+				image->WriteByte(255, lastValidOffset + 1);
 				errorDescription.Printf(wxT("Link at %d/%d (pointing to %d/%d) changed to 0/255"), lastTrack, lastSector, track, sector);
 			}
 			return;
@@ -101,15 +105,19 @@ CCbmDirectoryEntry::CCbmDirectoryEntry(CCbmImageBase *image, CCbmSector *sectorD
 		lastTrack = track;
 		lastSector = sector;
 		lastValidOffset = offset;														// remember last valid offset
-		track =  image->GetRawImage()[offset + 0];										// (points to last valid Track/Sector in image)
-		sector = image->GetRawImage()[offset + 1];
+		//track =  image->GetRawImage()[offset + 0];										// (points to last valid Track/Sector in image)
+		track = image->ReadByte(offset + 0);
+		//sector = image->GetRawImage()[offset + 1];
+		sector = image->ReadByte(offset + 1);
 		if (sectorArray.Index((track << 16) + sector) != wxNOT_FOUND)					// circular link encountered
 		{
 			cont = false;
 			circularLinked = true;					// mark file as bad
 			// Fix the Link to prevent freezing when deleting or extracting the file
-			image->GetRawImage()[offset + 0] = 0;	// next Track
-			image->GetRawImage()[offset + 1] = 255; // next Sector
+			//image->GetRawImage()[offset + 0] = 0;	// next Track
+			image->WriteByte(0, offset + 0);
+			//image->GetRawImage()[offset + 1] = 255; // next Sector
+			image->WriteByte(255, offset + 1);
 			errorDescription.Printf(wxT("Link at %d/%d (pointing to %d/%d) changed to 0/255"), lastTrack, lastSector, track, sector);
 		}
 		blocksUsedReal++;
@@ -180,14 +188,20 @@ void CCbmDirectoryEntry::Write(CCbmImageBase *image)
 		throw "Must set ImageOffset first !";
 	}
 
-	image->GetRawImage()[offsetInImage] = typeCode;							// File Type
-	image->GetRawImage()[offsetInImage + 1] = (byte)startTrack;
-	image->GetRawImage()[offsetInImage + 2] = (byte)startSector;			// Start of File
+	//image->GetRawImage()[offsetInImage] = typeCode;							// File Type
+	image->WriteByte(typeCode, offsetInImage);
+	//image->GetRawImage()[offsetInImage + 1] = (byte)startTrack;
+	image->WriteByte((unsigned char)startTrack, offsetInImage + 1);
+	//image->GetRawImage()[offsetInImage + 2] = (byte)startSector;			// Start of File
+	image->WriteByte((unsigned char)startSector, offsetInImage + 2);
 
-	memcpy(image->GetRawImage() + offsetInImage + 3, fileName, 16);
+	//memcpy(image->GetRawImage() + offsetInImage + 3, fileName, 16);
+	image->WriteContent(fileName, offsetInImage + 3, 16);
 
-	image->GetRawImage()[offsetInImage + 28] = (byte)(blocksUsed & 255);
-	image->GetRawImage()[offsetInImage + 29] = (byte)(blocksUsed >> 8);		// set used blocks
+	//image->GetRawImage()[offsetInImage + 28] = (byte)(blocksUsed & 255);
+	image->WriteByte((unsigned char)blocksUsed & 255, offsetInImage + 28);
+	//image->GetRawImage()[offsetInImage + 29] = (byte)(blocksUsed >> 8);		// set used blocks
+	image->WriteByte((unsigned char)blocksUsed >> 8, offsetInImage + 29);
 	// If type is Directory, set name also for the Header-Block
 	if (GetFileType() == CBM_DIR)
 	{
