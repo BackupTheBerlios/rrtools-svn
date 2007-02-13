@@ -35,6 +35,17 @@
 #define CMD_SEP_AFTER		7
 #define CMD_CREATE_SUBDIR	8
 #define CMD_RENAME_DISK		9
+#define CMD_CONVERT			10
+#define CMD_CONVERT_PRG		11
+#define CMD_CONVERT_USR		12
+#define CMD_CONVERT_SEQ		13
+#define CMD_CONVERT_REL		14
+#define CMD_CONVERT_DEL		15
+#define CMD_SET_SCRATCH_PROTECTION		16
+#define CMD_DEL_SCRATCH_PROTECTION		17
+#define CMD_SET_CLOSED_FLAG				18
+#define CMD_DEL_CLOSED_FLAG				19
+#define CMD_EXPORT_P00					20
 
 
 // external event

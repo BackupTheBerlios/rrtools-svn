@@ -115,7 +115,17 @@ BEGIN_EVENT_TABLE( CBMImager, wxFrame )
 	EVT_MENU(CMD_SEP_AFTER, CBMImager::OnEvent)
 	EVT_MENU(CMD_CREATE_SUBDIR, CBMImager::OnEvent)
 	EVT_MENU(CMD_RENAME_DISK, CBMImager::OnEvent)
-
+	EVT_MENU(CMD_CONVERT_PRG, CBMImager::OnEvent)
+	EVT_MENU(CMD_CONVERT_USR, CBMImager::OnEvent)
+	EVT_MENU(CMD_CONVERT_SEQ, CBMImager::OnEvent)
+	EVT_MENU(CMD_CONVERT_REL, CBMImager::OnEvent)
+	EVT_MENU(CMD_CONVERT_DEL, CBMImager::OnEvent)
+	EVT_MENU(CMD_SET_SCRATCH_PROTECTION, CBMImager::OnEvent)
+	EVT_MENU(CMD_DEL_SCRATCH_PROTECTION, CBMImager::OnEvent)
+	EVT_MENU(CMD_SET_CLOSED_FLAG, CBMImager::OnEvent)
+	EVT_MENU(CMD_DEL_CLOSED_FLAG, CBMImager::OnEvent)
+	EVT_MENU(CMD_EXPORT_P00, CBMImager::OnEvent)
+	
 	EVT_CONTEXT_MENU(CBMImager::OnContextMenu)
 
 	EVT_ODLISTBOX_DRAG_EVENT(wxID_ANY, CBMImager::OnODListDrag)
@@ -837,7 +847,7 @@ void CBMImager::OnMenufilesaveClick( wxCommandEvent& event )
 					filter = wxT("D64 Files (*.d64)|*.d64");
 					break;
 			}
-			fileDlg = new wxFileDialog(this, _T("Save Image"), tFileName.GetPath(), tFileName.GetFullName(), filter, wxSAVE);
+			fileDlg = new wxFileDialog(this, _T("Save Image"), tFileName.GetPath(), tFileName.GetFullName(), filter, wxSAVE | wxOVERWRITE_PROMPT);
 			if (fileDlg->ShowModal() == wxID_OK)
 			{
 				wxFFile f(fileDlg->GetPath(), wxT("wb"));
@@ -888,7 +898,7 @@ void CBMImager::OnMenufilesaveasClick( wxCommandEvent& event )
 					filter = wxT("D64 Files (*.d64)|*.d64");
 					break;
 			}
-			fileDlg = new wxFileDialog(this, _T("Save Image"), _T(""), _T(""), filter, wxSAVE);
+			fileDlg = new wxFileDialog(this, _T("Save Image"), _T(""), _T(""), filter, wxSAVE | wxOVERWRITE_PROMPT);
 			if (fileDlg->ShowModal() == wxID_OK)
 			{
 				wxFFile f(fileDlg->GetPath(), wxT("wb"));
@@ -988,7 +998,7 @@ void CBMImager::OnContextMenu(wxContextMenuEvent& event)
 {
 	unsigned long cookie = 0;
 	wxUnusedVar(event);
-	wxMenu menu(0);
+	wxMenu menu(0), *convertMenu;
 
 
 	if( cbmImage==NULL )
@@ -996,11 +1006,26 @@ void CBMImager::OnContextMenu(wxContextMenuEvent& event)
 		return;
 	}
 
+	convertMenu = new wxMenu(0);
+	convertMenu->Append(CMD_CONVERT_PRG, wxT("PRG"));
+	convertMenu->Append(CMD_CONVERT_USR, wxT("USR"));
+	convertMenu->Append(CMD_CONVERT_SEQ, wxT("SEQ"));
+	convertMenu->Append(CMD_CONVERT_REL, wxT("REL"));
+	convertMenu->Append(CMD_CONVERT_DEL, wxT("DEL"));
+	convertMenu->AppendSeparator();
+	convertMenu->Append(CMD_SET_SCRATCH_PROTECTION, wxT("Set Scratch Protection"));
+	convertMenu->Append(CMD_DEL_SCRATCH_PROTECTION, wxT("Remove Scratch Protection"));
+	convertMenu->Append(CMD_SET_CLOSED_FLAG, wxT("Set 'Closed' Flag"));
+	convertMenu->Append(CMD_DEL_CLOSED_FLAG, wxT("Remove 'Closed' Flag"));
+
 	menu.Append(CMD_ADD_FILES, wxT("Add File(s)"));
 	menu.Append(CMD_DELETE_FILES, wxT("Delete File(s)"));
 	menu.Append(CMD_EXTRACT_FILES, wxT("Extract File(s)"));
+	menu.Append(CMD_EXPORT_P00, wxT("Export as P00"));
 	menu.AppendSeparator();
 	menu.Append(CMD_RENAME_FILE, wxT("Rename File"));
+	menu.AppendSeparator();
+	menu.Append(CMD_CONVERT, wxT("Change File-Type"), convertMenu);
 
 	if (cbmImage->GetImageType() == DFI)
 	{
@@ -1048,6 +1073,7 @@ void CBMImager::OnContextMenu(wxContextMenuEvent& event)
 		{
 			menu.Enable(CMD_DELETE_FILES, false);
 			menu.Enable(CMD_ADD_FILES, false);
+			menu.Enable(CMD_CONVERT, false);
 		}
 		// Directorys can't be extracted
 		if (m_FileList->IsSelected(i) && m_FileList->GetEntry(i) != NULL && m_FileList->GetEntry(i)->GetFileType() == CBM_DIR)
@@ -1416,10 +1442,21 @@ void CBMImager::ReadCbmDirectory()
 void CBMImager::AddFile(wxString& filename)
 {
 	unsigned char aucFilenameBuffer[17];
+	wxFileName fName;
 	int track = 0, sector = 0, readBytes;
 	int newTrack = 0, newSector = 0;
 	byte buffer[256];
 	CCbmDirectoryEntry *entry = NULL;
+	bool isP00 = false;
+	struct
+	{
+		char magic[7];
+		char zero1;
+		char filename[16];
+		char zero2;
+		char recordLength;
+	} p00Header;
+
 
 	wxFFile f(filename, wxT("rb"));
 	if (!f.IsOpened())
@@ -1433,14 +1470,32 @@ void CBMImager::AddFile(wxString& filename)
 		dialog->Destroy();
 		return;
 	}
-	wxString fName = filename.AfterLast(wxFileName::GetPathSeparator(wxPATH_NATIVE));
-	fName = fName.Left(16);
+	filename = filename.AfterLast(wxFileName::GetPathSeparator(wxPATH_NATIVE));
+	filename = filename.Left(16);
+	// check for Pxx-Files
+	memset(&p00Header, 0, sizeof(p00Header));
+	fName.Assign(filename);
+	wxString ext = fName.GetExt().Upper();
+	if (ext.StartsWith("P") || ext.StartsWith("U") || ext.StartsWith("S") || ext.StartsWith("R"))
+	{
+		if (ext.Mid(1, 1).IsNumber() && ext.Mid(2, 1).IsNumber())
+		{
+			f.Read(&p00Header, sizeof(p00Header));
+			if (strcmp(p00Header.magic, "C64File") == 0)
+			{
+				filename = wxString::FromAscii(p00Header.filename);
+				isP00 = true;
+			}
+			else
+				wxLogMessage(wxT("Invalid Header in Emulator-File"));
+		}
+	}
 	// convert filename to petscii, result is in aucFilenameBuffer
-	CCbmImageBase::ASCII2PET(fName.mb_str(), 16, aucFilenameBuffer);
+	CCbmImageBase::ASCII2PET(filename.mb_str(), 16, aucFilenameBuffer);
 	// Check if a File with this name already exist
 	if (cbmDir->SearchFile(cbmImage, (const char*)aucFilenameBuffer, false, false) == true)
 	{
-		CRenameDialog dialog(this, fName);
+		CRenameDialog dialog(this, filename);
 		if (dialog.ShowModal() == wxID_OK)
 		{
 			// overwrite aucBuffer with new filename from the RenameDialog
@@ -1525,6 +1580,21 @@ void CBMImager::AddFile(wxString& filename)
 		readBytes = f.Read(&buffer[2], 254);
 	}
 	f.Close();
+
+	if (isP00)
+	{
+		if (ext.StartsWith("P"))
+			entry->SetFileType(CBM_PRG | CBM_CLOSED);
+		else if (ext.StartsWith("U"))
+			entry->SetFileType(CBM_USR | CBM_CLOSED);
+		else if (ext.StartsWith("S"))
+			entry->SetFileType(CBM_SEQ | CBM_CLOSED);
+		else if (ext.StartsWith("R"))
+		{
+			entry->SetFileType(CBM_REL | CBM_CLOSED);
+			cbmImage->WriteByte(p00Header.recordLength, entry->GetEntryOffset() + 21);	// Write Record-Length for REL-Files
+		}
+	}
 	entry->Write(cbmImage);
 	delete entry;
 
@@ -1532,8 +1602,16 @@ void CBMImager::AddFile(wxString& filename)
 }
 
 
-void CBMImager::ExtractFile(CCbmDirectoryEntry *entry, wxString& fileName, bool showError)
+void CBMImager::ExtractFile(CCbmDirectoryEntry *entry, wxString& fileName, bool showError, bool writeP00)
 {
+	struct
+	{
+		char magic[7];
+		char zero1;
+		char filename[16];
+		char zero2;
+		char recordLength;
+	} p00Header;
 	CCbmSector *sec = NULL;
 	int track = entry->GetFileStartTrack();
 	int sector = entry->GetFileStartSector();
@@ -1542,6 +1620,15 @@ void CBMImager::ExtractFile(CCbmDirectoryEntry *entry, wxString& fileName, bool 
 		return;
 	while (track != 0)
 	{
+		if (writeP00)
+		{
+			memset(&p00Header, 0, sizeof(p00Header));
+			sprintf(p00Header.magic, "C64File");
+			sprintf(p00Header.filename, (char*)entry->GetFileName());
+			if (entry->GetFileType() == CBM_REL)
+				p00Header.recordLength = cbmImage->ReadByte(entry->GetEntryOffset() + 21);	// Write Record-Length for REL-Files
+			f.Write(&p00Header, sizeof(p00Header));
+		}
 		try
 		{
 			sec = cbmImage->GetSector(track, sector);
@@ -1587,6 +1674,10 @@ void CBMImager::OnEvent(wxCommandEvent& event)
 	unsigned long cookie = 0;
 	int sel = 0;
 	wxFileDialog *fileDlg = NULL;
+	wxFileName fName;
+	wxString baseName, ext;
+	int num[] =		{ 0,   0,   0,   0,   0  };
+	char *types[] =	{ "", "S", "P", "U", "R" };
 
 	switch (event.m_id)
 	{
@@ -1654,10 +1745,30 @@ void CBMImager::OnEvent(wxCommandEvent& event)
 			while (sel != wxNOT_FOUND)
 			{
 				CCbmDirectoryEntry *entry = m_FileList->GetEntry(sel);
-				wxString str;
-				str.Printf(wxT("%s.%s"), entry->GetFileName(), entry->GetFileTypeString());
-				fileDlg = new wxFileDialog(this, _T("Extract File"), _T(""), str, _T("All Files (*.*)|*.*"),
-					wxSAVE);
+				wxString str, sIllChars, ext;
+				wxFileName fileName;
+				int iCnt;
+				
+				// convert the filename to a string
+				str = CCbmImageBase::PET2String(entry->GetFileName(), 0, 16);
+
+				// get the forbidden chars for a filename
+				sIllChars = fileName.GetForbiddenChars();
+				sIllChars += fileName.GetPathSeparators();
+				sIllChars += fileName.GetVolumeSeparator();
+				// replace all forbidden chars in the filename
+				for(iCnt = 0; iCnt < (int)sIllChars.Length(); ++iCnt)
+				{
+					str.Replace(sIllChars.Mid(iCnt, 1), wxT("_"), true);
+				}
+
+				ext = wxString::FromAscii(entry->GetFileTypeString());
+
+				fileName.Assign("", str, ext);
+				wxString fname = fileName.GetFullPath().Trim();
+
+				fileDlg = new wxFileDialog(this, _T("Extract File"), _T(""), fname, _T("All Files (*.*)|*.*"),
+					wxSAVE | wxOVERWRITE_PROMPT);
 				if (fileDlg->ShowModal() == wxID_OK)
 				{
 					wxString fName = fileDlg->GetPath();
@@ -1666,6 +1777,43 @@ void CBMImager::OnEvent(wxCommandEvent& event)
 				fileDlg->Destroy();
 				sel = m_FileList->GetNextSelected(cookie);
 			}
+			break;
+		case CMD_EXPORT_P00:
+			int type;
+			baseName = wxString::FromAscii((char*)cbmDir->GetDiskName());
+			// Disk-Name is Default-Name
+			fileDlg = new wxFileDialog(this, _T("Set Basename"), _T(""), baseName, _T("P00 Files (*.P00)|*.P00"), wxSAVE);
+			if (fileDlg->ShowModal() == wxID_OK)
+			{
+				sel = m_FileList->GetFirstSelected(cookie);
+				while (sel != wxNOT_FOUND)
+				{
+					CCbmDirectoryEntry *entry = m_FileList->GetEntry(sel);
+					type = entry->GetFileType();
+					if (type != CBM_DIR)
+					{
+						fName.Assign(fileDlg->GetPath());
+						do
+						{
+							ext.Printf("%s%02d", types[type], num[type]);
+							fName.SetExt(ext);
+							num[type]++;
+						} while (fName.FileExists() && num[type] <= 100);
+						if (num[type] > 99)
+						{
+							wxMessageDialog* dialog = new wxMessageDialog(this,
+								wxT("Maximum File-Number reached !"), wxT(CBMIMAGER_APPLICATION_NAME), wxOK | wxICON_ERROR);
+							dialog->ShowModal();
+							dialog->Destroy();
+							return;
+						}
+						baseName = fName.GetFullPath();
+						ExtractFile(entry, baseName, true, true);
+					}
+					sel = m_FileList->GetNextSelected(cookie);
+				}
+			}
+			fileDlg->Destroy();
 			break;
 		case CMD_RENAME_FILE:
 			sel = m_FileList->GetFirstSelected(cookie);
@@ -1747,6 +1895,58 @@ void CBMImager::OnEvent(wxCommandEvent& event)
 					cbmDir->ShiftEntries(cbmImage, entry->GetEntryIndex() + 1, true);
 				ReadCbmDirectory();
 			}
+			break;
+		case CMD_CONVERT_PRG:
+		case CMD_CONVERT_USR:
+		case CMD_CONVERT_SEQ:
+		case CMD_CONVERT_REL:
+		case CMD_CONVERT_DEL:
+		case CMD_SET_SCRATCH_PROTECTION:
+		case CMD_SET_CLOSED_FLAG:
+		case CMD_DEL_SCRATCH_PROTECTION:
+		case CMD_DEL_CLOSED_FLAG:
+			type = 0;
+			if (event.m_id == CMD_CONVERT_PRG)
+				type = CBM_PRG;
+			else if (event.m_id == CMD_CONVERT_USR)
+				type = CBM_USR;
+			else if (event.m_id == CMD_CONVERT_SEQ)
+				type = CBM_SEQ;
+			else if (event.m_id == CMD_CONVERT_REL)
+				type = CBM_REL;
+			else if (event.m_id == CMD_CONVERT_DEL)
+				type = CBM_DEL;
+			for (int i = m_FileList->GetItemCount() - 1; i >= 0; i--)
+			{
+				if (m_FileList->IsSelected(i))
+				{
+					CCbmDirectoryEntry *entry = m_FileList->GetEntry(i);
+					if (entry->GetFileType() != CBM_DIR)		// is this a Sub-Directory ?
+					{
+						if (event.m_id >= CMD_SET_SCRATCH_PROTECTION && event.m_id <= CMD_DEL_CLOSED_FLAG)
+						{
+							if (event.m_id == CMD_SET_SCRATCH_PROTECTION)
+								entry->SetScratchProtected(true);
+							else if (event.m_id == CMD_DEL_SCRATCH_PROTECTION)
+								entry->SetScratchProtected(false);
+							else if (event.m_id == CMD_SET_CLOSED_FLAG)
+								entry->SetClosedProperly(true);
+							else if (event.m_id == CMD_DEL_CLOSED_FLAG)
+								entry->SetClosedProperly(false);
+						}
+						else
+						{
+							if (entry->GetClosedProperly())
+								type |= 0x80;
+							if (entry->GetScratchProtected())
+								type |= 0x40;
+							entry->SetFileType(type);
+						}
+						entry->Write(cbmImage);
+					}
+				}
+			}
+			ReadCbmDirectory();
 			break;
 		case CMD_CREATE_SUBDIR:
 				CRenameDialog dialog(this, wxT("NEW DIR"));

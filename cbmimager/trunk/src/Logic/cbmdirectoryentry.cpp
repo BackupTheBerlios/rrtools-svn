@@ -188,20 +188,14 @@ void CCbmDirectoryEntry::Write(CCbmImageBase *image)
 		throw "Must set ImageOffset first !";
 	}
 
-	//image->GetRawImage()[offsetInImage] = typeCode;							// File Type
-	image->WriteByte(typeCode, offsetInImage);
-	//image->GetRawImage()[offsetInImage + 1] = (byte)startTrack;
+	image->WriteByte(typeCode, offsetInImage);									// File Type
 	image->WriteByte((unsigned char)startTrack, offsetInImage + 1);
-	//image->GetRawImage()[offsetInImage + 2] = (byte)startSector;			// Start of File
-	image->WriteByte((unsigned char)startSector, offsetInImage + 2);
+	image->WriteByte((unsigned char)startSector, offsetInImage + 2);			// Start of File
 
-	//memcpy(image->GetRawImage() + offsetInImage + 3, fileName, 16);
 	image->WriteContent(fileName, offsetInImage + 3, 16);
 
-	//image->GetRawImage()[offsetInImage + 28] = (byte)(blocksUsed & 255);
 	image->WriteByte((unsigned char)blocksUsed & 255, offsetInImage + 28);
-	//image->GetRawImage()[offsetInImage + 29] = (byte)(blocksUsed >> 8);		// set used blocks
-	image->WriteByte((unsigned char)blocksUsed >> 8, offsetInImage + 29);
+	image->WriteByte((unsigned char)blocksUsed >> 8, offsetInImage + 29);		// set used blocks
 	// If type is Directory, set name also for the Header-Block
 	if (GetFileType() == CBM_DIR)
 	{
@@ -413,11 +407,19 @@ bool CCbmDirectoryEntry::GetScratchProtected()
 void CCbmDirectoryEntry::SetClosedProperly(bool value)
 {
 	closedProperly = value;
+	if (value)
+		typeCode |= 0x80;
+	else
+		typeCode &= 0x7f;
 }
 
 void CCbmDirectoryEntry::SetScratchProtected(bool value)
 {
 	scratchProtected = value;
+	if (value)
+		typeCode |= 0x40;
+	else
+		typeCode &= 0xbf;
 }
 
 
