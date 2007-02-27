@@ -65,7 +65,7 @@
 #include "Logic/cbmsector.h"
 #include "Logic/cbmdirectoryentry.h"
 #include "Logic/cbmdirectory.h"
-
+#include "Logic/T64Reader.h"
 
 
 
@@ -101,6 +101,11 @@ BEGIN_EVENT_TABLE( CBMImager, wxFrame )
 	EVT_MENU( ID_MENUEXTRAS_EDITFILE, CBMImager::OnMenuextrasEditFile )
 
 	EVT_MENU( ID_MENUEXTRAS_EDITBAM, CBMImager::OnMenuextrasEditBam )
+
+	EVT_MENU( ID_MENUEXTRAS_IMPORTT64, CBMImager::OnMenuextrasImportT64 )
+
+	EVT_UPDATE_UI( ID_MENUEXTRAS_IMPORT, CBMImager::OnShowExtrasMenu )
+
 
     EVT_LISTBOX_DCLICK( ID_LISTBOXFILES, CBMImager::OnListboxfilesDClick )
 
@@ -231,6 +236,11 @@ void CBMImager::CreateControls()
 	m_extrasMenu = new wxMenu;
 	m_extrasMenu->Append(ID_MENUEXTRAS_EDITFILE, _("Edit &File"), _T("Edit the File-contents in a Hex-Editor"), wxITEM_NORMAL);
 	m_extrasMenu->Append(ID_MENUEXTRAS_EDITBAM, _("Edit &BAM"), _T("Edit the BAM"), wxITEM_NORMAL);
+
+	m_importMenu = new wxMenu;
+	m_importMenu->Append(ID_MENUEXTRAS_IMPORTT64, _("From T64"), _T("Import files from a T64-Image"), wxITEM_NORMAL);
+	m_extrasMenu->AppendSeparator();
+	m_extrasMenu->Append(ID_MENUEXTRAS_IMPORT, _("&Import..."), m_importMenu, _T(""));
 	menuBar->Append(m_extrasMenu, _("&Extras"));
 	SetMenuBar(menuBar);
 
@@ -724,6 +734,79 @@ void CBMImager::OnMenuextrasEditBam(wxCommandEvent& event)
 	dlg.ShowModal();
 	ReadCbmDirectory();				// perhaps we made changes in the directory, so update it
 }
+
+
+void CBMImager::OnMenuextrasImportT64(wxCommandEvent& event)
+{
+	// This should never happen, just check for safety...
+	if (cbmImage == NULL)
+	{
+		wxMessageDialog dlg(this, wxT("Please create or load an Image first !"), wxT("Error"), wxOK | wxICON_ERROR);
+		dlg.ShowModal();
+		return;
+	}
+
+	wxFileDialog dialog(this, _T("Import from T64"), _T(""), _T(""), _T("T64-Files (*.t64)|*.t64"), 0);
+	if (dialog.ShowModal() == wxID_OK)
+	{
+		if (dialog.GetPath().IsEmpty())
+		{
+			wxLogMessage( _T("Returned empty string.") );
+			return;
+		}
+
+		if (!wxFileExists(dialog.GetPath()))
+		{
+			wxLogMessage( _T("File doesn't exist.") );
+			return;
+		}
+	}
+
+	CT64Reader *r = new CT64Reader();
+	int numFiles = r->Read(dialog.GetPath().Trim());
+
+	for (int i = 0; i < numFiles; i++)
+		AddFile(r->GetExtractedFileName(i));
+
+	ReadCbmDirectory();
+
+	event.Skip();
+}
+
+
+// Set the states of the items in the "Extras"-Menu; called, when the menu pops up
+void CBMImager::OnShowExtrasMenu(wxUpdateUIEvent& event)
+{
+	unsigned long cookie = 0;
+
+	if (cbmImage == NULL)
+	{
+		m_extrasMenu->Enable(ID_MENUEXTRAS_IMPORT, FALSE);
+		m_extrasMenu->Enable(ID_MENUEXTRAS_EDITBAM, FALSE);
+		m_extrasMenu->Enable(ID_MENUEXTRAS_EDITFILE, FALSE);
+	}
+	else
+	{
+		m_extrasMenu->Enable(ID_MENUEXTRAS_IMPORT, TRUE);
+		m_extrasMenu->Enable(ID_MENUEXTRAS_EDITBAM, TRUE);
+		// Do we have a single selection ?
+		if (m_FileList->GetSelectedCount() == 1)
+		{
+			int sel = m_FileList->GetFirstSelected(cookie);
+			// Do we have a File-Selection ?
+			if (m_FileList->GetEntry(sel) != NULL)
+			{
+				m_extrasMenu->Enable(ID_MENUEXTRAS_EDITFILE, TRUE);
+			}
+			else
+			{
+				m_extrasMenu->Enable(ID_MENUEXTRAS_EDITBAM, FALSE);
+			}
+		}
+	}
+	event.Skip();
+}
+
 
 
 void CBMImager::OnMenufilenewClick( wxCommandEvent& event )
@@ -1329,6 +1412,8 @@ void CBMImager::ReadCbmDirectory()
 
 	wxString str;
 	pcString = (unsigned char*)cbmDir->GetDiskName();
+	// make pcString at least 16 chars long to avoid display glitches
+	strncat((char*)pcString, "                ", 16 - strlen((char*)pcString));
 	str = wxT("0 \"");
 	for(iCnt = 0; iCnt < 16; ++iCnt)
 	{

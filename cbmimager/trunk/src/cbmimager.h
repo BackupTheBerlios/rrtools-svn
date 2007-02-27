@@ -129,7 +129,10 @@ public:
 
 	void OnMenuextrasEditFile( wxCommandEvent& event);
 	void OnMenuextrasEditBam( wxCommandEvent& event);
-    
+    void OnMenuextrasImportT64( wxCommandEvent& event);
+
+	void OnShowExtrasMenu( wxUpdateUIEvent& event);
+
 	void OnClose(wxCloseEvent& event);
 
 	void OnEvent(wxCommandEvent& event);
@@ -155,6 +158,7 @@ public:
 ////@begin CBMImager member variables
 	wxMenu* m_FileMenu;
 	wxMenu* m_extrasMenu;
+	wxMenu* m_importMenu;
 	CODListBox* m_FileList;
 	wxStatusBar* m_StatusBar;
 

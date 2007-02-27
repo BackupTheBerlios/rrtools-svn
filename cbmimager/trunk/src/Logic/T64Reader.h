@@ -18,12 +18,56 @@
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
 
-#ifndef __cbmimager_version_h__
-#define __cbmimager_version_h__
+#pragma once
 
-#define CBMIMAGER_APPLICATION_NAME "CBMImager"
-#define CBMIMAGER_VER_MAJ 0
-#define CBMIMAGER_VER_MIN 2
-#define CBMIMAGER_VER_SUB 5
+#include <stdlib.h>
+#include <memory.h>
 
-#endif	// __cbmimager_version_h__
+#include "wx/wx.h"
+
+
+typedef unsigned char byte;
+
+
+typedef struct _T64Header
+{
+	char description[32];
+	byte Version[2];
+	unsigned short MaxFiles;
+	unsigned short CurrFiles;
+	byte Reserved[2];
+	char UserDescr[24];
+} T64Header;
+
+typedef struct _T64FileEntry
+{
+	byte EntryUsed;
+	byte FileType;
+	unsigned short StartAddr;
+	unsigned short EndAddr;
+	byte ReservedA[2];
+	int TapePos;
+	byte ReservedB[4];
+	char FileName[16];
+} T64FileEntry;
+
+
+
+
+class CT64Reader
+{
+public:
+	CT64Reader(void);
+	~CT64Reader(void);
+
+	// Read files from the tape-image and create Pxx Files in temp-dir, return number of extracted files
+	int Read(wxString filename);
+	// Get the name of an extracted file; number ranges from 0 to the number returned by Read()
+	wxString &GetExtractedFileName(int number) const;
+
+private:
+	_T64Header fileHeader;
+	_T64FileEntry *fileEntries;
+	byte *buffer;
+	wxArrayString filenames;
+};
