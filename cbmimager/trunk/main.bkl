@@ -35,13 +35,13 @@
 			src/Logic/d64image.cpp
 			src/Logic/dfiimage.cpp
 			src/Logic/imagebase.cpp
+			src/Logic/T64Reader.cpp
 		</sources>
-		<if cond="PLATFORM_WIN32=='1'">
-			<define>__WIN32__</define>
-		</if>
-		<if cond="PLATFORM_UNIX=='1'">
-			<define>__UNIX__</define>
-		</if>
+		<wx-lib>xml</wx-lib>
+		<wx-lib>html</wx-lib>
+		<wx-lib>core</wx-lib>
+		<wx-lib>adv</wx-lib>
+		<wx-lib>base</wx-lib>
 	</exe>
 
 </makefile>
