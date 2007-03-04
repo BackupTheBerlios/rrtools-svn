@@ -12,10 +12,6 @@
 #ifndef _APP_RESOURCES_H_
 #define _APP_RESOURCES_H_
 
-#if defined(__GNUG__) && !defined(NO_GCC_PRAGMA)
-#pragma interface ""
-#endif
-
 /*!
  * Control identifiers
  */

@@ -23,9 +23,6 @@
 #include "wx/wx.h"
 
 
-WX_DEFINE_ARRAY(unsigned long, FileSectors);
-
-
 
 CCbmDirectoryEntry::~CCbmDirectoryEntry(void)
 {
@@ -71,7 +68,7 @@ CCbmDirectoryEntry::CCbmDirectoryEntry(CCbmImageBase *image, CCbmSector *sectorD
 	sector = startSector;
 	blocksUsedReal = 0;
 
-	FileSectors sectorArray;
+	wxArrayLong sectorArray;
 	while (track > 0 && cont)
 	{
 		sectorArray.Add((track << 16) + sector);

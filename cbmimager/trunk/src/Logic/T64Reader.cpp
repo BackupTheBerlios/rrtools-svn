@@ -48,6 +48,7 @@ int CT64Reader::Read(wxString filename)
 	int i, numFiles = 0, fileLength;
 	wxFileName fileName;
 	wxString name;
+	wxString strSuffix;
 	struct
 	{
 		char magic[7];
@@ -85,7 +86,8 @@ int CT64Reader::Read(wxString filename)
 			fileName.AssignTempFileName(wxT(""));
 			if (fileName.IsOk())
 			{
-				name.Printf("%s%cT64.P%02d", fileName.GetPath(), fileName.GetPathSeparator(), numFiles);
+				strSuffix.Printf(wxT("%02d"), numFiles);
+				name = fileName.GetPath() + fileName.GetPathSeparator() + strSuffix;
 				wxFFile output(name, wxT("wb"));
 				if (output.IsOpened())
 				{

@@ -92,9 +92,21 @@ void CBamControl::OnDrawItem(wxDC &dc, const wxRect &rect, size_t n)const
 	{
 		byte pi = output.GetChar(i);
 		if ((m_selRow == (int)n && m_selCol == i) || selected.GetChar(i) == '1')
+		{
+#if wxCHECK_VERSION(2, 8, 0)
+			tempDC.SelectObjectAsSource(selBitmap);
+#else
 			tempDC.SelectObject(selBitmap);
+#endif
+		}
 		else
+		{
+#if wxCHECK_VERSION(2, 8, 0)
+			tempDC.SelectObjectAsSource(stdBitmap);
+#else
 			tempDC.SelectObject(stdBitmap);
+#endif
+		}
 		dc.Blit(i * charWidth + rect.x, rect.y, charWidth, charHeigth, &tempDC, pi<<3, 0);
 	}
 }

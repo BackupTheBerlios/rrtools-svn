@@ -44,9 +44,6 @@ DECLARE_EXPORTED_EVENT_TYPE(, wxEVT_BAMCONTROL_SELECTION_EVENT, 0)
 
 
 
-WX_DEFINE_ARRAY(unsigned long, FileSectors);
-
-
 class CBamControl :
 	public CODListBox
 {
@@ -73,7 +70,7 @@ public:
 
 protected:
 	CCbmImageBase *cbmImage;
-	FileSectors m_selectedSectors;
+	wxArrayLong m_selectedSectors;
 	int m_selRow;
 	int m_selCol;
 	int m_selTrack, m_selSector;		// current Selection

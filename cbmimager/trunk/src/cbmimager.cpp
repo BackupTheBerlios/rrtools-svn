@@ -1460,13 +1460,13 @@ void CBMImager::ReadCbmDirectory()
 		// Check for bad files and store their names
 		if (entry->WasCircularLinked())
 		{
-			errorMsg.Printf(wxT("%s -> %s"), wxString::FromAscii((char*)entry->GetFileName()), entry->GetErrorDescription());
+			errorMsg = CCbmImageBase::PET2String(entry->GetFileName(), 0, 16) + wxT(" -> ") + entry->GetErrorDescription();
 			circularFiles.Add(errorMsg);
 		}
 		// Check for Files with illegal Track/Sector
 		if (entry->HasBadSectors())
 		{
-			errorMsg.Printf(wxT("%s -> %s"), wxString::FromAscii((char*)entry->GetFileName()), entry->GetErrorDescription());
+			errorMsg = CCbmImageBase::PET2String(entry->GetFileName(), 0, 16) + wxT(" -> ") + entry->GetErrorDescription();
 			errorFiles.Add(errorMsg);
 		}
 	}
@@ -1561,7 +1561,7 @@ void CBMImager::AddFile(wxString& filename)
 	memset(&p00Header, 0, sizeof(p00Header));
 	fName.Assign(filename);
 	wxString ext = fName.GetExt().Upper();
-	if (ext.StartsWith("P") || ext.StartsWith("U") || ext.StartsWith("S") || ext.StartsWith("R"))
+	if (ext.StartsWith(wxT("P")) || ext.StartsWith(wxT("U")) || ext.StartsWith(wxT("S")) || ext.StartsWith(wxT("R")))
 	{
 		if (ext.Mid(1, 1).IsNumber() && ext.Mid(2, 1).IsNumber())
 		{
@@ -1668,13 +1668,13 @@ void CBMImager::AddFile(wxString& filename)
 
 	if (isP00)
 	{
-		if (ext.StartsWith("P"))
+		if (ext.StartsWith(wxT("P")))
 			entry->SetFileType(CBM_PRG | CBM_CLOSED);
-		else if (ext.StartsWith("U"))
+		else if (ext.StartsWith(wxT("U")))
 			entry->SetFileType(CBM_USR | CBM_CLOSED);
-		else if (ext.StartsWith("S"))
+		else if (ext.StartsWith(wxT("S")))
 			entry->SetFileType(CBM_SEQ | CBM_CLOSED);
-		else if (ext.StartsWith("R"))
+		else if (ext.StartsWith(wxT("R")))
 		{
 			entry->SetFileType(CBM_REL | CBM_CLOSED);
 			cbmImage->WriteByte(p00Header.recordLength, entry->GetEntryOffset() + 21);	// Write Record-Length for REL-Files
@@ -1764,7 +1764,7 @@ void CBMImager::OnEvent(wxCommandEvent& event)
 	int num[] =		{ 0,   0,   0,   0,   0  };
 	char *types[] =	{ "", "S", "P", "U", "R" };
 
-	switch (event.m_id)
+	switch (event.GetId())
 	{
 		case CMD_ADD_FILES:
 			if (cbmImage->GetImageType() != D16)
@@ -1849,7 +1849,7 @@ void CBMImager::OnEvent(wxCommandEvent& event)
 
 				ext = wxString::FromAscii(entry->GetFileTypeString());
 
-				fileName.Assign("", str, ext);
+				fileName.Assign(wxT(""), str, ext);
 				wxString fname = fileName.GetFullPath().Trim();
 
 				fileDlg = new wxFileDialog(this, _T("Extract File"), _T(""), fname, _T("All Files (*.*)|*.*"),
@@ -1880,7 +1880,7 @@ void CBMImager::OnEvent(wxCommandEvent& event)
 						fName.Assign(fileDlg->GetPath());
 						do
 						{
-							ext.Printf("%s%02d", types[type], num[type]);
+							ext.Printf(wxT("%s%02d"), types[type], num[type]);
 							fName.SetExt(ext);
 							num[type]++;
 						} while (fName.FileExists() && num[type] <= 100);
@@ -1991,15 +1991,15 @@ void CBMImager::OnEvent(wxCommandEvent& event)
 		case CMD_DEL_SCRATCH_PROTECTION:
 		case CMD_DEL_CLOSED_FLAG:
 			type = 0;
-			if (event.m_id == CMD_CONVERT_PRG)
+			if (event.GetId() == CMD_CONVERT_PRG)
 				type = CBM_PRG;
-			else if (event.m_id == CMD_CONVERT_USR)
+			else if (event.GetId() == CMD_CONVERT_USR)
 				type = CBM_USR;
-			else if (event.m_id == CMD_CONVERT_SEQ)
+			else if (event.GetId() == CMD_CONVERT_SEQ)
 				type = CBM_SEQ;
-			else if (event.m_id == CMD_CONVERT_REL)
+			else if (event.GetId() == CMD_CONVERT_REL)
 				type = CBM_REL;
-			else if (event.m_id == CMD_CONVERT_DEL)
+			else if (event.GetId() == CMD_CONVERT_DEL)
 				type = CBM_DEL;
 			for (int i = m_FileList->GetItemCount() - 1; i >= 0; i--)
 			{
@@ -2008,15 +2008,15 @@ void CBMImager::OnEvent(wxCommandEvent& event)
 					CCbmDirectoryEntry *entry = m_FileList->GetEntry(i);
 					if (entry->GetFileType() != CBM_DIR)		// is this a Sub-Directory ?
 					{
-						if (event.m_id >= CMD_SET_SCRATCH_PROTECTION && event.m_id <= CMD_DEL_CLOSED_FLAG)
+						if (event.GetId() >= CMD_SET_SCRATCH_PROTECTION && event.GetId() <= CMD_DEL_CLOSED_FLAG)
 						{
-							if (event.m_id == CMD_SET_SCRATCH_PROTECTION)
+							if (event.GetId() == CMD_SET_SCRATCH_PROTECTION)
 								entry->SetScratchProtected(true);
-							else if (event.m_id == CMD_DEL_SCRATCH_PROTECTION)
+							else if (event.GetId() == CMD_DEL_SCRATCH_PROTECTION)
 								entry->SetScratchProtected(false);
-							else if (event.m_id == CMD_SET_CLOSED_FLAG)
+							else if (event.GetId() == CMD_SET_CLOSED_FLAG)
 								entry->SetClosedProperly(true);
-							else if (event.m_id == CMD_DEL_CLOSED_FLAG)
+							else if (event.GetId() == CMD_DEL_CLOSED_FLAG)
 								entry->SetClosedProperly(false);
 						}
 						else

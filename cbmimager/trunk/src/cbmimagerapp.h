@@ -21,10 +21,6 @@
 #ifndef _CBMIMAGERAPP_H_
 #define _CBMIMAGERAPP_H_
 
-#if defined(__GNUG__) && !defined(NO_GCC_PRAGMA)
-#pragma interface "CbmImagerApp.h"
-#endif
-
 /*!
  * Includes
  */

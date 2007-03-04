@@ -23,10 +23,6 @@
 #ifndef _SELECTIMAGE_H_
 #define _SELECTIMAGE_H_
 
-#if defined(__GNUG__) && !defined(NO_GCC_PRAGMA)
-#pragma interface "selectimage.h"
-#endif
-
 /*!
  * Includes
  */

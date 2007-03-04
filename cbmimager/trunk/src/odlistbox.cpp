@@ -125,11 +125,19 @@ void CODListBox::OnDrawItem(wxDC &dc, const wxRect &rect, size_t n)const
 
 	if (this->IsSelected(n))
 	{
+#if wxCHECK_VERSION(2, 8, 0)
+		tempDC.SelectObjectAsSource(selBitmap);
+#else
 		tempDC.SelectObject(selBitmap);
+#endif
 	}
 	else
 	{
+#if wxCHECK_VERSION(2, 8, 0)
+		tempDC.SelectObjectAsSource(stdBitmap);
+#else
 		tempDC.SelectObject(stdBitmap);
+#endif
 	}
 
 	text = GetItem(n);

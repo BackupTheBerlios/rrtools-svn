@@ -157,7 +157,11 @@ void CHexControl::OnDrawItem(wxDC &dc, const wxRect &rect, size_t n)const
 
 		if (m_selRow == (int)n && (m_colHex == i || m_colAscii == i))
 		{
+#if wxCHECK_VERSION(2, 8, 0)
+			tempDC.SelectObjectAsSource(selBitmap);
+#else
 			tempDC.SelectObject(selBitmap);
+#endif
 		}
 		else
 		{
@@ -171,9 +175,21 @@ void CHexControl::OnDrawItem(wxDC &dc, const wxRect &rect, size_t n)const
 				specialBitmap = ((CHexControl*)this)->IsSpecialSelection(rowOffset, i - 31);		// ASCII Part
 			}
 			if (specialBitmap >= 0 && i > 5 && !forbidden)
+			{
+#if wxCHECK_VERSION(2, 8, 0)
+				tempDC.SelectObjectAsSource(selMaps[specialBitmap]);
+#else
 				tempDC.SelectObject(selMaps[specialBitmap]);
+#endif
+			}
 			else
+			{
+#if wxCHECK_VERSION(2, 8, 0)
+				tempDC.SelectObjectAsSource(stdBitmap);
+#else
 				tempDC.SelectObject(stdBitmap);
+#endif
+			}
 		}
 		dc.Blit(i * charWidth + rect.x, rect.y, charWidth, charHeigth, &tempDC, pi<<3, 0);
 	}
