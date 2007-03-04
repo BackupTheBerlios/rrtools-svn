@@ -1,8 +1,7 @@
 <?xml version="1.0" ?>
 
 <makefile>
-	<include file="presets/wx.bkl"/>
-	<include file="presets/simple.bkl"/>
+	<include file="wx.bkl"/>
 
 	<set var="BUILDDIR">output</set>
 

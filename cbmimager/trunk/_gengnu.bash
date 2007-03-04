@@ -1,2 +1,2 @@
 #! /bin/bash
-bakefile -f gnu -o Makefile main.bkl
+bakefile -f gnu -I/usr/local/share/bakefile/presets -o Makefile main.bkl
