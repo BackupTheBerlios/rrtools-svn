@@ -37,7 +37,8 @@ DFI_FS_SRC_ALL =	dfi_fs_bam.src \
 			dfi_fs_mmc64.src \
 			dfi_fs_reu.src \
 			dfi_fs_rom.src \
-			dfi_fs_switcher.src
+			dfi_fs_switcher.src \
+			basic.src
 
 DFI_FS_SRC_RELEASE =	dfi_fs.src \
 			dfi_fs_switcher.src
