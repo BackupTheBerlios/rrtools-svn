@@ -8,8 +8,8 @@
 #segdef "bank1", $8100-$9f00, fillup, force, $00
 #segdef "bank2", $8100-$9f00, fillup, force, $00
 #segdef "switcher", $de02-$df00, fillup, force, $00
-#segdef "bankjsr", $8000-$8080, fillup, force, $00
-#segdef "bankjsr_bank", $8080-$8100, fillup, force, $00
+#segdef "bankjsr", $8000-$80a0, fillup, force, $00
+#segdef "bankjsr_bank", $80a0-$8100, fillup, force, $00
 #segdef "bankjsr_lo", $9f00-$9f80, fillup, force, $00
 #segdef "bankjsr_hi", $9f80-$a000, fillup, force, $00
 
@@ -26,7 +26,7 @@ __OUTFILE_BANK2_OFFSET__ = $4000
 	* = $8000
 
 	.segment "bankjsr_bank"
-	* = $8080
+	* = $80a0
 
 	.segment "bank0"
 	* = $8100

@@ -45,6 +45,35 @@ jsrToRom:
 ;--------------------------------------
 
 
+exitToRom:
+    .(
+	; save flags and registers
+	php
+	sta exitToRom_saveA+1
+	stx exitToRom_saveX+1
+	sty exitToRom_saveY+1
+
+	; get the return address
+	tsx
+	lda $0102,x
+	sta exitToRom_Hi+1
+	lda $0103,x
+	sta exitToRom_Hi+2
+
+	; correct the stack pointer
+	pla
+	tay
+	pla
+	pla
+
+	; get the word behind the calling jsr
+	ldx #2
+	jmp exitToRom_Hi
+    .)
+
+
+;--------------------------------------
+
 bankJsr:
     .(
 	pha				; make stackspace for bank save

@@ -2,35 +2,6 @@
 ;--------------------------------------
 
 
-exitToRom:
-    .(
-	; save flags and registers
-	php
-	sta exitToRom_saveA+1
-	stx exitToRom_saveX+1
-	sty exitToRom_saveY+1
-
-	; get the return address
-	tsx
-	lda $0102,x
-	sta exitToRom_Hi+1
-	lda $0103,x
-	sta exitToRom_Hi+2
-
-	; correct the stack pointer
-	pla
-	tay
-	pla
-	pla
-
-	; get the word behind the calling jsr
-	ldx #2
-	jmp exitToRom_Hi
-    .)
-
-
-;--------------------------------------
-
 DfiFs_Open_Rom:
     .(
 	lda $ba
@@ -639,6 +610,21 @@ error:
 
 ;--------------------------------------
 
+
+DfiFs_Petscii2Tokens:
+	; switch to bank 1
+	.bankJsr(L_Petscii2Tokens)
+	rts
+
+
+DfiFs_GetBasicToken:
+	; switch to bank 1
+	.bankJsr(L_GetBasicToken)
+	rts
+
+
+;--------------------------------------
+
 @0BANK0_DfiFs_Demux_Vectors:
 	; save the status and all regs
 	php
@@ -668,6 +654,8 @@ error:
 	rts
 
 demux_vectors_jsr_table:
+	.DT (DfiFs_Petscii2Tokens-1).3
+	.DT (DfiFs_GetBasicToken-1).3
 	.DT (DfiFs_Open_Rom-1).3
 	.DT (DfiFs_Close_Rom-1).3
 	.DT (DfiFs_ChangeKernalInput_Rom-1).3

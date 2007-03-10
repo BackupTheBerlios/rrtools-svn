@@ -3,6 +3,12 @@
 
 	.segment "switcher"
 
+@0DfiFs_InputDecode:
+	jsr demux_vectors_switcher
+
+@0DfiFs_EvalTokens:
+	jsr demux_vectors_switcher
+
 @0DfiFs_Open:
 	jsr demux_vectors_switcher
 
