@@ -66,7 +66,7 @@
 #include "Logic/cbmdirectoryentry.h"
 #include "Logic/cbmdirectory.h"
 #include "Logic/T64Reader.h"
-
+#include "Logic/cbmimageconverter.h"
 
 
 ////@begin XPM images
@@ -226,7 +226,7 @@ void CBMImager::CreateControls()
 	m_FileMenu->Append(ID_MENUFILEOPEN, _("&Open Image...\tCtrl-O"), _T("Open an existing image."), wxITEM_NORMAL);
 	m_FileMenu->AppendSeparator();
 	m_FileMenu->Append(ID_MENUFILESAVE, _("&Save Image\tCtrl-S"), _T("Save the current image."), wxITEM_NORMAL);
-	m_FileMenu->Append(ID_MENUFILESAVEAS, _("Save Image as..."), _T("Save the current image with a different name."), wxITEM_NORMAL);
+	m_FileMenu->Append(ID_MENUFILESAVEAS, _("Save Image as..."), _T("Save the current image with a different name and/or as a different Type."), wxITEM_NORMAL);
 	m_FileMenu->AppendSeparator();
 	m_FileMenu->Append(ID_MENUFILESEARCH, _("Sea&rch\tAlt-R"), _T("Search Files"), wxITEM_NORMAL);
 	m_FileMenu->AppendSeparator();
@@ -963,7 +963,8 @@ void CBMImager::OnMenufilesaveClick( wxCommandEvent& event )
 void CBMImager::OnMenufilesaveasClick( wxCommandEvent& event )
 {
 	wxString sImagePath;
-
+	wxArrayString files;
+	CCbmImageBase *newImage = NULL;
 
 	if (cbmImage != NULL)
 	{
@@ -972,18 +973,55 @@ void CBMImager::OnMenufilesaveasClick( wxCommandEvent& event )
 		{
 			wxFileDialog *fileDlg;
 			wxString filter;
-			switch (cbmImage->GetImageType())
-			{
-				case DFI:
-					filter = wxT("DFI Files (*.dfi)|*.dfi");
-					break;
-				case D64:
-					filter = wxT("D64 Files (*.d64)|*.d64");
-					break;
-			}
+			filter = "DFI Files (*.dfi)|*.dfi|D64 Files (*.d64)|*.d64";
 			fileDlg = new wxFileDialog(this, _T("Save Image"), _T(""), _T(""), filter, wxSAVE | wxOVERWRITE_PROMPT);
 			if (fileDlg->ShowModal() == wxID_OK)
 			{
+				int index = fileDlg->GetFilterIndex();
+				// Save Image as DFI but curent Image-Type is different ?
+				if (index == 0 && cbmImage->GetImageType() != DFI)
+				{
+					CCBMImageConverter *converter = new CCBMImageConverter();
+					try
+					{
+						newImage = converter->ConvertImage(cbmImage, DFI);
+						converter->SetValid();
+					}
+					catch (char *text)
+					{
+						wxMessageDialog* dialog = new wxMessageDialog(this, wxString::FromAscii(text), wxT(CBMIMAGER_APPLICATION_NAME), 
+							wxOK | wxICON_ERROR);
+						dialog->ShowModal();
+						dialog->Destroy();
+						delete converter;
+						return;
+					}
+					delete cbmImage;
+					cbmImage = newImage;
+					delete converter;
+				}
+				// Save Image as D64 but curent Image-Type is different ?
+				if (index == 1 && cbmImage->GetImageType() != D64)
+				{
+					CCBMImageConverter *converter = new CCBMImageConverter();
+					try
+					{
+						newImage = converter->ConvertImage(cbmImage, D64);
+						converter->SetValid();
+					}
+					catch (char *text)
+					{
+						wxMessageDialog* dialog = new wxMessageDialog(this, wxString::FromAscii(text), wxT(CBMIMAGER_APPLICATION_NAME), 
+							wxOK | wxICON_ERROR);
+						dialog->ShowModal();
+						dialog->Destroy();
+						delete converter;
+						return;
+					}
+					delete cbmImage;
+					cbmImage = newImage;
+					delete converter;
+				}
 				wxFFile f(fileDlg->GetPath(), wxT("wb"));
 				if (f.IsOpened())
 				{
@@ -996,7 +1034,10 @@ void CBMImager::OnMenufilesaveasClick( wxCommandEvent& event )
 					cbmImage->SetDirty(false);
 				}
 			}
-			fileDlg->Destroy();
+			sImagePath = fileDlg->GetPath();
+			// Reopen saved Image (for validating and setting the new Path in the StatusBar)
+			OpenImage(sImagePath);
+			ReadCbmDirectory();
 		}
 		else
 			OnMenufilesaveClick(event);
@@ -1875,6 +1916,7 @@ void CBMImager::OnEvent(wxCommandEvent& event)
 				{
 					CCbmDirectoryEntry *entry = m_FileList->GetEntry(sel);
 					type = entry->GetFileType();
+					num[type] = 0;					// Reset Counter
 					if (type != CBM_DIR)
 					{
 						fName.Assign(fileDlg->GetPath());

@@ -155,7 +155,7 @@ CCbmDirectoryEntry *CCbmDirectory::CreateNewEntry(CCbmImageBase *image, const ch
 {
 	unsigned char buffer[17];
 
-	int track = 1, sector = 0;
+	int track = 0, sector = 1;
 	CCbmSector *sectorBuffer;
 	CCbmDirectoryEntry *entry = new CCbmDirectoryEntry();
 	CCbmSector *bam = image->GetBam();					                // Read BAM
