@@ -610,21 +610,6 @@ error:
 
 ;--------------------------------------
 
-
-DfiFs_Petscii2Tokens:
-	; switch to bank 1
-	.bankJsr(L_Petscii2Tokens)
-	rts
-
-
-DfiFs_GetBasicToken:
-	; switch to bank 1
-	.bankJsr(L_GetBasicToken)
-	rts
-
-
-;--------------------------------------
-
 @0BANK0_DfiFs_Demux_Vectors:
 	; save the status and all regs
 	php

@@ -35,6 +35,7 @@ DfiFs_BlockUsed			.DSB DfiFs_Cfg_NumberOfBuffers		; how many bytes of the block 
 
 	.setBank(0, BankCfg_0_Rom)
 
+#include "basic.src"
 #include "dfi_fs_rom.src"
 
 ;--------------------------------------
