@@ -64,6 +64,40 @@ selfMod0:
 ;--------------------------------------
 
 BasicJumpIn:
+	; execute 'new' to get a clear basic memory
+	lda #0
+	ldx #3
+clrBasic:
+	sta $0800,x
+	dex
+	bne clrBasic
+	lda #<$0201
+	sta $7a
+	lda #>$0201
+	sta $7b
+	lda #<$0803
+	sta $2d
+	sta $2f
+	sta $31
+	lda #>$0803
+	sta $2e
+	sta $30
+	sta $32
+
+	lda $37
+	sta $33
+	lda $38
+	sta $34
+
+	jsr $a81d	; restore
+
+	lda #$19
+	sta $16
+	lda #0
+	sta $3e
+	sta $10
+
+
 	sei
 
 	; switch to ram
