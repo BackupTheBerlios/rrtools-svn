@@ -4,19 +4,18 @@
 
 TokenZp_Cnt = $02
 
-Petscii2Tokens:
+DfiFs_Petscii2Tokens:
 	jsr GetBasicLine
 	stx $7a
 	sty $7b
 	jsr $0073.2
 	tax
-	beq Petscii2Tokens
+	beq DfiFs_Petscii2Tokens
 	ldx #$ff
 	stx $3a
 	bcs Tokens
-	jsr jsrToRom
+	jsr exitToRom
 	.DW $a49c-1
-	rts
 
 Tokens:
 	ldx #0
@@ -73,17 +72,22 @@ Token_RLo:
 	.DB <(Token_Load-1)
 	.DB <(Token_Verify-1)
 	.DB <(Token_Save-1)
-	.DB <($a579-1)
-	.DB <($a579-1)
+	.DB <(Token_Exit-1)
+	.DB <(Token_Exit-1)
 
 Token_RHi:
 	.DB >(Token_LoadAndRun-1)
 	.DB >(Token_Load-1)
 	.DB >(Token_Verify-1)
 	.DB >(Token_Save-1)
-	.DB >($a579-1)
-	.DB >($a579-1)
+	.DB >(Token_Exit-1)		; TODO: mon has no effect at the moment, use for something nice
+	.DB >(Token_Exit-1)
 
+
+Token_Exit:
+	; tokenize the buffer
+	jsr exitToRom
+	.DW $a496-1
 
 Token_LoadAndRun:
 	sei
@@ -104,9 +108,9 @@ Token_LoadAndRunTxt_len = * - Token_LoadAndRunTxt
 
 Token_Save:
 	jsr Token_GetName
-	jsr jsrToRom
+	; save
+	jsr exitToRom
 	.DW $e159-1
-	rts
 
 Token_Verify:
 	lda #1
@@ -115,9 +119,9 @@ Token_Load:
 	lda #0
 	sta $0a
 	jsr Token_GetName
-	jsr jsrToRom
+	; load/verify
+	jsr exitToRom
 	.DW $e16f-1
-	rts
 
 Token_GetName:
 	jsr $0079.2
@@ -139,11 +143,11 @@ Token_GetName2:
 	eor #$ff
 	adc $7a
 	ldy #2
-	jsr $ffbd
+	jsr $ffbd		; NOTE: ok, checked!
 	lda #0
 	ldx $ba
 	ldy #1
-	jmp $ffba
+	jmp $ffba		; NOTE: ok, checked!
 
 
 GetBasicLine:
@@ -156,27 +160,41 @@ GetBasicLine0:
 	inx
 	cpx #$59
 	bcc GetBasicLine0
+	; show error
 	ldx #$17
-	jsr jsrToRom			;This one never returns
+	jsr exitToRom			;This one never returns
 	.DW $a437-1
+
 GetBasicLine1:
-	jmp $aaca
+	; terminate string and print cr
+	jsr jsrToRom
+	.DW $aaca-1
+	rts
 
 CharIn:
+	; f15b in rom
 	lda $d3				;Save start column of input
 	sta $ca
 	lda $d6				;Save start row of input
 	sta $c9
 
+	lda $d0
+	beq CharIn0
+	jsr jsrToRom
+	.DW $e632
+	rts
+
+CharIn0:
 	tya
 	pha
 	txa
 	pha
-	lda $d0
-	beq CharIn0
-	jmp $e63a
 
-CharIn0:
+CharInShow0:
+	jsr jsrToRom			; print to screen
+	.DW $e716-1
+
+CharInShowSpecial:
 	ldx #WaitForKey_len-1
 CharInCopy0:
 	lda WaitForKey_Org,x
@@ -184,23 +202,23 @@ CharInCopy0:
 	dex
 	bpl CharInCopy0
 
-	ldx #$10|$22			; bank2, ram, c64 mode
-	ldy #0
-	cli
+	jsr jsrToRom
+	.DW WaitForKey-1
 
-	jsr WaitForKey
-
-;	sei
 	lda $cf
 	beq CharIn1
 	lda $ce
 	ldx $0287
 	ldy #0
 	sty $cf
-	jsr $ea13
+	; print to screen
+	jsr jsrToRom
+	.DW $ea13-1
 
 CharIn1:
-	jsr $e5b4
+	; get char from keyboard buffer
+	jsr jsrToRom
+	.DW $e5b4-1		; *** NOTE: this routine has a cli
 	cmp #$0d
 	beq CharIn3
 
@@ -210,12 +228,25 @@ CharIn2:
 	beq CharIn4
 	dex
 	bpl CharIn2
-
-	jsr $e716
-	jmp CharIn0
+	bmi CharInShow0
 
 CharIn3:
-	jmp $e602
+	; copy func
+	ldy #CallE602_len-1
+copyCaller:
+	lda CallE602_Org,y
+	sta CallE602,y
+	dey
+	bpl copyCaller
+	; patch saved x
+	pla
+	sta CallE602_saveX+1
+	; patch saved y
+	pla
+	sta CallE602_saveY+1
+	jsr jsrToRom
+	.DW CallE602-1
+	rts
 
 CharIn4:
 	ldy SpecialKeys1,x
@@ -233,7 +264,7 @@ CharIn5:
 	cpy $c6
 	bcc CharIn5
 	stx $c6
-	bcs CharIn0	;bra
+	bcs CharInShowSpecial	;bra
 
 CharIn6:
 	cmp #$80			;is it the magic for "Load and Run"?
@@ -327,22 +358,36 @@ CharIn14:
 	iny
 	sty $c6
 CharIn15:
-	jmp CharIn0
+	jmp CharInShowSpecial
+
+
 
 WaitForKey_Org:
     .PSEUDOPC($0210)
 WaitForKey:
+	cli
+WaitForKeyILoop:
 	lda $c6
 	sta $cc
-	beq WaitForKey
+	beq WaitForKeyILoop
 	sei
-	stx $de00
-WaitForKeyDl0:
-	iny
-	bne WaitForKeyDl0
 	rts
     .REALPC
 WaitForKey_len = *-WaitForKey_Org
+
+CallE602_Org:
+    .PSEUDOPC($0210)
+CallE602:
+CallE602_saveY:
+	lda #0
+	pha
+CallE602_saveX:
+	lda #0
+	pha
+	jmp $e602
+    .REALPC
+CallE602_len = *-CallE602_Org
+
 
 ValidDev:
 	cpx #8
@@ -389,7 +434,7 @@ SpecialKey3:
 SpecialKey4:
 	.PET "lI",$0d
 SpecialKey5:
-	.PET "mon",$0d
+	.PET "abc"
 SpecialKey6:
 	.PET "rU:",$0d
 SpecialKey7:
@@ -405,14 +450,14 @@ LoadTexts:
 
 ;--------------------------------------
 
-GetBasicToken:
+DfiFs_GetBasicToken:
 	lda #0
 	sta $0d
 	jsr $0073.2
 	bcs NoDigit
-	jsr jsrToRom
+	jsr exitToRom
 	.DW $bcf3-1
-	rts
+
 NoDigit:
 	cmp #'$'
 	bne NoHex
@@ -448,53 +493,12 @@ GetHex2:
 GetHex3:
 	ldx #$90
 	sec
-	jsr jsrToRom
+	jsr exitToRom
 	.DW $bc49-1
-	rts
 
 NoHex:
-	jsr jsrToRom
+	jsr exitToRom
 	.DW $ae92-1
-	rts
 
 
-;--------------------------------------
-;Die folgenden Routinen laufen, wenn Bank0 ab $e000 eingeblendet wird
-;	.PhaseToHighRom
-;--------------------------------------
-/*
-	.(
-;    .PSEUDOPC($de10)
-
-@0Vect_0302:
-	lda #%00000000 | BasicMode
-	jsr SetBank
-	jsr Petscii2Tokens
-	lda #%00000010 | BasicMode
-	jsr SetBank
-	jmp $a7e1
-
-@0Vect_030A:
-	lda #%00000000 | BasicMode
-	jsr SetBank
-	jsr GetBasicToken
-	lda #%00000010 | BasicMode
-;	jsr SetBank
-;	rts
-
-SetBank:
-	sta $de00
-	txa
-	ldx #ToggleEGDelay
-SetBank0:
-	inx
-	bne SetBank0
-	tax
-	cli
-	rts
-
-	.)
-
-;    .REALPC
-*/
 ;--------------------------------------

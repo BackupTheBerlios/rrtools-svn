@@ -109,6 +109,17 @@ installCopyCode:
 	lda #$37
 	sta 1
 
+	; patch basic vectors
+	lda #<DfiFs_InputDecode
+	sta $0302
+	lda #>DfiFs_InputDecode
+	sta $0303
+
+	lda #<DfiFs_EvalTokens
+	sta $030a
+	lda #>DfiFs_EvalTokens
+	sta $030b
+
 	; patch the load/save/open/get vectors
 	ldx #vectors_end-vectors_start-1
 installVectors:
