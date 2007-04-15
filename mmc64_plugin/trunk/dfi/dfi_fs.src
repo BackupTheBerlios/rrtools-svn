@@ -133,29 +133,6 @@ BankCfg_C64	= $00|$22
 
 ;--------------------------------------
 
-	.defBankJumpLabel(f12f, $f12f, C64Rom, BankCfg_C64)
-	.defBankJumpLabel(f13e, $f13e, C64Rom, BankCfg_C64)
-	.defBankJumpLabel(f157, $f157, C64Rom, BankCfg_C64)
-	.defBankJumpLabel(f1ca, $f1ca, C64Rom, BankCfg_C64)
-	.defBankJumpLabel(f219, $f219, C64Rom, BankCfg_C64)
-	.defBankJumpLabel(f25b, $f25b, C64Rom, BankCfg_C64)
-	.defBankJumpLabel(f291, $f291, C64Rom, BankCfg_C64)
-	.defBankJumpLabel(f2f3, $f2f3, C64Rom, BankCfg_C64)
-	.defBankJumpLabel(f333, $f333, C64Rom, BankCfg_C64)
-	.defBankJumpLabel(f34a, $f34a, C64Rom, BankCfg_C64)
-	.defBankJumpLabel(f4ab, $f4ab, C64Rom, BankCfg_C64)
-	.defBankJumpLabel(f5d2, $f5d2, C64Rom, BankCfg_C64)
-	.defBankJumpLabel(f5ed, $f5ed, C64Rom, BankCfg_C64)
-	.defBankJumpLabel(f68f, $f68f, C64Rom, BankCfg_C64)
-	.defBankJumpLabel(f6fb, $f6fb, C64Rom, BankCfg_C64)
-	.defBankJumpLabel(f6fe, $f6fe, C64Rom, BankCfg_C64)
-	.defBankJumpLabel(f701, $f701, C64Rom, BankCfg_C64)
-	.defBankJumpLabel(f704, $f704, C64Rom, BankCfg_C64)
-	.defBankJumpLabel(f70a, $f70a, C64Rom, BankCfg_C64)
-	.defBankJumpLabel(f710, $f710, C64Rom, BankCfg_C64)
-	.defBankJumpLabel(ffe1, $ffe1, C64Rom, BankCfg_C64)
-	.defBankJumpLabel(ffd2, $ffd2, C64Rom, BankCfg_C64)
-
 Kernal_f30f = $f30f
 Kernal_f314 = $f314
 Kernal_f31f = $f31f
