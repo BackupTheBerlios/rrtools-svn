@@ -57,7 +57,7 @@ LdMMC_ClusterHandlerPatchSize = $57
 
 @0LdMMCReadBlock:
     .(
-	; track 0 is special, it always results in the dirst dir block
+	; track 0 is special, it always results in the first dir block
 	txa
 	bne notDirBlock
 @0Patch_LdMMC64_DirTrack:
