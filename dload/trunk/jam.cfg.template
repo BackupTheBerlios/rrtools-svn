@@ -1,0 +1,12 @@
+
+DREAMASS	= dreamass ;
+CBMCONVERT	= cbmconvert ;
+EXOMIZER	= exomizer ;
+PUCRUNCH	= pucrunch ;
+
+ARCDIR		= /home/baccy/BackUp ;
+
+X64		= x64 ;
+EMUFLAGS	= +sound -truedrive ;
+RR_PAL_CRT	= -cartrr /home/baccy/RetroReplay/rr-38a-64pal.bin ;
+RR_NTSC_CRT	= -cartrr /home/baccy/RetroReplay/rr-38a-64ntsc.bin ;

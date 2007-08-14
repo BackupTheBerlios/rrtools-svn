@@ -63,7 +63,7 @@ rule Emu
 
 actions Emu
 {
-	x64 $(EMUFLAGS) -8 $(>)
+	$(X64) $(EMUFLAGS) -8 $(>)
 }
 
 #--------------------------------------
@@ -306,7 +306,7 @@ rule Pucrunch
 
 actions Pucrunch
 {
-	pucrunch $(PUCRUNCHFLAGS) $(>) $(<)
+	$(PUCRUNCH) $(PUCRUNCHFLAGS) $(>) $(<)
 }
 
 
@@ -323,7 +323,7 @@ rule Exomizer
 
 actions Exomizer
 {
-	exomizer $(EXOMIZERFLAGS) -o $(<) $(>)
+	$(EXOMIZER) $(EXOMIZERFLAGS) -o $(<) $(>)
 }
 
 #--------------------------------------
@@ -344,7 +344,7 @@ actions CreateD64
 {
 	echo x > $(<)
 	$(RM) $(<)
-	cbmconvert -n -D4 $(<) $(>)
+	$(CBMCONVERT) -n -D4 $(<) $(>)
 }
 
 
@@ -362,7 +362,7 @@ actions CreateD81
 {
 	echo x > $(<)
 	$(RM) $(<)
-	cbmconvert -n -D8 $(<) $(>)
+	$(CBMCONVERT) -n -D8 $(<) $(>)
 }
 
 
@@ -380,7 +380,7 @@ actions CreateLynx
 {
 	echo x > $(<)
 	$(RM) $(<)
-	cbmconvert -n -L $(<) $(>)
+	$(CBMCONVERT) -n -L $(<) $(>)
 }
 
 
@@ -397,7 +397,7 @@ actions CreateDfi
 {
 	echo x > $(<)
 	$(RM) $(<)
-	cbmconvert -n -F $(<) $(>)
+	$(CBMCONVERT) -n -F $(<) $(>)
 }
 
 #--------------------------------------
@@ -413,7 +413,7 @@ rule DreamAss
 
 actions DreamAss
 {
-	dreamass -o $(<) -l $(<:S=.lab) -d $(<:S=.html) -I$(HDRS) $(DAFLAGS) $(>)
+	$(DREAMASS) -o $(<) -l $(<:S=.lab) -d $(<:S=.html) -I$(HDRS) $(DAFLAGS) $(>)
 }
 
 #--------------------------------------
