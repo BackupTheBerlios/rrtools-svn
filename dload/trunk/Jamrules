@@ -449,7 +449,7 @@ rule RunCommand
 
 actions RunCommand
 {
-	$(COMMAND) -o $(<) $(>[1])
+	$(COMMAND) $(>[1])
 }
 
 #--------------------------------------
