@@ -1,7 +1,7 @@
 This directory contains some examples. They are build by executing 'jam' in
 the main directory (that's one directory up, where the 'Jamrules' file is).
 
-Each example generates a .d64, .d81 and lynx file with all the necessary files to run it.
+Each example generates a .d64, .d81, lynx and dfi file with all the necessary files to run it.
 Please see the 'readme.txt' in the according directory for more info.
 
 
@@ -32,15 +32,12 @@ irq
 simple
   Just a spimple rasterbar while loading a file.
 
-stresstest
+stress1 - stress4
   This test loads 8 files continuously. The files contain random generated data which is protected with a CRC16 checksum.
-  NOTE: This test is an endurance test, it only stops after an error.
-
-stresstestget
-  The same as 'stresstest', but using the Open/Get interface.
-  NOTE: This test is an endurance test, it only stops after an error.
+  The 4 versions differ in their combination of LdFlag_OpenGetInterface and LdFlag_SetDD02.
+  NOTE: All stresstests are endurance tests, they only stop after an error.
 
 More to come...
 --
 Baccy.
-  
+

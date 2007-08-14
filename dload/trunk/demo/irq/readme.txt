@@ -14,10 +14,13 @@ Start the code at $c000.
 Filelist:
 --------
 
-Makefile	: make rules for this examples, run Gnu Make to build it
+Jamfile		: jam rules for this examples, run jam in the main directory to build it
 dload.cfg	: dload configuration
 dload.prg	: dload object code
-irqdemo.d64	: diskimage with all object files of this example
+irqdemo.d64	: 1541 diskimage with all object files of this example
+irqdemo.d81	: 1581 diskimage with all object files of this example
+irqdemo.dfi	: dfi image with all object files of this example
+irqdemo.lnx	: lynx archive with all object files of this example
 irqdemo.prg	: irq routine, object code
 irqdemo.src	: irq routine, source
 readme.txt	: this text

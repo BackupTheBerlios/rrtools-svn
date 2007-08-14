@@ -15,11 +15,14 @@ Start the code at $c000.
 Filelist:
 --------
 
-Makefile	: make rules for this examples, run Gnu Make to build it
+Jamfile		: jam rules for this examples, run jam in the main directory to build it
 dload.cfg	: dload configuration
 dload.prg	: dload object code
 readme.txt	: this text
-simple.d64	: diskimage with all object files of this example
+simple.d64	: 1541 diskimage with all object files of this example
+simple.d81	: 1581 diskimage with all object files of this example
+simple.dfi	: dfi image with all object files of this example
+simple.lnx	: lynx archive with all object files of this example
 simple.prg	: decrunch object code
 simple.src	: decrunch source
 test.prg	: example data to load
