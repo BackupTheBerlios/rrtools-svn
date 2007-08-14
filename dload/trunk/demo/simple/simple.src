@@ -52,9 +52,9 @@ BasicJumpIn:
 	lda #>InitPsyEnd
 	sta $5a
 
-	lda #<LdCfgInitCodeStart
+	lda #<LdCfgInit_CodeStart
 	sta $5b
-	lda #>LdCfgInitCodeStart
+	lda #>LdCfgInit_CodeStart
 	sta $5c
 
 	jsr copy
@@ -100,7 +100,7 @@ IrqLine2	= $92
 
 TestStart:
 	sta $d07a		;1Mhz
-	jsr LdCfgInitCodeStart
+	jsr LdCfgInit_CodeStart
 	bcc FastLoadInstallOk
 	lda #<Text_FastLoadErr
 	ldy #>Text_FastLoadErr

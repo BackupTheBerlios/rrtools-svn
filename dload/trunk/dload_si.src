@@ -35,10 +35,10 @@
 #outfile @, "code", startadr
 
 	.segment "code"
-	* = LdCfgInitCodeStart
+	* = LdCfgInit_CodeStart
 
 	.segment "zp"
-	* = LdCfgInitZPStart
+	* = LdCfgInit_ZPStart
 
 ;--------------------------------------
 

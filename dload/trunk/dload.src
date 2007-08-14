@@ -12,7 +12,7 @@
 ; eg. 12.41 = $1241. !!! Note that .3==.30 !!! So Subversion 3 is .03 .
 ;--------------------------------------
 
-#if LdCfgVer<$0206
+#if LdCfgVer<$0207
 #error "Update your LdConfig!"
 #endif
 
@@ -369,15 +369,15 @@ Send:
 	ldx #3
 Send0:
 	asl LdLAE
-        lda #$30+LdFlag_VicBank
+        lda #$30+LdCfgInit_VicBank
 	bcs Send1
-        lda #$10+LdFlag_VicBank
+        lda #$10+LdCfgInit_VicBank
 Send1:
 	sta $dd00
 	asl LdLAE
-        lda #$20+LdFlag_VicBank
+        lda #$20+LdCfgInit_VicBank
 	bcs Send2
-        lda #$00+LdFlag_VicBank
+        lda #$00+LdCfgInit_VicBank
 Send2:
 	sta $dd00
 	jsr Delay
@@ -388,7 +388,7 @@ Send2:
 	inc DLoadZp_Ptr+1
 	dec LdLAE+1
 	bne Send
-        lda #$00+LdFlag_VicBank
+        lda #$00+LdCfgInit_VicBank
         sta $dd00
 
 	ldy #0
