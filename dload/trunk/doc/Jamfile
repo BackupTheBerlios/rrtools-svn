@@ -5,6 +5,8 @@ SubDir TOP doc ;
 AddProjectFiles Jamfile ;
 AddProjectFiles dload.asc ;
 
+AddDocFiles dload.html ;
+
 #--------------------------------------
 
 NotFile docs docs_clean ;

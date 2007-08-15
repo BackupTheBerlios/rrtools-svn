@@ -76,6 +76,6 @@ SubInclude TOP user_cfg ;
 # backup and distribution
 
 BackupRar backup ;
-DistribRar distrib : $(PROJECT_FILES) ;
+DistribRar distrib : $(PROJECT_FILES) : $(DOC_FILES) : $(DEMO_FILES) ;
 
 #--------------------------------------

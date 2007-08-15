@@ -12,12 +12,16 @@ AddProjectFiles readme.txt ;
 PUCRUNCHFLAGS = -fshort -c0 ;
 EXOMIZERFLAGS = -q -r ;
 
-datafiles = bitmap.prg col.prg d8.prg viewer.prg ;
+datafiles = [ FGristFiles bitmap.prg col.prg d8.prg viewer.prg ] ;
+
+DEPENDS testexo.prg : $(datafiles:S=.exo) ;
+DEPENDS testpuc.prg : $(datafiles:S=.puc) ;
 
 Object testexo.prg : [ FGristFiles testexo.src ] ;
 Object testpuc.prg : [ FGristFiles testpuc.src ] ;
 
-for data in [ FGristFiles $(datafiles) ] {
+for data in $(datafiles)
+{
 	Exomizer $(data:S=.exo) : $(data) ;
 	Pucrunch $(data:S=.puc) : $(data) ;
 }
