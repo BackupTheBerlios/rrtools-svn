@@ -61,6 +61,7 @@ AddProjectFiles Jamfile Jamrules jam.cfg.template ;
 AddProjectFiles dload.src dload_si.src filelib.src i41.src i71.src i81.src iff.src ihd.src ;
 AddProjectFiles ld41.src ldcommon.src ldhd.src ldmmc.src ldserial.src mmcparam.src ;
 AddProjectFiles t41.src t71.src t81.src thd.src ;
+AddProjectFiles upgrade.txt ;
 
 #--------------------------------------
 

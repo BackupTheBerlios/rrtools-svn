@@ -1,0 +1,12 @@
+
+Upgrade from LdCfgVer 2.6 -> 2.7
+--------------------------------
+
+Changes:
+ * LdCfgInitCodeStart was renamed to LdCfgInit_CodeStart
+ * LdCfgInitZPStart was renmed to LdCfgInit_ZPStart
+ * LdFlag_VicBank was renamed to LdCfgInit_VicBank
+
+New:
+ nothing
+
