@@ -1,0 +1,18 @@
+3.10.2007 track und sector als externe uint_8 eingebau
+4.10. track und sector in hex ausgabe (ohne abcdef) (mit :;<=>?) 
+5.10.eingabe von kommandos ohne : nicht ok , das alles geht.
+weiter versucht
+6.10. cd<- und cd /seperat abgefragt , besser 
+10.10. . files raus uj rein, u0> rein
+alle type impelementiet p,s,u,r wobei r noch keine daten erzeugt
+das verhalen ob geschiebe wird korregiert
+dir ausgabe an type und geschlossen gehängt
+14.11.07
+commando einterpreter hat <cmdArc1 nicht richtig deklamiert , korregiert
+atantion off in dir eingefügt.
+dir bockzahl korregiert 258 ist der Teiler und nicht 254
+to do!dirs can have the same name as files
+to do! @t an * cant get entrys with seq ...
+ die ANY defoult engebaut, dadur ging save nicht mehr eichtig zusätzlich file =prg in 1 eingebaut (nicht ganz richtig)
+ VERSION eingebaut , damit an den 3 stellen immer die richtige nummer steht.
+ 1.35.1 
