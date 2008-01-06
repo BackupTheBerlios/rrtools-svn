@@ -3,8 +3,11 @@ OBJ            = iecata.o
 MCU_TARGET     = atmega162
 OPTIMIZE       = -Os
 
-FLASHCMD       = uisp -dprog=bsd --upload if=$(PRG).hex 
-ERASECMD       = uisp -dprog=bsd --erase 
+FLASHCMD       = avrdude -c bsd -p m162 -U flash:w:$(PRG).hex
+
+#ERASECMD       = uisp -dprog=bsd --erase 
+
+FLASHCMDA      = avrdude-patch -c xa1541 -p m162 -U flash:w:$(PRG).hex
 
 DEFS           = -DF_CPU=8000000
 LIBS           =
@@ -33,6 +36,8 @@ clean:
 flash:
 	$(ERASECMD)
 	$(FLASHCMD)
+flasha:
+	$(FLASHCMDA)
 
 lst:  $(PRG).lst
 
