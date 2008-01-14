@@ -59,7 +59,7 @@
 
 #define BASIC_LINE_LENGTH    33 /* TODO: check this number */
 #define CDOS_DIRENTRY_LENGTH 32 //two bytes more then in 1541 
-#define VERSION "V1.35.1"
+#define VERSION "V1.35.2"
 /* error numbers, given in bcd */
 #define NO_ERROR         0x00
 #define INIT_ERROR       0x74
@@ -257,15 +257,15 @@ inline extern bool_t readDir (struct channelTableStruct *channel) {
   if (channel->readDirState == READ_DIR_BEGIN) {
     if (channelNumber == 0) {
       memcpy_P (buffer, PSTR ("\x01\x04\x01\x01\x00\x00"
-                              "\x12\"IEC-ATA "VERSION" \" AD 2A\x00"), 32);
+                              "\x12\"IEC-ATA "VERSION" \" AD 2E\x00"), 32);
       buffer += 32;
     } else {
       memset (buffer, 255, 142);
-      memcpy_P (buffer, PSTR ("\x41\x00"), 2);
+      memcpy_P (buffer, PSTR ("E\x00"), 2);
       buffer += 142;
       memset (buffer, 0, 112);
       memcpy_P (buffer, PSTR ("IEC-ATA "VERSION"\xa0\xa0\xa0"
-                              "AD\xa0""2A\xa0\xa0\xa0\xa0"), 27);
+                              "AD\xa0""2E\xa0\xa0\xa0\xa0"), 27);
       buffer += 112;
     }
 
@@ -430,8 +430,8 @@ void parseCommand (void) {
   if ((cmdArg1 = strchr (command, ':'))) {
   *cmdArg1 = '\0';
   cmdArg1++;
-}
-  else cmdArg1=command;
+} 
+ // else cmdArg1=command;
   
   /* get arg2 */
   if ((cmdArg2 = strchr (cmdArg1, '='))) {
@@ -451,18 +451,17 @@ void parseCommand (void) {
 
   { /* interpret and execute command */
     char c1 = *command;
-	
     char c2 = *(command + 1);
-  
+    char c3 = *(command + 2);
+
     if ((c1 == 'C') && (c2 == 'D')) {
 
-	  if (*(command + 2)=='_')
+	  if (c3 =='_')
 	     {*cmdArg1 = '.';*(cmdArg1+1) = '\0';}
 		 
-	  if (*(command + 2)=='/')
+	  if (c3 =='/')
 	     {*cmdArg1 = '/';*(cmdArg2+1) = '\0';}
 		 
-
       /* change directory */
 	  if (*cmdArg1  == '\0' ){error = SYNTAX_ERROR;}
 		else{
@@ -470,12 +469,34 @@ void parseCommand (void) {
          error = NOT_FOUND_ERROR;
       } 
 	  }
-    } else if ((c1 == 'M') && (c2 == 'D')) {
-      /* create directory */
-      if (!createDir (cmdArg1)) {
-        error = CREATE_ERROR;
-      }
-    } else if ((c1 == 'R') && (c2 == 'D')) {
+    } else if (c1 == 'M') {
+		if (c2 == 'D') {
+	      /* create directory */
+      		if (!createDir (cmdArg1)) {
+        	error = CREATE_ERROR;
+      		}}
+      	else if (c2 == '-'){
+		     if (c3 == 'R'){/*memory-Read*/}
+		else if (c3 == 'W'){/*memory-Write*/}
+		else if (c3 == 'E'){/*memory-Execute*/}
+			   }
+    } else if (c1 == 'B') {
+    uint8_t *cb;
+	if (cb =  strchr (command, '-')) {
+	
+	c3 = *(cb + 1);
+		if ((cmdArg1 = strchr (command, ' '))) {
+  *cmdArg1 = '\0';
+  cmdArg1++;
+			
+		     if (c3 == 'R'){track = *(cmdArg1+ 3);sector = *(cmdArg1 + 4);/*Block-Read*/}
+		else if (c3 == 'W'){/*Block-Write*/}
+		else if (c3 == 'P'){/*Buffer-Pointer*/}
+		else if (c3 == 'E'){/*Block-Execute*/}
+		else if (c3 == 'A'){/*Block-Alocate */}
+		else if (c3 == 'F'){/*Block-Free*/}
+			  }}
+    }else if ((c1 == 'R') && (c2 == 'D')) {
       /* delete directory */
       deleteDir (cmdArg1);
     }  else if (c1 == 'S') {
@@ -570,9 +591,24 @@ inline extern void parseName (struct channelTableStruct *channel) {
 	}
 
    filename = bufferPtr;
-   filetype = PRG; /* if no , x,y than  take any*/
+   filetype = PRG; 
    read = TRUE;
 	
+/* file type and direction */
+	switch (channelNumber) {
+		case 0:
+			/* read  LOAD*/
+			read = TRUE;
+			break;
+		case 1:
+			/* write SAVE  */
+			read = FALSE;
+			break;
+		default:
+			/* write number !>1  */
+			 filetype = ANY;
+			break;
+	}
 
   { /* override file type and direction with data extracted from file name */
     char *ptr = NULL;
@@ -609,17 +645,7 @@ inline extern void parseName (struct channelTableStruct *channel) {
       }
     } while (ptr);/*prt is 0 if no , found*/
   }
-/* file type and direction */
-	switch (channelNumber) {
-		case 0:
-			/* read  LOAD*/
-			read = TRUE;
-			break;
-		case 1:
-			/* write SAVE  */
-			read = FALSE;
-			break;
-	}
+	
 
   if (channel->readDirState) {
     /* directory */
