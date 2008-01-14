@@ -37,42 +37,53 @@
 
 #include "iecata.h"
 
-/*
-#define ATA_DIOW   PB1
-#define ATA_DIOR   PB2
-*/
 
-#define ATA_DIOW   PB0
-#define ATA_DIOR   PB1
+//set this when wires normally connected to PD0 and PD1
+//go to the Latch 0 and 1 instead (to free the serial port)
 
-/*
-#define ATA_REG_DATA            0x10
-#define ATA_REG_ERROR           0x30
-#define ATA_REG_SECTORS         0x50
-#define ATA_REG_LBA0            0x70
-#define ATA_REG_LBA1            0x90
-#define ATA_REG_LBA2            0xb0
-#define ATA_REG_LBA3            0xd0
-#define ATA_REG_COMMAND         0xf0
-#define ATA_REG_ALT_STATUS      0xc8
-#define ATA_REG_DRIVE_ADDR      0xe8
-*/
+//#define OLD_BOARD
+//#define ATA_ADDRESSLATCH // FOR TXRX (NEW BORD)
+#define NEW_BOARD
 
-#define ATA_REG_DATA            0x02
-#define ATA_REG_ERROR           0x06
-#define ATA_REG_SECTORS         0x0A
-#define ATA_REG_LBA0            0x0E
-#define ATA_REG_LBA1            0x12
-#define ATA_REG_LBA2            0x16
-#define ATA_REG_LBA3            0x1A
-#define ATA_REG_COMMAND         0x1E
-#define ATA_REG_ALT_STATUS      0x19
-#define ATA_REG_DRIVE_ADDR      0x1D
+#ifdef OLD_BOARD
+	//defines for original PCB
+	
+
+	#define ATA_DIOW   PB1
+	#define ATA_DIOR   PB2
+
+	#define ATA_REG_DATA            0x10
+	#define ATA_REG_ERROR           0x30
+	#define ATA_REG_SECTORS         0x50
+	#define ATA_REG_LBA0            0x70
+	#define ATA_REG_LBA1            0x90
+	#define ATA_REG_LBA2            0xb0
+	#define ATA_REG_LBA3            0xd0
+	#define ATA_REG_COMMAND         0xf0
+	#define ATA_REG_ALT_STATUS      0xc8
+	#define ATA_REG_DRIVE_ADDR      0xe8
+#else
+// NEW_BOARD
+	//defines for Dienstagstreff PCB by Suschman
+
+	#define ATA_DIOW   PB0
+	#define ATA_DIOR   PB1
+
+	#define ATA_REG_DATA            0x02
+	#define ATA_REG_ERROR           0x06
+	#define ATA_REG_SECTORS         0x0A
+	#define ATA_REG_LBA0            0x0E
+	#define ATA_REG_LBA1            0x12
+	#define ATA_REG_LBA2            0x16
+	#define ATA_REG_LBA3            0x1A
+	#define ATA_REG_COMMAND         0x1E
+	#define ATA_REG_ALT_STATUS      0x19
+	#define ATA_REG_DRIVE_ADDR      0x1D
+#endif
 
 
-
-#define ATA_CMD_READ_SECT       0x21
-#define ATA_CMD_WRITE_SECT      0x31
+#define ATA_CMD_READ_SECT       0x21//  20 in moderneren laufwerken vorhanden
+#define ATA_CMD_WRITE_SECT      0x31//  30 in moderneren laufwerken vorh
 #define ATA_CMD_IDENTIFY_DRIVE  0xec
 
 #define STATUS_DRDY             0x40
@@ -140,7 +151,7 @@ void ataGetBlock (block_t blockNumber, uint8_t *block) {
   waitWhileDisk (STATUS_DRQ, FALSE);
   /* TODO: why is the following necessary? Without it, some blocks
      don't load correctly! */
-  //waitWhileDisk (STATUS_BSY, STATUS_BSY); 
+  waitWhileDisk (STATUS_BSY, STATUS_BSY); 
 
   /* collect all the bytes */
   for (byteNumber = 0; byteNumber < BLOCKSIZE; byteNumber += 2) {
@@ -179,35 +190,58 @@ static void setupRegisters (uint32_t blockNumber) {
 
 static void ataGetWord (uint8_t address, uint8_t *dataH, uint8_t *dataL) {
   /* to make sure variables are not in external SRAM */
-  uint8_t h, l; 
+  	uint8_t h, l; 
 
   /* disable interrupts */
-  cli();
+  	cli();
   /* set up address */
-  //outp ((address & 0xf8) | (inp (PORTB) & 0x07), PORTB);
-  PORTD = (PORTD & 0xC4) | (address & 0x03) | ((address & 0x1C) <<1);
+#ifdef OLD_BOARD
+   	
+	outp ((address & 0xf8) | (inp (PORTB) & 0x07), PORTB);
+#endif
+#ifdef ATA_ADDRESSLATCH // FOR TXRX
+
+	PORTD = (PORTD & 0xC4) | ((address & 0x1C) <<1);// FOR TXRX
+#endif
+#ifdef NEW_BOARD
+
+	PORTD = (PORTD & 0xC4) | (address & 0x03) | ((address & 0x1C) <<1);
+#endif
+
   /* disable external SRAM */
-  cbi (MCUCR, SRE);
+  	cbi (MCUCR, SRE);
+  
+#ifdef ATA_ADDRESSLATCH // FOR TXRX
+	/* set up rest of address if lines are connected to latch */
+	DDRA = 0xff;// #Port a out
+	PORTA = (address & 0x03);// put bit 0,1 to Port
+	sbi (PORT_ALE, BIT_ALE);// set Ale to activate ladge
+	cbi (PORT_ALE, BIT_ALE);// clr Ale to mak it save
+#endif
+
   /* set ATA databus to input */
-  outp (0x00, DDRA);
-  outp (0x00, DDRC);
+	outp (0x00, DDRA);
+	outp (0x00, DDRC);
   /* disable pullups */
-  outp (0x00, PORTA);
-  outp (0x00, PORTC);
+	outp (0x00, PORTA);
+	outp (0x00, PORTC);
   /* assert DIOR */
-  cbi (PORTB, ATA_DIOR);
+  	cbi (PORTB, ATA_DIOR);
   /* wait a short time */
-  asm volatile ("nop");
+  	asm volatile ("nop");
+	asm volatile ("nop");
+	asm volatile ("nop");
+	asm volatile ("nop");
   /* collect data */
-  l = inp (PINA);
-  h = inp (PINC);
+	l = inp (PINA);
+	h = inp (PINC);
   /* reset DIOR*/
-  sbi (PORTB, ATA_DIOR);
+	sbi (PORTB, ATA_DIOR);
   /* enable external SRAM */
-  sbi (MCUCR, SRE);
+	sbi (MCUCR, SRE);
   /* copy to parameters */
-  *dataH = h;
-  *dataL = l;
+  	*dataH = h;
+	*dataL = l;
   /* enable interrupts */
   sei();
 }
@@ -216,27 +250,44 @@ static void ataPutWord (uint8_t address, uint8_t dataH, uint8_t dataL) {
   /* disable interrupts */
   cli();
   /* set up address */
-  //outp ((address & 0xf8) | (inp (PORTB) & 0x07), PORTB);
-  PORTD = (PORTD & 0xC4) | (address & 0x03) | ((address & 0x1C) <<1);
+#ifdef OLD_BOARD
+
+	outp ((address & 0xf8) | (inp (PORTB) & 0x07), PORTB);
+#endif
+#ifdef ATA_ADDRESSLATCH// FOR TXRX
+
+	PORTD = (PORTD & 0xC4) | ((address & 0x1C) <<1);// FOR TXRX
+#endif
+#ifdef NEW_BOARD
+
+	PORTD = (PORTD & 0xC4) | (address & 0x03) | ((address & 0x1C) <<1);
+#endif
+
   /* set ATA databus to output */
-  outp (0xff, DDRA);
-  outp (0xff, DDRC);
+	DDRA = 0xff;
+	DDRC = 0xff;
   /* disable external SRAM */
   cbi (MCUCR, SRE);
-  /* wait a short time */
-  asm volatile ("nop");
-  /* assert DIOW */
-  cbi (PORTB, ATA_DIOW);
-  /* wait a short time */
-  asm volatile ("nop");
-  /* put data on bus */
-  outp (dataL, PORTA);
-  outp (dataH, PORTC);
-  /* reset DIOW*/
-  sbi (PORTB, ATA_DIOW);
-  /* enable external SRAM */
-  sbi (MCUCR, SRE);
-  /* enable interrupts */
+#ifdef ATA_ADDRESSLATCH  // FOR TXRX
+	/* set up rest of address if lines are connected to latch */
+	PORTA = (address & 0x03);// FOR TXRX
+	sbi (PORT_ALE, BIT_ALE);// FOR TXRX
+	cbi (PORT_ALE, BIT_ALE);// FOR TXRX
+#endif
+	/* wait a short time */
+	asm volatile ("nop");
+	/* assert DIOW */
+	cbi (PORTB, ATA_DIOW);
+	/* wait a short time */
+	asm volatile ("nop");
+	/* put data on bus */
+	outp (dataL, PORTA);
+	outp (dataH, PORTC);
+	/* reset DIOW*/
+	sbi (PORTB, ATA_DIOW);
+	/* enable external SRAM */
+	sbi (MCUCR, SRE);
+	/* enable interrupts */
   sei();
 }
 
