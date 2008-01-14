@@ -71,6 +71,9 @@ typedef unsigned int uint32_t;
 #define sbi(p,b) p|=(1<<b)
 #define cbi(p,b) p&=~(1<<b) 
 
+#define PORT_ALE PORTE // tixiv
+#define BIT_ALE PE1 // tixiv 
+
 #endif
 
 typedef uint8_t bool_t;
