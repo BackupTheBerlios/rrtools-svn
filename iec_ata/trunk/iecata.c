@@ -431,7 +431,7 @@ void parseCommand (void) {
   *cmdArg1 = '\0';
   cmdArg1++;
 } 
- // else cmdArg1=command;
+ else cmdArg1=command;
   
   /* get arg2 */
   if ((cmdArg2 = strchr (cmdArg1, '='))) {
@@ -475,27 +475,43 @@ void parseCommand (void) {
       		if (!createDir (cmdArg1)) {
         	error = CREATE_ERROR;
       		}}
-      	else if (c2 == '-'){
-		     if (c3 == 'R'){/*memory-Read*/}
-		else if (c3 == 'W'){/*memory-Write*/}
-		else if (c3 == 'E'){/*memory-Execute*/}
-			   }
+      	else if (c2 != '-'){c3= '\0';}
+		switch (c3){
+		     case  'R' :/*memory-Read*/
+			break ;
+			case  'W' :/*memory-Write*/
+			break ;
+			case 'E':/*memory-Execute*/
+			break ;
+			default : error = SYNTAX_ERROR;
+			break ;
+	   }
     } else if (c1 == 'B') {
-    uint8_t *cb;
-	if (cb =  strchr (command, '-')) {
-	
-	c3 = *(cb + 1);
-		if ((cmdArg1 = strchr (command, ' '))) {
-  *cmdArg1 = '\0';
-  cmdArg1++;
-			
-		     if (c3 == 'R'){track = *(cmdArg1+ 3);sector = *(cmdArg1 + 4);/*Block-Read*/}
-		else if (c3 == 'W'){/*Block-Write*/}
-		else if (c3 == 'P'){/*Buffer-Pointer*/}
-		else if (c3 == 'E'){/*Block-Execute*/}
-		else if (c3 == 'A'){/*Block-Alocate */}
-		else if (c3 == 'F'){/*Block-Free*/}
-			  }}
+				uint8_t *cb;
+				if (cb =  strchr (command, '-')) {
+						c3 = *(cb + 1);
+						if (cmdArg1 = strchr (cmdArg1, ' ')){
+									*cmdArg1 = '\0';
+									cmdArg1++;
+						}else {c3= '\0';}
+				}
+		switch (c3) {
+				case 'R': 
+					track = *(cmdArg1+ 3);sector = *(cmdArg1 + 4);/*Block-Read*/
+				break ;
+				case 'W': /*Block-Write*/
+				break ;
+				case 'P':/*Buffer-Pointer*/
+				break ;
+				case 'E':/*Block-Execute*/
+				break ;
+				case 'A':/*Block-Alocate */
+				break ;
+				case 'F':/*Block-Free*/
+				break ;
+				default : error = SYNTAX_ERROR;
+				break ;
+			  }
     }else if ((c1 == 'R') && (c2 == 'D')) {
       /* delete directory */
       deleteDir (cmdArg1);
@@ -513,8 +529,7 @@ void parseCommand (void) {
       if (!formatDrive()) {
         error = INIT_ERROR;
       }
-    } 
-	else if (c1 == 'I') {
+    } else if (c1 == 'I') {
       /* initialize */
 		
 	}else if (c1 == 'U'){ 
@@ -522,7 +537,7 @@ void parseCommand (void) {
 		if            (c2 == '0') {
         /* evicenumber change */
 			if (*(command + 2) == '>') {
-			devicenumber = *(command + 3);}
+			devicenumber = *(command +3);}
 		}else if (c2 == '1'){
 		/*block read*/
 		
@@ -719,7 +734,6 @@ int main (void) {
 			/* reset variables */
 				channel->bufferPtr = 0;
 				channel->endOfBuffer = 0;
-
 				if (channelNumber == COMMAND_CHANNEL) {
 					/* get command and execute it */
 					parseCommand();
