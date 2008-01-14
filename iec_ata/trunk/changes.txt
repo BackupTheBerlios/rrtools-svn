@@ -16,3 +16,7 @@ to do! @t an * cant get entrys with seq ...
  die ANY defoult engebaut, dadur ging save nicht mehr eichtig zusätzlich file =prg in 1 eingebaut (nicht ganz richtig)
  VERSION eingebaut , damit an den 3 stellen immer die richtige nummer steht.
  1.35.1 
+11.1.08 Debug für tx,rx eingebaut klappt aber nicht
+13.1.08 M- und B- eingebaut und @t unterstützt.
+14.1.08 Bugs angelegt, Version gesendet. 
+
