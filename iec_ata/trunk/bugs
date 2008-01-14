@@ -1,4 +1,6 @@
 Bekannte bugs:
-* Doppelpunkte hinter dem z.b. "B-R: 2 2 2 2" werden in der normalen Auswertung zu \0 gemacht und dann wird im comando der String an der Stelle abgebrochen.
+* Doppelpunkte hinter dem z.b. "B-R: 2 2 2 2" werden in der normalen Auswertung zu \0 gemacht und dann wird im comando der String an der Stelle abgebrochen. OK
 * Im dir sec!>2 ist der Trac und Sector immer 0
 * Der Debug patch klappt nicht.
+* Es wird fast alles als ok angeseken auch falsch geschriebene Befehle.
+* Das löschen ist nicht richtig gefixt 
