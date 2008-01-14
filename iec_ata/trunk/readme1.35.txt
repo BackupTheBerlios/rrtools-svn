@@ -91,6 +91,11 @@ The following disk commands are supported (through disk channel 15):
   change the devienmber tempurary to dev
 - UJ
   make a reset the dev Nr stay
+- with jiffidos @t is working
+
+- new kommands with no funktion jet: m-w, m-r, m-e
+
+- new kommands wiht no funktion in long and short version: b-r, b-w, b-e, b-a, b-f
 
 The syntax of these commands are the same as on Commodore DOS. Where
 appropriate, you may use wildcards (* and ?) just like on Commodore
