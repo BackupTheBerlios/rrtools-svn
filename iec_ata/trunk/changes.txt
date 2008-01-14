@@ -19,4 +19,4 @@ to do! @t an * cant get entrys with seq ...
 11.1.08 Debug für tx,rx eingebaut klappt aber nicht
 13.1.08 M- und B- eingebaut und @t unterstützt.
 14.1.08 Bugs angelegt, Version gesendet. 
-
+error verbessert bei m und b
