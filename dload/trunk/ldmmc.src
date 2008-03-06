@@ -259,28 +259,28 @@ error:
 
 
 
-; shutup / wakeup routines only set $dd00 and $dd02 to
+; shutup / wakeup routines only set LdHostDp and LdHostDdr to
 ; get the same results as the serial versions
 
 @0LdMMC64_ShutUp:
 #ifndef LdFlag_SetDD02
-	lda $dd02
+	lda LdHostDdr
 	eor #3
-	sta $dd00
+	sta LdHostDp
 #endif
 	lda #3
-	sta $dd02
+	sta LdHostDdr
 	rts
 
 
 #ifndef LdFlag_SetDD02
 @0LdMMC64_WakeUp:
-	lda $dd00
+	lda LdHostDp
 	and #3
 	eor #$3f
-	sta $dd02
+	sta LdHostDdr
 	lda #0
-	sta $dd00
+	sta LdHostDp
 	rts
 #else
 @0LdMMC64_WakeUp = UnSetDD02_restoreDD02

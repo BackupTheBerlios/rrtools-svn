@@ -194,22 +194,22 @@ LoadTS_SetDD02:
 PatchCommon_ReadBlock0:
 	jsr Tama_ReadBlock
 UnSetDD02:
-	lda $dd02
+	lda LdHostDdr
 	and #3
 	eor #3
-	sta $dd00
+	sta LdHostDp
 UnSetDD02_restoreDD02:
 	lda #$3f
-	sta $dd02
+	sta LdHostDdr
 	rts
 
 SetDD02:
-	lda $dd00
+	lda LdHostDp
 	and #3
 	eor #$3f
-	sta $dd02
+	sta LdHostDdr
 	lda #0
-	sta $dd00
+	sta LdHostDp
 	rts
 #endif
 

@@ -4,8 +4,6 @@ DLoad Todo:
 
 * Streaming demo: load scrolltext from file... or gfx? hmmm...
 
-* t1581 needs a short delay between loads, or it hangs. why?!?
-
 
 MMC ToDo:
 ---------

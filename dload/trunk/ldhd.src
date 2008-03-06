@@ -14,9 +14,9 @@ LdHDPsyStart:
 @0LdHDReadBlock:
 	jsr LdSerial_LdSendH
         ldy #0
-        sty $dd00
+        sty LdHostDp
 LdHDGet:
-	bit $dd00
+	bit LdHostDp
 	bmi LdHDGet
 	jsr LdHDGByte
 	bne LdHDErr
@@ -41,25 +41,25 @@ LdHDErr:
 	rts
 
 LdHDGByte:
-	ldx #8
-	lda $dd00
-	stx $dd00
+	ldx #Serial_Atn
+	lda LdHostDp
+	stx LdHostDp
 	lsr
 	lsr
 	ldx #0
-	eor $dd00
-	stx $dd00
+	eor LdHostDp
+	stx LdHostDp
 	lsr
 	lsr
-	ldx #8
-	eor $dd00
-	stx $dd00
+	ldx #Serial_Atn
+	eor LdHostDp
+	stx LdHostDp
 	lsr
 	lsr
 	sta LdGZp
 	ldx #0
-	lda $dd00
-	stx $dd00
+	lda LdHostDp
+	stx LdHostDp
 	and #$c0
 	eor LdGZp
 	rts

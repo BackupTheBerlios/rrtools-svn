@@ -24,3 +24,11 @@ File_WriteByte		= $ffa8
 
 ;--------------------------------------
 
+LdHostDp		= $dd00
+LdHostDdr		= $dd02
+
+Serial_Atn		= $08
+Serial_Clk		= $10
+Serial_Data		= $20
+
+; bei +4: LdVicBank = 0, setdd02 = false

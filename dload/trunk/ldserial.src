@@ -27,41 +27,41 @@ PatchCommon_SendH0:
 
 @0LdSerial_ShutUp:
 #ifdef LdFlag_SetDD02
-	lda $dd00
-	ora #$20
-	and #$ef
-	sta $dd00
+	lda LdHostDp
+	ora #Serial_Data
+	and #~Serial_Clk
+	sta LdHostDp
 ShutUp0:
-	bit $dd00
+	bit LdHostDp
 	bvc ShutUp0
-	eor #$30
-	sta $dd00
+	eor #Serial_Data|Serial_Clk
+	sta LdHostDp
 #else
-	lda #$20
-	sta $dd00
+	lda #Serial_Data
+	sta LdHostDp
 ShutUp0:
-	bit $dd00
+	bit LdHostDp
 	bvc ShutUp0
-	lda $dd02
+	lda LdHostDdr
 	and #3
-	eor #$13
-	sta $dd00
+	eor #Serial_clk|3	; so nicht portierbar!
+	sta LdHostDp
 #endif
 	jsr ShutUp1
         lda #3
-        sta $dd02
+        sta LdHostDdr
 ShutUp1:
         rts
 
 ;--------------------------------------
 
 @0LdSerial_WakeUp:
-	lda $dd00
-	ora #$10
-	sta $dd00
+	lda LdHostDp
+	ora #Serial_Clk
+	sta LdHostDp
 	and #3
 	eor #$3f
-	sta $dd02
+	sta LdHostDdr
 	ldx #0
 	ldy #2
 #ifdef LdFlag_SetDD02
@@ -72,10 +72,10 @@ ShutUp1:
 #endif
 
 @0LdSerial_LdSendH:
-	lda #$20
-	sta $dd00
+	lda #Serial_Data
+	sta LdHostDp
 SendH0:
-	bit $dd00
+	bit LdHostDp
 	bvc SendH0
 SendHJumpIn:
 	txa
@@ -91,18 +91,18 @@ SendNibble:
 	ror
 	lsr
 	lsr
-	sta $dd00
+	sta LdHostDp
 	jsr LdSerial_CSRts
 	asl LdGZp
 	lda #$00
 	ror
 	lsr
 	lsr
-	sta $dd00
+	sta LdHostDp
 	jsr LdSerial_CSRts
 	dex
 	bpl SendNibble
-	jsr LdSerial_CSRts
+	jsr LdSerial_CSRts	; ldx #10, dex, bpl
 	jsr LdSerial_CSRts
 	jsr LdSerial_CSRts
 	jsr LdSerial_CSRts

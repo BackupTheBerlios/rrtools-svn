@@ -14,9 +14,9 @@ Ld41PsyStart:
 @0Ld41ReadBlock:
 	jsr LdSerial_LdSendH
         ldy #0
-        sty $dd00
+        sty LdHostDp
 Get:
-	bit $dd00
+	bit LdHostDp
 	bmi Get
         ;ldy #0
 	sty LdChk
@@ -42,17 +42,17 @@ Get0:
 	rts
 
 GByte:
-	ldx #8
-	lda $dd00
-	stx $dd00
+	ldx #Serial_Atn
+	lda LdHostDp
+	stx LdHostDp
 	and #$C0
 	lsr
 	lsr
 	sta LdGZp
 	jsr GBRts
 	ldx #0
-	lda $dd00
-	stx $dd00
+	lda LdHostDp
+	stx LdHostDp
 	and #$C0
 	ora LdGZp
 	lsr
@@ -60,9 +60,9 @@ GByte:
 	sta LdGZp
 	jsr LdSerial_CSRts
 	nop
-	ldx #8
-	lda $dd00
-	stx $dd00
+	ldx #Serial_Atn
+	lda LdHostDp
+	stx LdHostDp
 	and #$C0
 	ora LdGZp
 	lsr
@@ -70,8 +70,8 @@ GByte:
 	sta LdGZp
 	jsr GBRts
 	ldx #0
-	lda $dd00
-	stx $dd00
+	lda LdHostDp
+	stx LdHostDp
 	and #$C0
 	ora LdGZp	;3
 	pha		;3
