@@ -102,10 +102,9 @@ SendNibble:
 	jsr LdSerial_CSRts
 	dex
 	bpl SendNibble
-	jsr LdSerial_CSRts	; ldx #10, dex, bpl
-	jsr LdSerial_CSRts
-	jsr LdSerial_CSRts
-	jsr LdSerial_CSRts
+	ldx #10		; wait some cycles (56 is a safe value)
+	dex
+	bpl *-1
 LdSerial_CSRts:
 	; LedOff and thus LdSerial_CSRts must return carry clear!
 	clc
