@@ -137,8 +137,11 @@ int main (int argc, char *argv[]) {
                         entry->readOnly ? '<' : ' ',
                         entry->splat ? '*' : ' ',
                         filename,
+                        entry->fileType == DEL ? "del" :
+                        entry->fileType == SEQ ? "seq" :
+                        entry->fileType == USR ? "usr" :
                         entry->fileType == PRG ? "prg" :
-                        entry->fileType == SEQ ? "seq" : "dir");
+                        entry->fileType == REL ? "rel" : "dir");
               }
             }
           } else if (!strcmp (cmd, "cd")) {
