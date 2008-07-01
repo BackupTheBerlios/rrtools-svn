@@ -1,0 +1,133 @@
+1541 Test Suite
+by Wolfram Sang (Ninja / The Dreams) in 2008
+--------------------------------------------
+
+This project wants to provide tests and a test framework for the Commodore 1541
+and compatible floppy-drives. It can also be used by emulators and emulating
+hardware which strive for maximum compatibility.
+
+You can find the latest version of this project at:
+
+FIXME: Files section
+
+Anonymous SVN access is possible, too:
+
+http://svn.berlios.de/svnroot/repos/rrtools/1541-testsuite
+
+
+How to run tests
+----------------
+
+Simply start "1541-TESTSUITE" from a test disk. Then, all tests from this disk
+will be run. At the end you will be given a matrix with the test results. For
+detailed information, the addresses of the maps containing all results and
+errcodes are also printed.
+
+Note that disk changes are not supported. Only tests on the current disk are
+used. This means you need to have the C64 executable on every disk containing
+tests. That way, you can easily create sub- or supersets from existing test
+packages.
+
+The framework
+-------------
+
+The 1541-testsuite consists of one executable for the C64 (the framework) and
+lots of tests for the 1541. These are stored as "utility loaders", i.e.
+usr-files starting with "&".
+
+First, the framework scans the current disk for valid tests. Such a test has a
+filename like
+
+"&xxMYTEST"  USR
+
+with "xx" being a hexadecimal number ("00"-"FF"). Tests are applied in a
+sequential row according to this initial number (a bit like unix-startup
+scripts).
+
+After the test, the framework will read addresses $14+$15 from the floppy,
+protected by a watchdog. If it cannot retrieve a test result after 5 seconds
+(FIXME: make it a parameter), then the test run will be stopped as the drive is
+assumed to hang.
+
+Addresses $14+$15 have the following meaning:
+
+$14 (result)
+
+ $00	: OK (no further details)
+   Test passed.
+
+ $01-$7F: OK (print result & errcode)
+   Test passed, but print data. In case, you measured something during the test
+   run.
+
+ $80	: TIMEOUT (no further details)
+   Failed. Drive may even hang, so test run is stopped. To be exact, this value
+   is not read from $14, but assigned by the C64 if the watchdog triggers.
+
+ $81-$FF: FAILED (print result & errcode)
+   Failed. Assign the values to errors as you like, but please document it.
+   Idea is a bit like -Esomething in unix-errorhandling.
+
+$15 (errcode)
+ whatever you like to get more details about the failure
+
+
+Utility loader
+--------------
+
+For now, I simply add a textfile from the net to explain the utility loaders. I
+also include the C-source for a generator of such files (prg2ul). This is not
+tested for huge files and cannot handle non-sequential chunks (yet?). Still, it
+enables you to use a cross-dev system for coding tests by simply converting prg
+files afterwards.
+
+Compile yourself
+----------------
+
+To compile 1541-testsuite, you will need a standard unixish dev-toolchain
+(bash, make, cc...). Furthermore, you will need DreamAss by Christoph Thelen
+(Doc Bacardi/The Dreams) available at:
+
+http://developer.berlios.de/projects/rrtools
+
+Furthermore, you will need the c1541 tool from the VICE emulator.
+
+http://www.viceteam.org
+
+If you got all these tools, simply run 'make' in the root dir of the project.
+This will compile all source codes and create the disk images according to the
+list files.
+
+Adding tests
+------------
+
+Generally, you add a test by copying a vaild testfile to the test-disk (valid
+testfiles are described in 'The framework'). That means, you could even develop
+a test on the C64, make a proper USR-file from it and copy it to the
+destination. However, it is recommended to use the build system of the
+1541-testsuite, as this will improve maintainability a lot. That means, you
+develop the test using DreamAss and have the source file in the 'tests/'
+directory of the testsuite. Please, include the file '1541-tests.inc' and use
+the labels defined there. This will make future changes a lot easier. You can
+use the 'make tests' target to just compile the tests. Please make sure you add
+documentation for your test: What is tested? How is it tested (roughly)? What
+do error codes indicate?
+
+Generating test disks
+---------------------
+
+Test disks are generated from lists stored in the 'disks/' directory. Every
+list file will produce a d64-disk image with the same name. This image will
+contain the C64 executable and all tests from the list, properly named. It is
+ready to run.
+
+The list files are pretty simple. Just write the name of the tests to be added,
+one at a line, without extension. Tests will be numbered from "&00..." upwards
+with a step size of 1 on the disk image. If you want to set a specific number,
+use the command "& <number>", e.g. "& 0x20" (next test will start with
+"&20..."). Be careful to not assign numbers twice! To increase the step size
+between test numbers, use the command "&+", e.g. "&+ 4". That way, you have
+room to put a test inbetween others.
+
+Comments have to be on seperate lines and must start with "# " (Note the space
+after #). Blank lines are ignored.
