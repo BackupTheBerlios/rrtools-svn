@@ -31,7 +31,7 @@
 */
 
 /*
-  iecata.h V1.32
+  iecata.h V1.35
   The main header file for the IEC-ATA software. 
 */
 
@@ -71,9 +71,6 @@ typedef unsigned int uint32_t;
 #define sbi(p,b) p|=(1<<b)
 #define cbi(p,b) p&=~(1<<b) 
 
-#define PORT_ALE PORTE // tixiv
-#define BIT_ALE PE1 // tixiv 
-
 #endif
 
 typedef uint8_t bool_t;
@@ -88,14 +85,34 @@ typedef uint16_t bufferSize_t;
 enum commands {
   IDLE, LISTEN_OPEN, LISTEN_CLOSE, LISTEN_DATA, TALK_DATA
 };
+#define VERSION "V1.35.3"
 
-#define ROOTBLOCK              1 //root dir
-#define BLOCKSIZE            512
-#define FILE_NAME_SIZE        16
-#define MAX_OPEN_FILES        16
-#define LED                  PD5
+#define BASIC_LINE_LENGTH    33 /* TODO: check this number */
+#define CDOS_DIRENTRY_LENGTH 32 //two bytes more then in 1541 
+
+#define ROOTBLOCK              		1 //root dir
+#define BLOCKSIZE           				512
+#define FILE_NAME_SIZE        		16
+#define MAX_OPEN_FILES        	16
+
 #define COMMAND_CHANNEL     0x0f
 
+#define ATTENTION_OFF() \
+	attention_delay = 1;
+	
+#define ATTENTION_ON() \
+	attention_delay = 0;\
+	if(attention){\
+		attention = 0;\
+		iecAttention();\
+	}
+#define LED           PD5
+#define LED_PIN 2
+
+#define LED_IS_ON ((PORTE&(1<<LED_PIN))?0:1);
+#define LED_IS_OFF ((PORTE&(1<<LED_PIN))?1:0);
+#define LED_OFF PORTE |= (1<<LED_PIN);
+#define LED_ON PORTE &= ~(1<<LED_PIN);
 enum filetypes {
   ANY, DEL=0, SEQ = 1, PRG = 2, USR= 3, REL = 4 , DIR = 6
 };
@@ -163,7 +180,8 @@ bool_t iecListen (uint8_t *data, bufferSize_t maxBytes,
                   bufferSize_t *bytesReceived);
 void iecTalk (struct channelTableStruct * channel, bool_t eoi);
 void iecAttention (void);
-
+volatile bool_t attention_delay;
+volatile bool_t attention;
 /* ata.c */
 extern block_t totalDiskSize;
 bool_t ataInit (void);
@@ -172,7 +190,7 @@ void ataPutBlock (block_t blockNumber, uint8_t *block);
 
 /* dos-init.c */
 bool_t dosInit (void);
-bool_t formatDrive (void);
+bool_t formatDrive (char*Header,char*Id);
 block_t allocateBlock (void);
 void freeBlock (block_t block);
 void flushFreeBlockList (void);
@@ -202,6 +220,6 @@ bool_t openWrite (char *name, uint8_t fileType, uint8_t channel);
 void closeFile (uint8_t channel);
 bool_t readFile (uint8_t channel, bool_t *eof);
 bool_t writeFile (uint8_t channel);
-void deleteFile (char *pattern);
+int deleteFile (char *pattern);
 
 #endif
