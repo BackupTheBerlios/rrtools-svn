@@ -34,7 +34,7 @@
 
 
 /*
-  iecata.c V1.33
+  iecata.c V1.35.3
   The main source file for the IEC-ATA software, contains main()
 */
 
@@ -59,7 +59,7 @@
 
 #define BASIC_LINE_LENGTH    33 /* TODO: check this number */
 #define CDOS_DIRENTRY_LENGTH 32 //two bytes more then in 1541 
-#define VERSION "V1.35.2"
+#define VERSION "V1.35.3"
 /* error numbers, given in bcd */
 #define NO_ERROR         0x00
 #define INIT_ERROR       0x74
@@ -203,12 +203,12 @@ inline extern bool_t readStatus (struct channelTableStruct *channel) {
         bufferAdd = 12;
         break;
       case NOT_OPEN_ERROR:
-        errorMessage = PSTR ("NOT OPEN");
-        bufferAdd = 8;
+        errorMessage = PSTR ("FILE NOT OPEN");
+        bufferAdd = 13;
         break;
       case NOT_FOUND_ERROR:
-        errorMessage = PSTR ("NOT FOUND");
-        bufferAdd = 9;
+        errorMessage = PSTR ("FILE NOT FOUND");
+        bufferAdd = 14;
         break;
       case VERSION_ERROR:
         errorMessage = PSTR ("IEC-ATA "VERSION);
@@ -251,6 +251,7 @@ sector = 0;
 inline extern bool_t readDir (struct channelTableStruct *channel) {
   bool_t eof = FALSE;
   uint8_t *buffer = channel->buffer;
+
   static entryIndex_t entryIndex;
   static uint8_t writtenEntries;
 
@@ -286,11 +287,14 @@ inline extern bool_t readDir (struct channelTableStruct *channel) {
 	ATTENTION_OFF();
     if ((entry = getEntry (entryIndex))) {
       /* only process non-deleted files */
-      if ((entry->startBlock )&&!(*entry->fileName=='.')/*&&!((entry->fileType== DEL)&&(entry->splat))*/){
+      if ((entry->startBlock )&&!(*entry->fileName=='.')&&(channel->dirEntry.fileType==entry->fileType)/*&&!((entry->filetype== DEL)&&(entry->splat))*/){
 		
         /* only show files that match pattern */
         if (filenameMatch (entry->fileName, channel->dirEntry.fileName) ||
-            !(channel->dirEntry.fileName)) {
+            !(channel->dirEntry.fileName)) 
+
+
+{
           fileSize_t fileSize = entry->fileSize;
 
           { /* convert fileSize to number of 254 byte blocks (like 1541) */
@@ -343,7 +347,7 @@ inline extern bool_t readDir (struct channelTableStruct *channel) {
               case SEQ:
                 memcpy_P (buffer, PSTR ("SEQ"), 3);
                 break;
-			  case USR:
+	   case USR:
                 memcpy_P (buffer, PSTR ("USR"), 3);
                 break;
               case PRG:
@@ -629,7 +633,7 @@ inline extern void parseName (struct channelTableStruct *channel) {
     char *ptr = NULL;
 
     do {
-      if ((ptr = strchr (bufferPtr, ','))) {
+      if ((ptr = strchr (bufferPtr, ',')) || (ptr = strchr (bufferPtr, '='))) {
         *ptr = '\0'; /*set at the position of th . a 0 to make sure filename is properly ended */
         bufferPtr = ptr + 1; /*bufferpinter is behint the ,*/
         switch (*bufferPtr) {
@@ -667,13 +671,18 @@ inline extern void parseName (struct channelTableStruct *channel) {
     if (read) {
       channel->fileState = READ_FILE;
       /* load "$" or load "$0" ==> filename = "*" */
-      if (((*filename == 0) && (*(filename - 1) != ':')) ||
-          ((*filename == '0') && (*(filename + 1) == 0))) {
+           if (
+          ((*filename == 0) && (*(filename - 1) != ':')) ||
+          ((*filename == '0') && (*(filename + 1) == 0))) 
+
+         {
         *filename = '*';
         *(filename + 1) = 0;
-      }
+         }
+
       /* copy filename (to be used by pattern matching) */
       memcpy (channel->dirEntry.fileName, filename, FILE_NAME_SIZE);
+      memcpy (channel->dirEntry.fileType, filetype, 1);
     } else {
       error = CREATE_ERROR;
     }
@@ -681,7 +690,7 @@ inline extern void parseName (struct channelTableStruct *channel) {
   closeFile (channelNumber);
     /* normal file */
     if (read) {
-		//hierhin kommt er
+		//hierhin kommt er der filename
       /* open file */
 	  
 	  	
