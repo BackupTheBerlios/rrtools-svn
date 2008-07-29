@@ -1,9 +1,14 @@
 
 		.setpet
 
+Timeout_Sec		= $30
+Timeout_Min		= $00
+
 FileZp_SecAdr 		= $b9
 FileZp_Device 		= $ba
 FileZp_Status 		= $90
+
+Basic_PrintString	= $ab1e
 
 File_SetName		= $ffbd
 File_Open		= $f3d5
@@ -19,9 +24,6 @@ File_UnTalk		= $ffab
 
 File_ReadByte 		= $ffa5
 File_WriteByte		= $ffa8
-
-Timeout_Sec		= $05
-Timeout_Min		= $00
 
 test_cnt		= $57
 stackp_tmp		= $58
@@ -47,7 +49,7 @@ test_errcode_map	= test_result_map + $100
 #macro print (string) {
 		lda #<{string}
 		ldy #>{string}
-		jsr $ab1e
+		jsr Basic_PrintString
 }
 
 		* = $0801
@@ -113,7 +115,7 @@ next_test:
 		asl
 		asl
 		asl
-		jsr $ab1e
+		jsr Basic_PrintString
 		.print (string_running_post)
 
 		tsx
@@ -123,7 +125,8 @@ next_test:
 		lda test_result
 		bmi test_failed
 		bne test_ok_data
-		.print (string_ok)
+		;.print (string_ok)
+		 jsr dummy
 		jmp end_test
 test_ok_data:
 		jsr hex2str_caps
@@ -136,6 +139,11 @@ test_ok_data:
 		.print (string_ok_data)
 		jmp end_test
 test_failed:
+		cmp #$80
+		bne normal_fail
+		.print (string_diskerr)
+		jmp end_test
+normal_fail		
 		jsr hex2str_caps
 		stx string_failed_result
 		sta string_failed_result+1
@@ -147,7 +155,8 @@ test_failed:
 end_test:
 no_test:
 		inc test_cnt
-		bne next_test
+		beq *+5
+		jmp next_test
 exit:
 		jsr clear_watchdog
 		.print (string_waitkey)
@@ -171,6 +180,8 @@ do_test:
 		ldx #cmd_start_test - cmds
 		ldy #cmd_start_test_len
 		jsr Send_Command
+		jsr Get_Status
+		bcs utility_failed
 
 		ldx #cmd_get_result - cmds
 		ldy #cmd_get_result_len
@@ -180,20 +191,31 @@ do_test:
 		jsr File_Talk
 		lda #$6F
 		jsr File_SecTalk
-
-		ldx test_cnt
 		jsr File_ReadByte
 		sta test_result
-		sta test_result_map,x
 		jsr File_ReadByte
 		sta test_errcode
+utility_failed:
+		ldx test_cnt
+		lda test_result
+		sta test_result_map,x
+		lda test_errcode
 		sta test_errcode_map,x
-
 		lda #0
 		sta $dd0b
 
 		jmp File_UnTalk
 
+dummy:
+		 jsr hex2str_caps
+		 stx string_ok_result
+		 sta string_ok_result+1
+		 lda $dd09
+		 jsr hex2str_caps
+		 stx string_ok_result+3
+		 sta string_ok_result+4
+		 .print (string_ok_data)
+		 rts
 
 setup_watchdog:
 		lda $dd0f
@@ -234,14 +256,22 @@ clear_watchdog:
 		rts
 
 nmi_handler:
+.(
 		.print (string_timeout)
 		ldx test_cnt
 		lda #$80
 		sta test_result_map,x
 		sta test_errcode_map,x
+		inx
+		lda #0
+_1:
+		sta test_avail,x
+		inx
+		bne _1
 		ldx stackp_tmp
 		txs
 		jmp exit
+.)
 
 
 Send_Command:
@@ -260,6 +290,35 @@ _1:
 		bne _1
 
 		jmp File_UnListen
+.)
+
+
+Get_Status:
+.(
+		lda FileZp_Device
+		jsr File_Talk
+		lda #$6F
+		jsr File_SecTalk
+		jsr File_ReadByte
+		sta string_diskerr_result
+		jsr File_ReadByte
+		sta string_diskerr_result+1
+		jsr File_UnTalk
+		
+		lda #'0'
+		cmp string_diskerr_result
+		bne disk_error 
+		cmp string_diskerr_result+1
+		bne disk_error
+		clc
+		rts
+disk_error:
+		ldx #$80
+		stx test_result
+		inx
+		stx test_errcode
+		sec
+		rts
 .)
 
 get_direntry:
@@ -390,7 +449,7 @@ sm_no_cr:
 		bne sm_print
 sm_test_avail:
 		lda test_result_map,x
-				bmi sm_test_false
+		bmi sm_test_false
 		lda #$99
 		ldy #186
 		bne sm_print
@@ -398,7 +457,11 @@ sm_test_false:
 		cmp #$81
 		lda #$96
                 bcs sm_test_err
-                ldy #'T'
+                ldy test_errcode_map,x
+                pha
+                lda map_err_table-$80,y
+                tay
+                pla
                 .byte $2c
 sm_test_err:
 		ldy #'x'
@@ -430,7 +493,7 @@ cmd_get_result:
 cmd_get_result_len = * - cmd_get_result
 
 
-string_header:		.text $93,$05,$0e,"1541 Test Framework V0.2", $0d
+string_header:		.text $93,$05,$0e,"1541 Test Framework V0.3", $0d
 			.text "by Ninja / The Dreams in 2008",$0d,$0d,0
 string_ok:		.text $99,"OK",$05,$0d,0
 string_ok_data:		.text $99,"OK ("
@@ -438,6 +501,9 @@ string_ok_result:	.text "00/00"
 			.text ")",$05,$0d,0
 string_failed:		.text $96,"FAILED! ("
 string_failed_result:	.text "00/00"
+			.text ")",$05,$0d,0
+string_diskerr:		.text $96,"DISK ERR! ("
+string_diskerr_result:	.text "00"
 			.text ")",$05,$0d,0
 string_timeout:		.text $96,"TIMEOUT!!",$05,$0d,0
 string_scanning:	.text "Scanning for tests: ",0
@@ -455,3 +521,6 @@ map_info_tables:
 			.text "Result-Map is at $7100.",$0d
 			.text "Errcode-Map is at $7200.",$0d
 			.text 0
+map_err_table:
+			.text "T","D"
+			
