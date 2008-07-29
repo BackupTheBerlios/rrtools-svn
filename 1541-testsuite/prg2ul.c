@@ -3,7 +3,7 @@
 
 #define BUFFER_SIZE 32768
 #define FPUT_WITH_CHK(_val) \
-        do { fputc(_val, outfile); chk += _val; } while(0);
+        do { fputc(_val, outfile); chk += _val; chk -= (chk > 255) * 255; } while(0);
 
 int main(int argc, char **argv)
 {
@@ -16,7 +16,7 @@ int main(int argc, char **argv)
         size_t size, len, pc;
 
         if (argc == 1) {
-		printf("prg2ul v0.2 by Wolfram Sang (Ninja/The Dreams) in 2008\n");
+		printf("prg2ul v0.3 by Wolfram Sang (Ninja/The Dreams) in 2008\n");
 		printf("Convert standard C64 prg-files to utility loader-files (&USR).\n");
 		printf("Part of the 1541-Testsuite.\n");
 		printf("Usage: 'prg2ul <infile> <outfile>'\n");
@@ -57,8 +57,7 @@ int main(int argc, char **argv)
               for (i = 0; i < len; i++)
                   FPUT_WITH_CHK(b[i]);
 
-              chk += chk >> 8;
-              fputc(chk & 255, outfile);
+              fputc(chk, outfile);
 
               size -= len;
               pc += len;
