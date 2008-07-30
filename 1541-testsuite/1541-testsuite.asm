@@ -1,7 +1,7 @@
 
 		.setpet
 
-Timeout_Sec		= $30
+Timeout_Sec		= $45
 Timeout_Min		= $00
 
 FileZp_SecAdr 		= $b9
@@ -450,21 +450,19 @@ sm_no_cr:
 sm_test_avail:
 		lda test_result_map,x
 		bmi sm_test_false
-		lda #$99
 		ldy #186
+		lda #$99
 		bne sm_print
 sm_test_false:
 		cmp #$81
-		lda #$96
                 bcs sm_test_err
                 ldy test_errcode_map,x
-                pha
                 lda map_err_table-$80,y
                 tay
-                pla
                 .byte $2c
 sm_test_err:
 		ldy #'x'
+		lda #$96
 sm_print:
 		jsr $ffd2
 		tya
