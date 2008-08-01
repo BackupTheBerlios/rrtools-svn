@@ -121,7 +121,6 @@ inline extern void iecTalk ( struct channelTableStruct * channel, bool_t eoi) {
 		
 		/* signal ready to send */
 		CLKOUT_SET;
-
 		/* wait for listener */
 		while (bit_is_clear (PINB, IEC_DATA_IN));
 		

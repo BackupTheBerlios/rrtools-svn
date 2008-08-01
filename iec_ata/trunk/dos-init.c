@@ -60,64 +60,61 @@ static char * fs_version_string;
 
 bool_t dosInit (void) {
   /* get pointer to version string */
-  fs_version_string = PSTR (FS_VERSION_STRING);
+  fs_version_string = FS_VERSION_STRING;//pstr 
 
   /* read superblock */
   ataGetBlock (SUPERBLOCK, (uint8_t *)&superblock);
 
   /* check if HD is formatted with correct file system */
   if (strncmp_P (superblock.versionString, fs_version_string,
-                 sizeof (FS_VERSION_STRING))) {
-    /* invalid disk */
-    return FALSE;
-  }
+        sizeof (FS_VERSION_STRING))) {
+		/* invalid disk */
+		return FALSE;
+	}
 
-  /* read first block of free block list */
-  ataGetBlock (superblock.freeBlockList, (uint8_t *)freeBlocks);
-  freeBlocksIndex = 0;
+ /* read first block of free block list */
+ ataGetBlock (superblock.freeBlockList, (uint8_t *)freeBlocks);
+ freeBlocksIndex = 0;
 
-  /* init the other dos modules */
-  dosDirInit();
-  dosFileInit();
+/* init the other dos modules */
+dosDirInit();
+dosFileInit();
 
-  return TRUE;
+return TRUE;
 }
 
-inline extern bool_t formatDrive (void) {
-  /* Set up and write superblock */
-  memcpy_P (superblock.versionString, fs_version_string,
-            sizeof (FS_VERSION_STRING));
-  superblock.freeBlockList = 2;
-  ataPutBlock (SUPERBLOCK, (uint8_t *)&superblock);
-
-  memset (freeBlocks, '\0', BLOCKSIZE);
-
-  /* create empty root directory */
-  ataPutBlock (ROOTBLOCK, (uint8_t *)freeBlocks);
-
-  { /* create the free block list */
-    bool_t done = FALSE;
-    block_t blockCount = superblock.freeBlockList + 1;
-
-    /* one loop is one block in free block list */
-    while (!done) {
-      uint8_t i = 0;
-      block_t currentBlock = blockCount - 1;
-      
-      memset (freeBlocks, '\0', BLOCKSIZE);
-
-      /* set up the pointers in the current free block list block */
-      while (!done && (i < (BLOCKSIZE / sizeof (block_t)))) {
-        freeBlocks[i] = blockCount++;
-        if (blockCount >= totalDiskSize) {
-          done = TRUE;
-        }
-        i++;
-      }
-      ataPutBlock (currentBlock, (uint8_t *)freeBlocks);
-    }
-  }
-
+inline extern bool_t formatDrive (char*Header,char*Id) {
+ /* Set up and write superblock */
+memcpy_P (superblock.versionString, fs_version_string, 
+sizeof (FS_VERSION_STRING));
+superblock.freeBlockList = 2;
+ataPutBlock (SUPERBLOCK, (uint8_t *)&superblock);
+memset (freeBlocks, '\0', BLOCKSIZE);
+ /* create empty root directory */
+ ataPutBlock (ROOTBLOCK, (uint8_t *)freeBlocks);
+	if (Id!='\0'){
+			{ /* create the free block list */
+				bool_t done = FALSE;
+				block_t blockCount = superblock.freeBlockList + 1;
+				
+				/* one loop is one block in free block list */
+				while (!done) {
+					uint8_t i = 0;
+					block_t currentBlock = blockCount - 1;
+					
+					memset (freeBlocks, '\0', BLOCKSIZE);
+					/* set up the pointers in the current free block list block */
+					while (!done && (i < (BLOCKSIZE / sizeof (block_t)))) {
+						freeBlocks[i] = blockCount++;
+						if (blockCount >= totalDiskSize) {
+						done = TRUE;
+						}
+					i++;
+					}
+				ataPutBlock (currentBlock, (uint8_t *)freeBlocks);
+			}
+		}
+	}
   /* Init FS to newly formatted disk */
   return dosInit();
 }

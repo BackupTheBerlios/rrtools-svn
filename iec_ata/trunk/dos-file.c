@@ -158,7 +158,7 @@ inline extern bool_t readFile (uint8_t channel, bool_t *eof) {
     /* don't read anything if file has no more bytes */
     *eof = TRUE;
   } else {
-
+	ATTENTION_OFF();
     /* if at end of inode, get next inode */
     if (channelStruct->inodePtr == (BLOCKSIZE / sizeof (block_t)) - 1) {
       ataGetBlock (channelStruct->inode[channelStruct->inodePtr],
@@ -169,7 +169,7 @@ inline extern bool_t readFile (uint8_t channel, bool_t *eof) {
     /* get data block */
     ataGetBlock (channelStruct->inode[channelStruct->inodePtr++],
                  channelStruct->buffer);
-
+ATTENTION_ON();
     channelStruct->dirEntry.fileSize--;
 
     if (!channelStruct->dirEntry.fileSize) {
@@ -182,7 +182,7 @@ inline extern bool_t readFile (uint8_t channel, bool_t *eof) {
 
 bool_t writeFile (uint8_t channel) {
   struct channelTableStruct *channelStruct = &channelTable[channel];
-
+ATTENTION_OFF();
   /* if at end of inode, make new inode */
   if (channelStruct->inodePtr ==
       (BLOCKSIZE / sizeof (block_t)) - 1) {
@@ -202,54 +202,54 @@ bool_t writeFile (uint8_t channel) {
   ataPutBlock (channelStruct->inode[channelStruct->inodePtr++],
                channelStruct->buffer);
   channelStruct->dirEntry.fileSize++;
-
+ATTENTION_ON();
   return TRUE;
 }
  
-void deleteFile (char *pattern) {
+int deleteFile (char *pattern) {
   struct dirEntryStruct *entry;
   entryIndex_t entryIndex = 0;
-
+ int count =0;
   while ((entry = getEntry (entryIndex++))) {
-    /* only process non-deleted files */
-    if (entry->startBlock) {
-      /* only delete files that match pattern */
-      if (filenameMatch (entry->fileName, pattern)) {
-        /* only delete non-locked files */
-        if ((entry->fileType != DIR) && !(entry->readOnly)) {
-          block_t tmpBufferBlock;
-          bufferSize_t tmpBufferPtr;
-          /* get inode of file to delete */
-		  
-          tmpBufferBlock = entry->startBlock;
-//		  ataGetBlock (tmpBufferBlock, tmpBuffer);
-		  tmpBufferPtr = 0;
-          /* free all blocks belonging to file */
-          while (entry->fileSize) {
-           //  if at the end of inode, get next inode 
-           if (tmpBufferPtr == (BLOCKSIZE / sizeof (block_t)) - 1) {
-              freeBlock (tmpBufferBlock);
-              tmpBufferBlock = ((block_t *)tmpBuffer)[tmpBufferPtr];
-//              ataGetBlock (tmpBufferBlock, tmpBuffer);//get next block
-              tmpBufferPtr = 0;
-            }
-            // free block 
-            freeBlock (((block_t *)tmpBuffer)[tmpBufferPtr++]);
-            entry->fileSize--;
-          }
-          /* free last inode block */
-          freeBlock (tmpBufferBlock);
-
-          /* remove entry from directory */
-          deleteEntry (entry);
-
-          flushDirBuffer();
-          flushFreeBlockList();
-
-          /* begin counting at 0 because direntries may have been moved */
-          entryIndex = 0;
-        }
-      }
-    }
-  }
+		/* only process non-deleted files */
+		if (entry->startBlock) {
+		/* only delete files that match pattern */
+			if (filenameMatch (entry->fileName, pattern)) {
+				/* only delete non-locked files */
+				if ((entry->fileType != DIR) && !(entry->readOnly)) {
+					block_t tmpBufferBlock;
+					bufferSize_t tmpBufferPtr;
+					/* get inode of file to delete */
+					ATTENTION_OFF();
+					tmpBufferBlock = entry->startBlock;
+					//ataGetBlock (tmpBufferBlock, tmpBuffer);
+					tmpBufferPtr = 0;
+					/* free all blocks belonging to file */
+					while (entry->fileSize) {
+						//  if at the end of inode, get next inode 
+						if (tmpBufferPtr == (BLOCKSIZE / sizeof (block_t)) - 1) {
+							freeBlock (tmpBufferBlock);
+							tmpBufferBlock = ((block_t *)tmpBuffer)[tmpBufferPtr];
+							//ataGetBlock (tmpBufferBlock, tmpBuffer);//get next block
+							tmpBufferPtr = 0;
+						}
+						// free block 
+						freeBlock (((block_t *)tmpBuffer)[tmpBufferPtr++]);
+						entry->fileSize--;
+					}
+					/* free last inode block */
+					freeBlock (tmpBufferBlock);
+					/* remove entry from directory */
+					deleteEntry (entry);
+					flushDirBuffer();
+					flushFreeBlockList();
+					count ++;
+					/* begin counting at 0 because direntries may have been moved */
+					entryIndex = 0;
+				}ATTENTION_ON();
+			}
+		}
+		
+	}
+	return count; 
 }
