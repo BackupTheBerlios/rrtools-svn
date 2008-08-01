@@ -1,4 +1,4 @@
-/*
+	/*
      IEC-ATA, a hard drive controller for the CBM IEC bus 
      Copyright (C) 2002  Asbjørn Djupdal
      
@@ -95,7 +95,7 @@ enum commands {
 #define FILE_NAME_SIZE        		16
 #define MAX_OPEN_FILES        	16
 
-#define COMMAND_CHANNEL     0x0f
+#define 	   COMMAND_CHANNEL  0x0f
 
 #define ATTENTION_OFF() \
 	attention_delay = 1;
@@ -174,6 +174,7 @@ struct channelTableStruct {
 extern volatile uint8_t command;
 extern volatile uint8_t error;
 extern volatile uint8_t channelNumber;
+bufferSize_t getBuffer (uint8_t *commandBuffer) ;
 
 /* iec.c */
 bool_t iecListen (uint8_t *data, bufferSize_t maxBytes,
@@ -213,7 +214,7 @@ bool_t nameValid (char *name);
 bool_t filenameMatch (char *name, char *pattern);
 
 /* dos-file.c */
-extern struct channelTableStruct channelTable[MAX_OPEN_FILES];
+extern struct channelTableStruct    channelTable[MAX_OPEN_FILES];
 void dosFileInit (void);
 bool_t openRead (char *pattern, uint8_t fileType, uint8_t channel);
 bool_t openWrite (char *name, uint8_t fileType, uint8_t channel);
@@ -221,5 +222,6 @@ void closeFile (uint8_t channel);
 bool_t readFile (uint8_t channel, bool_t *eof);
 bool_t writeFile (uint8_t channel);
 int deleteFile (char *pattern);
+
 
 #endif
