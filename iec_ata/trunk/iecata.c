@@ -51,7 +51,7 @@
 #include "dos-dir.c"
 #include "dos-init.c"
 #include "readdir.c"
-
+#include "mem.c"
 
 /* error numbers, given in bcd */
 
@@ -64,7 +64,6 @@ bool_t readStatus (struct channelTableStruct *channel);
 bool_t readDir (struct channelTableStruct *channel);
 static void parseCommand (void);
 void parseName (struct channelTableStruct *channel);
-
 
 int main (void);
 
@@ -255,64 +254,54 @@ void parseCommand (void) {
   uint8_t *cmdArg1;
   uint8_t *cmdArg2;
 
-	{ /* get message */
-		bufferSize_t bytesReceived;
-		
-		iecListen (command, 255, &bytesReceived);
-		if (bytesReceived>=254){
-			error = 0x32;
-		}
-		
-		
-		//ATTENTION_OFF();
-		
-		/* make message a proper string */
-		command[bytesReceived] = '\0';
-	}
-  /* get arg1 */
-  if ((cmdArg1 = strchr (command, ':'))) {
-  *cmdArg1 = '\0';
-  cmdArg1++;
-}
-  else cmdArg1='\0';//command;
+  { /* get message */
+    bufferSize_t bytesReceived;
+
+    iecListen (command, 255, &bytesReceived);
+	ATTENTION_OFF();
+	
+	/* make message a proper string */
+	command[bytesReceived] = '\0';}
+	
+	/* get arg1 */
+	if ((cmdArg1 = strchr (command, ':'))) {
+		*cmdArg1 = '\0';
+		cmdArg1++;
+	}else cmdArg1=0;//command;
   
-  /* get arg2 */
-  if ((cmdArg2 = strchr (cmdArg1, '='))) {
-    *cmdArg2 = '\0';
-	cmdArg2++;
-  } else
- { cmdArg2 = cmdArg1;}
+	/* get arg2 */
+	if ((cmdArg2 = strchr (cmdArg1, '='))) {
+		*cmdArg2 = '\0';
+		cmdArg2++;
+	} else cmdArg2 = cmdArg1;
 
-
-  { /* erase possible CR at end of arg2 */
+	/* erase possible CR at end of arg2 */
     uint8_t *cr;
 
     if ((cr = strchr (cmdArg2, 0x0d))) {
       *cr = '\0';
     }
-  }
-
-  { /* interpret and execute command */
+  
+	/* interpret and execute command */
     char c1 = *command;
 	
     char c2 = *(command + 1);
   
     if ((c1 == 'C') && (c2 == 'D')) {
-
-	  if (*(command + 2)=='_')
-	     {*cmdArg1 = '.';*(cmdArg1+1) = '\0';}
-		 
-	  if (*(command + 2)=='/')
-	     {*cmdArg1 = '/';*(cmdArg2+1) = '\0';}
-		 
-
+		if (*(command + 2)=='_'){
+			*cmdArg1 = '.';*(cmdArg1+1) = '\0';
+		}
+	  if (*(command + 2)=='/'){
+			*cmdArg1 = '/';*(cmdArg2+1) = '\0';
+		}
       /* change directory */
-	  if (*cmdArg1  == '\0' ){error = 0x34;}
+	  if (*cmdArg1  == '\0' ){
+			error = 0x34;}
 		else{
-         if (!setCurrentDir (cmdArg1)) {
-         error = 0x62;
-      } 
-	  }
+			if (!setCurrentDir (cmdArg1)) {
+				error = 0x62;
+			} 
+		}
     } else if ((c1 == 'M') && (c2 == 'D')) {
 		/* create directory */
 		if (!createDir (cmdArg1)) {
@@ -371,8 +360,8 @@ void parseCommand (void) {
 			if (dosInit()) {error = 0x73;} 
 		}
 	}else  if ((c1 == 'M')){ 
-	
-	
+		
+		
 	}else  if (c1 == 'B'){ 
 		
 		
@@ -381,15 +370,12 @@ void parseCommand (void) {
 		/* not a valid command */
 		error = 0x30;
     }
-  }
 }
 
 
 
 
-
-
-inline extern void parseName (struct channelTableStruct *channel) {
+ void parseName (struct channelTableStruct *channel) {
 	static uint8_t commandBuffer[255];
 	uint8_t *bufferPtr = commandBuffer;
 
@@ -405,8 +391,10 @@ inline extern void parseName (struct channelTableStruct *channel) {
 		
 		/*delay Attention handling until next begin of main loop*/
 		ATTENTION_OFF();
-		/* make buffer a proper string */
-		commandBuffer[bytesReceived] = '\0';
+
+	
+	/* make buffer a proper string */
+	commandBuffer[bytesReceived] = '\0';
 	}
 
 	channel->readDirState = NOT_READ_DIR;
@@ -584,18 +572,17 @@ int main (void) {
 				channel->endOfBuffer = 0;
 				if (channelNumber == COMMAND_CHANNEL) {
 					/* get command and execute it */
-					
 					parseCommand();
-					
 				} else {
 					/* normal data channel, get file name and open file */
-					
 					parseName (channel);
-					
 				}
 				break;
+				
+				
+				
 			}
-			case LISTEN_CLOSE:
+			case LISTEN_CLOSE:{
 				ATTENTION_OFF();
 				if (channelNumber == COMMAND_CHANNEL) {
 					/* close all files */
@@ -610,6 +597,7 @@ int main (void) {
 				}
 				
 				break;
+			}	
 			case LISTEN_DATA: {
 				if (channelNumber == COMMAND_CHANNEL) {
 					/* status channel must be reset before each command */
