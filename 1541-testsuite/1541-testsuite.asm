@@ -207,14 +207,15 @@ utility_failed:
 		jmp File_UnTalk
 
 dummy:
+		 lda $dd0a
 		 jsr hex2str_caps
-		 stx string_ok_result
-		 sta string_ok_result+1
+		 stx string_ok_timevals
+		 sta string_ok_timevals+1
 		 lda $dd09
 		 jsr hex2str_caps
-		 stx string_ok_result+3
-		 sta string_ok_result+4
-		 .print (string_ok_data)
+		 stx string_ok_timevals+3
+		 sta string_ok_timevals+4
+		 .print (string_ok_time)
 		 rts
 
 setup_watchdog:
@@ -497,12 +498,15 @@ string_ok:		.text $99,"OK",$05,$0d,0
 string_ok_data:		.text $99,"OK ("
 string_ok_result:	.text "00/00"
 			.text ")",$05,$0d,0
+string_ok_time:		.text $99,"OK ("
+string_ok_timevals:	.text "00:00"
+			.text ")",$05,$0d,0
 string_failed:		.text $96,"FAILED! ("
 string_failed_result:	.text "00/00"
 			.text ")",$05,$0d,0
-string_diskerr:		.text $96,"DISK ERR! ("
+string_diskerr:		.text $96,"DISK ERROR #"
 string_diskerr_result:	.text "00"
-			.text ")",$05,$0d,0
+			.text "!",$05,$0d,0
 string_timeout:		.text $96,"TIMEOUT!!",$05,$0d,0
 string_scanning:	.text "Scanning for tests: ",0
 string_running_pre:	.text "Test '",0

@@ -43,7 +43,7 @@ for listfile in $*; do
         		;;
         	*)
         		if [ $name ]; then
-        			usrname=`printf '&%02x%.13s,u' $i $name`
+        			usrname=`printf '&%02x>%.12s,u' $i $name`
         			./prg2ul tests/$name.prg $name.usr
         			c1541 $imagename -write $name.usr $usrname
         			rm -f $name.usr

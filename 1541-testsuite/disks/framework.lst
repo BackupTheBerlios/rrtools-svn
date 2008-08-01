@@ -9,3 +9,5 @@ false-fe.03
 &+ 1
 wait-4sec
 wait-6sec
+# Next test must not appear in result map!
+true
