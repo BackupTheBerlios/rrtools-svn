@@ -31,7 +31,7 @@
 */
 
 /*
-  dos-dir.c V1.35.3
+  dos-dir.c V1.32
   Contains the directory handling code for the file system
 */
 
