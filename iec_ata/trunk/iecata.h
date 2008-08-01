@@ -95,7 +95,7 @@ enum commands {
 #define FILE_NAME_SIZE        		16
 #define MAX_OPEN_FILES        	16
 
-#define 	   COMMAND_CHANNEL  0x0f
+#define 	     0x0f
 
 #define ATTENTION_OFF() \
 	attention_delay = 1;
