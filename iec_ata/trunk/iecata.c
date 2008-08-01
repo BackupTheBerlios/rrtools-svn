@@ -257,7 +257,7 @@ void parseCommand (void) {
 	struct channelTableStruct *channel;
 	channel=channelTable;
 	channel+=COMMAND_CHANNEL;
-	/* get message */
+
 	bufferSize_t bytesReceived ;
 
     bytesReceived = channel->endOfBuffer ;
@@ -395,16 +395,15 @@ bufferSize_t getBuffer (uint8_t *commandBuffer) {
 
 
 inline extern void parseName (struct channelTableStruct *channel) {
-	uint8_t commandBuffer;
+	uint8_t *commandBuffer;
 	uint8_t *bufferPtr ;
-	bufferSize_t bytesReceived;
+	
 	
 	channel=channelTable;
 	
 	
-	bufferSize_t bytesReceived ;
-
-    bytesReceived = channel->endOfBuffer ;
+	
+    
 	commandBuffer = channel->buffer;
 
 
@@ -415,7 +414,7 @@ inline extern void parseName (struct channelTableStruct *channel) {
 
 		
 	/* make buffer a proper string */
-	commandBuffer[bytesReceived] = '\0';
+	commandBuffer[channel->endOfBuffer] = '\0';
 	
 
 	channel->readDirState = NOT_READ_DIR;
@@ -628,8 +627,8 @@ int main (void) {
 			case LISTEN_DATA: {
 				if (channelNumber == COMMAND_CHANNEL) {
 					/* status channel must be reset before each command */
-					channel->bufferPtr = 0;
-					channel->endOfBuffer = 0;
+					//channel->bufferPtr = 0;
+					//channel->endOfBuffer = 0;
 					
 					parseCommand();
 					
