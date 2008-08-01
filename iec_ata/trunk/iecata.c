@@ -250,18 +250,23 @@ sector = 0;
  
 
 void parseCommand (void) {
-  static uint8_t command[255];
-  uint8_t *cmdArg1;
-  uint8_t *cmdArg2;
+	uint8_t *command;
+	uint8_t *cmdArg1;
+	uint8_t *cmdArg2;
 
-  { /* get message */
-    bufferSize_t bytesReceived;
+	struct channelTableStruct *channel;
+	channel=channelTable;
+	channel+=COMMAND_CHANNEL;
+	/* get message */
+	bufferSize_t bytesReceived ;
 
-    iecListen (command, 255, &bytesReceived);
+    bytesReceived = channel->endOfBuffer ;
+	command = channel->buffer;
+
 	ATTENTION_OFF();
 	
 	/* make message a proper string */
-	command[bytesReceived] = '\0';}
+	command[bytesReceived] = '\0';
 	
 	/* get arg1 */
 	if ((cmdArg1 = strchr (command, ':'))) {
@@ -372,30 +377,46 @@ void parseCommand (void) {
     }
 }
 
+bufferSize_t getBuffer (uint8_t *commandBuffer) {
+	uint8_t eoi;
+	bufferSize_t bytesReceived;
+
+	eoi=	iecListen (commandBuffer, 255, &bytesReceived);
+
+
+	if	 (bytesReceived>=254){
+		error = 0x32;
+	}
+	
+	
+	return bytesReceived;
+}
 
 
 
- void parseName (struct channelTableStruct *channel) {
-	static uint8_t commandBuffer[255];
-	uint8_t *bufferPtr = commandBuffer;
+inline extern void parseName (struct channelTableStruct *channel) {
+	uint8_t commandBuffer;
+	uint8_t *bufferPtr ;
+	bufferSize_t bytesReceived;
+	
+	channel=channelTable;
+	
+	
+	bufferSize_t bytesReceived ;
 
-	bool_t overwrite = FALSE;
+    bytesReceived = channel->endOfBuffer ;
+	commandBuffer = channel->buffer;
+
+
+	bool_t overwrite 	= FALSE;
 	char *filename;
 	uint8_t filetype;
 	bool_t read;
 
-	{ /* get string */
-		bufferSize_t bytesReceived;
-
-		iecListen (commandBuffer, 255, &bytesReceived);
 		
-		/*delay Attention handling until next begin of main loop*/
-		ATTENTION_OFF();
-
-	
 	/* make buffer a proper string */
 	commandBuffer[bytesReceived] = '\0';
-	}
+	
 
 	channel->readDirState = NOT_READ_DIR;
 
@@ -567,22 +588,29 @@ int main (void) {
 		/* execute command */
 		switch (command) {
 			case LISTEN_OPEN: {
-			/* reset variables */
+				/* reset variables */
 				channel->bufferPtr = 0;
-				channel->endOfBuffer = 0;
-				if (channelNumber == COMMAND_CHANNEL) {
+				
+				
+				channel->endOfBuffer=getBuffer (channel->buffer) ;//braucht keinen & operator da array
+				
+				//if (channelNumber == COMMAND_CHANNEL) {
 					/* get command and execute it */
-					parseCommand();
-				} else {
+					
+					//parseCommand();
+					
+				//} else {
 					/* normal data channel, get file name and open file */
-					parseName (channel);
-				}
-				break;
+					
+					//parseName (channel);
+					
+				//}
+			break;
 				
 				
 				
 			}
-			case LISTEN_CLOSE:{
+			case LISTEN_CLOSE:
 				ATTENTION_OFF();
 				if (channelNumber == COMMAND_CHANNEL) {
 					/* close all files */
@@ -597,7 +625,6 @@ int main (void) {
 				}
 				
 				break;
-			}	
 			case LISTEN_DATA: {
 				if (channelNumber == COMMAND_CHANNEL) {
 					/* status channel must be reset before each command */
