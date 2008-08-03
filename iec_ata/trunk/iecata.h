@@ -83,7 +83,7 @@ typedef uint16_t bufferSize_t;
 #define TRUE   (~FALSE)
 
 enum commands {
-  IDLE, LISTEN_OPEN, LISTEN_CLOSE, LISTEN_DATA, TALK_DATA
+  IDLE, LISTEN_OPEN, LISTEN_CLOSE, LISTEN_DATA, TALK_DATA,UNLISTEN,UNTALK
 };
 #define VERSION "V1.35.3"
 
@@ -95,7 +95,7 @@ enum commands {
 #define FILE_NAME_SIZE        		16
 #define MAX_OPEN_FILES        	16
 
-#define 	     0x0f
+#define 	 COMMAND_CHANNEL    0x0f
 
 #define ATTENTION_OFF() \
 	attention_delay = 1;
@@ -174,8 +174,9 @@ struct channelTableStruct {
 extern volatile uint8_t command;
 extern volatile uint8_t error;
 extern volatile uint8_t channelNumber;
-bufferSize_t getBuffer (uint8_t *commandBuffer) ;
 
+extern   uint8_t commandBuffer[BLOCKSIZE];
+extern  bufferSize_t bytesReceived;
 /* iec.c */
 bool_t iecListen (uint8_t *data, bufferSize_t maxBytes,
                   bufferSize_t *bytesReceived);
