@@ -1,4 +1,4 @@
-IEC-ATA v2 software 1.35
+IEC-ATA v2 software 1.35.3
 ==========
 
 This short document briefly describes the IEC-ATA v2 hard drive
@@ -93,9 +93,9 @@ The following disk commands are supported (through disk channel 15):
   make a reset the dev Nr stay
 - with jiffidos @t is working
 
-- new kommands with no funktion jet: m-w, m-r, m-e
+- new kommands with no funktion jet: M-W, M-R, M-E
 
-- new kommands wiht no funktion in long and short version: b-r, b-w, b-e, b-a, b-f
+- new kommands wiht no funktion in long and short version: B-R, B-W, B-E, B-A, B-F
 
 The syntax of these commands are the same as on Commodore DOS. Where
 appropriate, you may use wildcards (* and ?) just like on Commodore
@@ -106,13 +106,17 @@ If you read the error channel (channel 15), you get one of these
 messages: 
 
 - 00: No error
-- 74: Initialize error, the hard drive does not have a valid file
+- 74: DRIVE NOT READY , the hard drive does not have a valid file
       system
 - 25: Create error, the file or directory you try to create can not be
       created
-- 61: Not open error, you are trying to access a file that is not open
-- 62: Not found error, the file or directory is not found
-- 30: Syntax error
+- 61: FILE NOT OPEN error, you are trying to access a file that is not open
+- 62: FILE NOT FOUND error, the file or directory is not found
+
+
+- 30: SYNTAX ERROR
+- 31: SYNTAX ERROR
+- 32: SYNTAX ERROR
 - 73: Version message, this is shown after startup and gives the
       version of the IEC-ATA software. 
 
@@ -135,9 +139,13 @@ Changing the directory:
 
   OPEN1,14,15,"CD:mydir":CLOSE1
 
+Formatting the disk:fast without check the size
+
+  OPEN1,14,15,"N:name":CLOSE1
+  
 Formatting the disk:
 
-  OPEN1,14,15,"N":CLOSE1
+  OPEN1,14,15,"N:name,id":CLOSE1
 
 Change the devicenumber temporary to 9
 
@@ -166,6 +174,8 @@ Read one data to A$
 Close a file
 
   CLOSE1
+
+
 
 Hardware
 --------
