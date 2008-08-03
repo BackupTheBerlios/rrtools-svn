@@ -74,7 +74,8 @@ volatile uint8_t command;
 volatile uint8_t error;
 volatile uint8_t channelNumber;
 jmp_buf attention_jmp;
-
+uint8_t commandBuffer[BLOCKSIZE];
+ bufferSize_t bytesReceived;
 /* functions *************************************************************/
 
 
@@ -237,7 +238,8 @@ inline extern bool_t readStatus (struct channelTableStruct *channel) {
   *(buffer++) = '\x0d';    
 track = 0;
 sector = 0;  
-  
+      //memcpy_P (buffer, commandBuffer, bytesReceived);
+
 
 
   /* record buffer length */
@@ -248,31 +250,25 @@ sector = 0;
 
 
  
-
+//+++++++++++++++++++++++++++++++++++++++  
 void parseCommand (void) {
-	uint8_t *command;
+	uint8_t *comman;
 	uint8_t *cmdArg1;
 	uint8_t *cmdArg2;
-
-	struct channelTableStruct *channel;
-	channel=channelTable;
-	channel+=COMMAND_CHANNEL;
-
-	bufferSize_t bytesReceived ;
-
-    bytesReceived = channel->endOfBuffer ;
-	command = channel->buffer;
+	
+   
+	comman = commandBuffer;
 
 	ATTENTION_OFF();
 	
 	/* make message a proper string */
-	command[bytesReceived] = '\0';
-	
+	comman[bytesReceived] = '\0';
+
 	/* get arg1 */
-	if ((cmdArg1 = strchr (command, ':'))) {
+	if ((cmdArg1 = strchr (comman, ':'))) {
 		*cmdArg1 = '\0';
 		cmdArg1++;
-	}else cmdArg1=0;//command;
+	}else cmdArg1=0;//comman;
   
 	/* get arg2 */
 	if ((cmdArg2 = strchr (cmdArg1, '='))) {
@@ -288,15 +284,15 @@ void parseCommand (void) {
     }
   
 	/* interpret and execute command */
-    char c1 = *command;
+    char c1 = *comman;
 	
-    char c2 = *(command + 1);
+    char c2 = *(comman + 1);
   
     if ((c1 == 'C') && (c2 == 'D')) {
-		if (*(command + 2)=='_'){
+		if (*(comman + 2)=='_'){
 			*cmdArg1 = '.';*(cmdArg1+1) = '\0';
 		}
-	  if (*(command + 2)=='/'){
+	  if (*(comman + 2)=='/'){
 			*cmdArg1 = '/';*(cmdArg2+1) = '\0';
 		}
       /* change directory */
@@ -344,9 +340,9 @@ void parseCommand (void) {
 		c1=c1 & 0x0f;
 		if            (c2 == '0') {
         /* devicenumber change */
-			if (*(command + 2) == '>') {
-			    if (*(command+3)!='\0')	
-					{devicenumber = *(command + 3);}
+			if (*(comman + 2) == '>') {
+			    if (*(comman+3)!='\0')	
+					{devicenumber = *(comman + 3);}
 				else {error = 0x34;
 				}
 			}
@@ -377,10 +373,10 @@ void parseCommand (void) {
     }
 }
 
-bufferSize_t getBuffer (uint8_t *commandBuffer) {
+void getBuffer () {
 	uint8_t eoi;
-	bufferSize_t bytesReceived;
-
+	
+//(uint8_t *data, bufferSize_t maxBytes, bufferSize_t *bytesReceived
 	eoi=	iecListen (commandBuffer, 255, &bytesReceived);
 
 
@@ -389,32 +385,30 @@ bufferSize_t getBuffer (uint8_t *commandBuffer) {
 	}
 	
 	
-	return bytesReceived;
+	return;
 }
 
 
 
-inline extern void parseName (struct channelTableStruct *channel) {
-	uint8_t *commandBuffer;
-	uint8_t *bufferPtr ;
-	
-	
-	channel=channelTable;
-	
-	
-	
-    
-	commandBuffer = channel->buffer;
 
+inline extern void parseName (struct channelTableStruct *channel) {
+	
+	uint8_t *bufferPtr;
+	
+	bufferPtr = commandBuffer;
+
+	ATTENTION_OFF();
+	
+	/* make message a proper string */
+	bufferPtr[bytesReceived] = '\0';
+    
+	
 
 	bool_t overwrite 	= FALSE;
 	char *filename;
 	uint8_t filetype;
 	bool_t read;
 
-		
-	/* make buffer a proper string */
-	commandBuffer[channel->endOfBuffer] = '\0';
 	
 
 	channel->readDirState = NOT_READ_DIR;
@@ -586,32 +580,36 @@ int main (void) {
 		channel = &channelTable[channelNumber];
 		/* execute command */
 		switch (command) {
-			case LISTEN_OPEN: {
+			case LISTEN_OPEN: {//A for LOAD SAVE OPEN Filename
 				/* reset variables */
 				channel->bufferPtr = 0;
+				channel->endOfBuffer = 0;
 				
 				
-				channel->endOfBuffer=getBuffer (channel->buffer) ;//braucht keinen & operator da array
+				getBuffer () ;//
 				
-				//if (channelNumber == COMMAND_CHANNEL) {
+				
+			break;	
+			}
+			case UNTALK:
+				
+				
+			break;
+				
+			case UNLISTEN:
+				if (channelNumber == COMMAND_CHANNEL)  {
 					/* get command and execute it */
-					
-					//parseCommand();
-					
-				//} else {
+					parseCommand();
+				} else {
 					/* normal data channel, get file name and open file */
-					
-					//parseName (channel);
-					
-				//}
+					parseName (channel);
+				}
 			break;
 				
 				
-				
-			}
-			case LISTEN_CLOSE:
+			case LISTEN_CLOSE://D LOAD SAVE end CLOSE
 				ATTENTION_OFF();
-				if (channelNumber == COMMAND_CHANNEL) {
+				if (channelNumber == COMMAND_CHANNEL){
 					/* close all files */
 					uint8_t i;
 					for (i = 0; i < 15; i++) {
@@ -622,15 +620,14 @@ int main (void) {
 					/* close requested file */
 					closeFile (channelNumber);
 				}
-				
-				break;
-			case LISTEN_DATA: {
+			break;
+			case LISTEN_DATA: {//C SAVE PRINT
 				if (channelNumber == COMMAND_CHANNEL) {
 					/* status channel must be reset before each command */
-					//channel->bufferPtr = 0;
-					//channel->endOfBuffer = 0;
-					
-					parseCommand();
+					/* reset variables */
+				channel->bufferPtr = 0;
+				channel->endOfBuffer = 0;
+					getBuffer () ;
 					
 				} else {
 					if (channel->fileState == WRITE_FILE) {
@@ -657,7 +654,7 @@ int main (void) {
 				}
 				break;
 			} 
-			case TALK_DATA: {
+			case TALK_DATA: {//B LOAD INPUT GET
 			//	if ((channel->fileState == READ_FILE) || (channelNumber == COMMAND_CHANNEL)) {
 					bool_t done = FALSE;
 					while (!done) {
@@ -669,7 +666,7 @@ int main (void) {
 							eof = FALSE;
 							if (channelNumber == COMMAND_CHANNEL) {
 								
-								eof = readStatus (channel);
+								eof = readStatus (channel);//put error in Buffer
 								
 							} else if (channel->readDirState) {
 								
@@ -689,8 +686,10 @@ int main (void) {
 						ATTENTION_ON();
 						/* send data block */
 						iecTalk (channel, eof);
+						
 						done = eof;
 					}
+					
 				break;
 			}
 		}
