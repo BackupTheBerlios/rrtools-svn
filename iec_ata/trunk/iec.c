@@ -180,7 +180,11 @@ inline extern void iecAttention (void) {
 			if(idx == 0){
 				if ((data[0] & 0x1f) == devicenumber){
 					
-				}else if ((data[0] == UNLISTEN) || (data[0] == UNTALK)){
+				}else if (data[0] == UNLISTEN) {
+					command = UNLISTEN;
+					release = 1;
+				}else if (data[0] == UNTALK){
+					command = UNTALK;
 					release = 1;
 				}else{
 					iecUnAttention();
@@ -192,11 +196,11 @@ inline extern void iecAttention (void) {
 				
 				}else if ((data[0] & 0xe0) == LISTEN) {
 					if ((data[1] & 0xf0) == OPEN) {
-						command = LISTEN_OPEN;
+						command = LISTEN_OPEN;//A condition for LOAD SAVE Filename
 						error = 0;
 					} else if ((data[1] & 0xf0) == CLOSE) {
 						if (!error) {
-							command = LISTEN_CLOSE;
+							command = LISTEN_CLOSE;//D condition for LOAD SAVE end
 						}
 						/* release IEC DATA */
 						release = 1;
@@ -205,7 +209,7 @@ inline extern void iecAttention (void) {
 							/* release IEC DATA */
 							release = 1;
 						} else {
-							command = LISTEN_DATA;
+							command = LISTEN_DATA;// C condition for data from talker
 						}
 					}
 				} else if ((data[0] & 0xe0) == TALK) {
@@ -222,7 +226,7 @@ inline extern void iecAttention (void) {
 					/* delay */
 					iecDelay80();
 					if (!error || (channelNumber == COMMAND_CHANNEL)) {
-						command = TALK_DATA;
+						command = TALK_DATA;// B condition for LOAD INPUT 
 					} else {
 						/* release IEC CLK */
 						CLKOUT_SET;
