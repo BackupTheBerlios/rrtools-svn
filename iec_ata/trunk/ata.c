@@ -44,7 +44,8 @@
 
 #define ATA_DIOW   PB0
 #define ATA_DIOR   PB1
-
+#define PORT_ALE PORTE
+#define BIT_ALE PE1
 /*
 #define ATA_REG_DATA            0x10
 #define ATA_REG_ERROR           0x30
@@ -185,9 +186,21 @@ static void ataGetWord (uint8_t address, uint8_t *dataH, uint8_t *dataL) {
   cli();
   /* set up address */
   //outp ((address & 0xf8) | (inp (PORTB) & 0x07), PORTB);
-  PORTD = (PORTD & 0xC4) | (address & 0x03) | ((address & 0x1C) <<1);
+  #ifdef ATA_ADDRESSLATCH
+	PORTD = (PORTD & 0xC4) | ((address & 0x1C) <<1);
+#else
+	PORTD = (PORTD & 0xC4) | (address & 0x03) | ((address & 0x1C) <<1);
+#endif
   /* disable external SRAM */
   cbi (MCUCR, SRE);
+  #ifdef ATA_ADDRESSLATCH
+	/* set up rest of address if lines are connected to latch */
+	DDRA = 0xff;
+	PORTA = address;
+	sbi (PORT_ALE, BIT_ALE);
+	cbi (PORT_ALE, BIT_ALE);
+#endif
+  
   /* set ATA databus to input */
   outp (0x00, DDRA);
   outp (0x00, DDRC);
@@ -197,6 +210,9 @@ static void ataGetWord (uint8_t address, uint8_t *dataH, uint8_t *dataL) {
   /* assert DIOR */
   cbi (PORTB, ATA_DIOR);
   /* wait a short time */
+  asm volatile ("nop");
+  asm volatile ("nop");
+  asm volatile ("nop");
   asm volatile ("nop");
   /* collect data */
   l = inp (PINA);
@@ -217,12 +233,23 @@ static void ataPutWord (uint8_t address, uint8_t dataH, uint8_t dataL) {
   cli();
   /* set up address */
   //outp ((address & 0xf8) | (inp (PORTB) & 0x07), PORTB);
-  PORTD = (PORTD & 0xC4) | (address & 0x03) | ((address & 0x1C) <<1);
+  #ifdef ATA_ADDRESSLATCH
+	PORTD = (PORTD & 0xC4) | ((address & 0x1C) <<1);
+#else
+	PORTD = (PORTD & 0xC4) | (address & 0x03) | ((address & 0x1C) <<1);
+#endif
   /* set ATA databus to output */
   outp (0xff, DDRA);
   outp (0xff, DDRC);
   /* disable external SRAM */
   cbi (MCUCR, SRE);
+  #ifdef ATA_ADDRESSLATCH  
+	/* set up rest of address if lines are connected to latch */
+	PORTA = address;
+	sbi (PORT_ALE, BIT_ALE);
+	cbi (PORT_ALE, BIT_ALE);
+#endif
+  
   /* wait a short time */
   asm volatile ("nop");
   /* assert DIOW */
