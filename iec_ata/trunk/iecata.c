@@ -40,10 +40,24 @@
 
 #include "iecata.h"
 
+
+#define UART_DEBUG //enable uart debugging
+#define ATA_ADDRESSLATCH//changed connection of pins to free uart
+
+#ifdef UART_DEBUG
+	#define DGB_PRINT(s) uart_putstr(s)
+#else
+	#define DGB_PRINT(s)
+#endif
+
+
 /* include c-files instead of linking; saves program space because
    functions may be declared inline and extern */
 
 
+#ifdef UART_DEBUG
+	#include "uart.c"
+#endif
 
 #include "ata.c"
 #include "iec.c"
@@ -107,12 +121,17 @@ inline extern void init (void) {
   DDRD = 0xFB;
   PORTD = 0xFB;
   
-  DDRE = 0x04;
-  PORTE = 0x04;
+  DDRE = 0x06;
+  PORTE = 0x07;
   
   
   /* enable timer */
   TCCR0 = (1<<CS01); // clk/8
+
+#ifdef UART_DEBUG
+  uart_init();
+  uart_putstr_P( PSTR("Hallo\r\n") );
+#endif
 
   /* setup interrupt */
   sbi (MCUCR, ISC01);
@@ -238,9 +257,6 @@ inline extern bool_t readStatus (struct channelTableStruct *channel) {
   *(buffer++) = '\x0d';    
 track = 0;
 sector = 0;  
-      //memcpy_P (buffer, commandBuffer, bytesReceived);
-
-
 
   /* record buffer length */
   channel->endOfBuffer = buffer - channel->buffer;
@@ -369,7 +385,7 @@ void parseCommand (void) {
 		
 	} else {
 		/* not a valid command */
-		error = 0x30;
+	if (bytesReceived!=0)	{error = 0x30;}
     }
 }
 
@@ -378,8 +394,8 @@ void getBuffer () {
 	
 //(uint8_t *data, bufferSize_t maxBytes, bufferSize_t *bytesReceived
 	eoi=	iecListen (commandBuffer, 255, &bytesReceived);
-
-
+track=bytesReceived;
+sector=commandBuffer[0];
 	if	 (bytesReceived>=254){
 		error = 0x32;
 	}
@@ -391,7 +407,7 @@ void getBuffer () {
 
 
 
-inline extern void parseName (struct channelTableStruct *channel) {
+void parseName (struct channelTableStruct *channel) {
 	
 	uint8_t *bufferPtr;
 	
@@ -636,11 +652,11 @@ int main (void) {
 						do {
 							bufferSize_t bytesReceived;
 							bufferSize_t *bufPtr = &(channel->bufferPtr);
-							/* receive bytes */
+							// receive bytes 
 							eoi = iecListen (channel->buffer + *bufPtr, BLOCKSIZE - *bufPtr, &bytesReceived);
-							/* update bufferPtr */
+							//* update bufferPtr 
 							*bufPtr += bytesReceived;
-							/* save to disk */
+							// save to disk 
 							if (*bufPtr == BLOCKSIZE) { 
 								
 								writeFile (channelNumber);
