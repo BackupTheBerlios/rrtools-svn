@@ -28,6 +28,8 @@ File_WriteByte		= $ffa8
 test_cnt		= $57
 stackp_tmp		= $58
 
+flag_quit_on_failure	= $59
+
 test_result		= $fb
 test_errcode		= $fc
 zp_pnt			= $fd
@@ -57,6 +59,13 @@ test_errcode_map	= test_result_map + $100
 		.text $9e,"2061",0,0,0
 
 		.print (string_header)
+		
+		.print (string_quit_on_failure)
+		jsr input_yes_no
+		sta flag_quit_on_failure
+		
+		lda #$0d
+		jsr $ffd2
 
 		lda #0
 		tax
@@ -100,8 +109,12 @@ next_dir_entry:
 next_test:
 		ldx test_cnt
 		lda test_avail,x
-		beq no_test
+		bne *+5
+		jmp no_test
 
+		lda #$ff
+		sta test_avail,x
+		
 		.print (string_running_pre)
 		lda test_cnt
 		lsr
@@ -152,6 +165,8 @@ normal_fail
 		stx string_failed_result+3
 		sta string_failed_result+4
 		.print (string_failed)
+		lda flag_quit_on_failure
+		bne exit
 end_test:
 no_test:
 		inc test_cnt
@@ -263,12 +278,6 @@ nmi_handler:
 		lda #$80
 		sta test_result_map,x
 		sta test_errcode_map,x
-		inx
-		lda #0
-_1:
-		sta test_avail,x
-		inx
-		bne _1
 		ldx stackp_tmp
 		txs
 		jmp exit
@@ -426,6 +435,26 @@ h2s_caps		= *+1
 		adc #7-1
 		rts
 
+input_yes_no:
+.(
+		jsr $ffe4
+		beq input_yes_no
+		cmp #'n'
+		beq found
+		cmp #'y'
+		bne input_yes_no
+		.byte $24
+found:
+		clc
+		php
+		jsr $ffd2
+		lda #$0d
+		jsr $ffd2
+		plp
+		lda #0
+		rol
+		rts		
+.)
 
 show_map:
 .(
@@ -444,9 +473,13 @@ _1:
 		ldx zp_tmp
 sm_no_cr:
 		lda test_avail,x
-		bne sm_test_avail
-		lda #$9b
+		bmi sm_test_avail
+		bne sm_not_executed
 		ldy #'-'
+		.byte $2c
+sm_not_executed:
+		ldy #'o'		
+		lda #$9b
 		bne sm_print
 sm_test_avail:
 		lda test_result_map,x
@@ -491,9 +524,9 @@ cmd_get_result:
 			.text "m-r",$14,$00,2
 cmd_get_result_len = * - cmd_get_result
 
-
-string_header:		.text $93,$05,$0e,"1541 Test Framework V0.3", $0d
+string_header:		.text $93,$05,$0e,"1541 Test Framework V0.31", $0d
 			.text "by Ninja / The Dreams in 2008",$0d,$0d,0
+string_quit_on_failure:	.text "Quit tests on failure (y/n)? ",0
 string_ok:		.text $99,"OK",$05,$0d,0
 string_ok_data:		.text $99,"OK ("
 string_ok_result:	.text "00/00"

@@ -5,7 +5,7 @@ for file in *.tasm; do
 	dest=${file/\.tasm/.asm}
 	[ -e $temp ] && rm $temp
 	./TMPview -w 16 -i $file -o $temp >/dev/null
-	unexpand -a $temp | sed -f _pc64.sed > $dest
+	unexpand -a $temp | sed -f conv_testsuite.sed > $dest
 	echo $file
 	dreamass -o ${dest/\.asm/.prg} $dest
 	if [ $? -lt 1 ]; then
