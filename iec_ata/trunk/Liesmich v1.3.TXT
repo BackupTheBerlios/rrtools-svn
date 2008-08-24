@@ -1,0 +1,119 @@
+IEC-ATA V2 C-Version V1.3 
+=========================
+Kurz Anleitung. 
+------------
+Das IEC-ATA V2 besteht aus einem Platiene, der vorher zusammen gebaut werden
+muss, siehe Bauanleitung und einer Firmware, die aufgeflasht werden muss.
+Weiter benötigt man
+- Einem IDE kompatieblem Massenspeicher z.B. IDE Festplatte, CF Karte 
+  mit IDE Adapter u.s.w. Wobei die Festplatten am besten arbeiten.
+  Es Können Medien bis 128 GB angesprochen werden.
+  Größere werden allerdings bis zur 128 GB Grenzte benutzt.  
+  Diese müssen LBA Mode verwenden.
+- Passende Stromversorgungen für die Festplatte und der Platine.
+
+Funktion:
+- Die gesamte Disk ist wie eine große Partition  
+- Es werden Standard Commodore Kernal Kommandos unterstützt.
+  im Gegensatz zur alten Version kann man nun auch Jiffidos oder Aktionreplay benutzen.
+  Wobei die Schnelllader nicht funktionieren.
+- Es können unter Anderem folgende Geräte verwendet werden 
+  VIC 20,C64,C128,C16....
+- Keine Software auf dem Computer nötig.
+- Das File System hat folgende Funktionen:   
+  - Unterstützung von PRG und SEQ Files und zusätzlich 
+    DIR für Unterverzeichnisse.
+  - Maximale File Größe ist 32 MB
+  - In einem Unterverzeichnis können maximal 256 Einträge sein.
+  - Es können unbegrenzt Unterverzeichnisse angelegt werden.
+
+Gebrauch
+--------
+Verbinde die IEC-ATA V2 Platine mit dem Computer und mit der Festplatte.
+Versorge beide mit den notwendigen Spannungen.
+Bei der Verwendung einer CF-Karte kann in manchen Fällen auf eine Versorgung 
+verzichtet werden. Auch die Platine kann man mit Power over IDE versorgen, 
+dazu ist der Jumper BUS POWER zu schlissen.
+Nach dem Einschalten muss die rote LED aus gehen.
+Wenn sie das nach einigen Sekunden nicht tut ist etwas mit der Festplatte 
+nicht in Ordnung.
+
+Das Laufwerk hat die Geräte Nummer 14
+Diese kann geändert werden, indem man im File iec.c entsprechend
+ändert und alles neu compiliert.
+
+
+Auf dem Befehlskanal 15 können folgende Kommandos erkannt werden: 
+
+
+
+- CD:<Unterverzeichnis>
+  springe in  Unterverzeichnis
+- MD:<Unterverzeichnis>
+  Erzeugt Unterverzeichnis
+- RD:<Unterverzeichnis>
+  Löscht Unterverzeichnis. Das Unterverzeichnis muss leer sein.
+- S:<File>
+  Löscht Files
+- R:<neuer-File>=<alter-File>
+  Umbenennen von Files
+- N
+  Formatiert Festplatte.
+- I
+  Initialisiert die Festplatte  (wird ignoriert)
+- Es können Ersatzzeichen wie * und ? benutzt werden, wie beim Commodore DOS
+  Das LOAD und SAVE funktioniert so wie bei der 1541.
+  Auch das erzeugen von SEQ Files ist wie bei den Commodore Laufwerken möglich.
+
+
+Im Error Kanal können folgende Fehler ausgegeben werden. 
+
+- 00: Kein Fehler
+- 74: Initialisierungs Fehler, auf der Festplatte ist nicht das erforderliche 
+      File System.
+- 25: Erzeugungs Fehler, das File oder Unterverzeichnis konnte nicht erzeugt werden. 
+- 61: Nicht geöffnet, sie versuchten ein File zu verwenden, der nicht offen war. 
+- 62: Nicht gefunden, das gesuchte File oder Unterverzeichnis ist nicht vorhanden.
+- 30: Syntax Fehler, das an den Kommando Kanal geschickte konnte nicht
+      interpretiert werden.
+- 73: Version Mitteilung, dies erscheint nach einem Reset. 
+
+Beispiele
+---------
+
+Ein Programm in BASIC laden:
+
+  LOAD"filename",14
+
+Ein Programm in BASIC speichern:
+
+  SAVE"filename",14
+
+Ein Unterverzeichnis laden:
+
+  LOAD"$",14
+
+
+In ein Unterverzeichnis wechsen:
+
+  OPEN1,14,15,"CD:mydir":CLOSE1
+
+Festplatte formatieren:
+  OPEN1,14,15,"N":CLOSE1
+
+Bekannte Probleme:
+
+Beim Formatieren (N) bleibt die Software gerne hängen. In dem Fall warten bis die HD LED aus 
+ist und dann einen Reset auslösen.
+
+Wenn die rote LED an bleibt ist die Festplatte defekt, keine LBA oder die Daten sind nicht 
+richtig angekommen. In dem Fall eine andere Festplatte verwenden oder diese löschen und 
+nochmal versuchen  
+
+Die IEC Software ist zwar schon bedeutend besser als die alte, aber leider kommt es von Zeit zu Zeit zu Problemen.
+
+Die Software ist nicht 100% sicher. Bitte keine wichtigen Daten verwenden.
+ 
+
+--
+Asbjørn Djupdal, 2002, dienstagtreff, 2005 SKERN

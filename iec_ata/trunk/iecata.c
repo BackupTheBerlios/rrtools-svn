@@ -254,7 +254,8 @@ inline extern bool_t readStatus (struct channelTableStruct *channel) {
   *(buffer++) = ',';
   *(buffer++) = (sector >> 4) | '0';
   *(buffer++) = (sector & 0x0f) | '0';
-  *(buffer++) = '\x0d';    
+  *(buffer++) = '\x0d';  
+ 
 track = 0;
 sector = 0;  
 
