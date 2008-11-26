@@ -1,3 +1,8 @@
+
+/*
+ * prg2ul by Wolfram Sang (Ninja/The Dreams) - Public Domain
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 

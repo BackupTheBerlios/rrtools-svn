@@ -1,13 +1,10 @@
 # Set step size 2 (number is 0)
 &+ 2
-true
-true-23.42
-false-fe.03
+dummy-true0
+dummy-true23
+dummy-false
 
 # Set test-number to $10 with step size 1
 & 0x10
 &+ 1
-wait-4sec
-wait-6sec
-# Next test must not appear in result map!
-true
+dummy-wait4
