@@ -124,9 +124,9 @@ directory of the testsuite. Just a few rules:
 - Please, include the file '1541-tests.inc' and use the labels defined there.
   This will make future changes a lot easier.
 
-- Embrace your tests with the .start_test and .end_test macros.
+- Mark your entry point with '.start_test' and your exit point with '.end_test'.
 
-- Don't use RTS at the end. This will be done by .end_test.
+- Don't use RTS to exit. This will be done by '.end_test'.
 
 You might simply take some dummy-*.asm file as a template. You can use the
 'make tests' target to compile just the tests. Please make sure you add
