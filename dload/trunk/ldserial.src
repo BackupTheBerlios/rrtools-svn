@@ -44,7 +44,7 @@ ShutUp0:
 	bvc ShutUp0
 	lda LdHostDdr
 	and #3
-	eor #Serial_clk|3	; so nicht portierbar!
+	eor #Serial_Clk|3	; so nicht portierbar!
 	sta LdHostDp
 #endif
 	jsr ShutUp1
