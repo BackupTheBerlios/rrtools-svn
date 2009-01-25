@@ -19,5 +19,7 @@ SubInclude TOP demo stress1 ;
 SubInclude TOP demo stress2 ;
 SubInclude TOP demo stress3 ;
 SubInclude TOP demo stress4 ;
+SubInclude TOP demo stress5 ;
+SubInclude TOP demo stress6 ;
 
 #--------------------------------------
