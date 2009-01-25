@@ -144,18 +144,25 @@ Psy_Err_Read:
 	rts
 #else
 	#ifdef LdFlag_PresetAE
+		#if (isdef LdFlag_RememberStart)==1 && (isdef LdFlag_RememberStart_EvenIfPreset)==1
+			lda LdLAE
+			ldx LdLAE+1
+		#endif
 		bit LdZp_PresetAE
-		bmi PresetAE
+		#if (isdef LdFlag_RememberStart)==1 && (isdef LdFlag_RememberStart_EvenIfPreset)==1
+			bmi PresetAE_Always
+		#else
+			bmi PresetAE
+		#endif
 	#endif
 		lda LdBf+2
+		ldx LdBf+3
 		sta LdLAE
+		stx LdLAE+1
+	PresetAE_Always:
 	#ifdef LdFlag_RememberStart
 		sta LdLC1
-	#endif
-		lda LdBf+3
-		sta LdLAE+1
-	#ifdef LdFlag_RememberStart
-		sta LdLC1+1
+		stx LdLC1+1
 	#endif
 	PresetAE:
 		ldx #2

@@ -12,7 +12,7 @@
 ; eg. 12.41 = $1241. !!! Note that .3==.30 !!! So Subversion 3 is .03 .
 ;--------------------------------------
 
-#if LdCfgVer<$0206
+#if LdCfgVer<$0208
 #error "Update your LdConfig!"
 #endif
 
