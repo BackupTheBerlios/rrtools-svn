@@ -56,8 +56,14 @@ OpenFile:
 LoadFile:
 #endif
 	sta SelfMod_FileNameLen+1
+; use LdLC1 when possible (LdFlag_RememberStart is defined and LdFlag_OpenGetInterface not)
+#if (isdef LdFlag_RememberStart)==1 && (isdef LdFlag_OpenGetInterface)==0
+	stx LdLC1
+	sty LdLC1+1
+#else
 	stx PatchFileNamePtr+1
 	sty PatchFileNamePtr+2
+#endif
         ldx #0
 	ldy #1
 
@@ -73,8 +79,13 @@ Find0:
 	bne Find3
 	tay
 Find1:
+; use LdLC1 when possible (LdFlag_RememberStart is defined and LdFlag_OpenGetInterface not)
+#if (isdef LdFlag_RememberStart)==1 && (isdef LdFlag_OpenGetInterface)==0
+	lda (LdLC1),y
+#else
 PatchFileNamePtr:
 	lda $ffff,y
+#endif
 	cmp #'*'
 	beq Find4
 	cmp #'?'
