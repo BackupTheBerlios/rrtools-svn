@@ -180,11 +180,7 @@ inline extern void iecAttention (void) {
 			if(idx == 0){
 				if ((data[0] & 0x1f) == devicenumber){
 					
-				}else if (data[0] == UNLISTEN) {
-					command = UNLISTEN;
-					release = 1;
-				}else if (data[0] == UNTALK){
-					command = UNTALK;
+				}else if ((data[0] == UNLISTEN) || (data[0] == UNTALK)){
 					release = 1;
 				}else{
 					iecUnAttention();
