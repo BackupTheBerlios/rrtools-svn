@@ -24,6 +24,6 @@
 #define CBMIMAGER_APPLICATION_NAME "CBMImager"
 #define CBMIMAGER_VER_MAJ 0
 #define CBMIMAGER_VER_MIN 2
-#define CBMIMAGER_VER_SUB 5
+#define CBMIMAGER_VER_SUB 6
 
 #endif	// __cbmimager_version_h__

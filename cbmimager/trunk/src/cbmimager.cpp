@@ -38,6 +38,8 @@
 #endif
 
 #include <wx/config.h>
+#include "wx/cmdline.h"
+#include "wx/log.h"
 #include "wx/dnd.h"
 #include "wx/ffile.h"
 #include "wx/filedlg.h"
@@ -67,6 +69,23 @@
 #include "Logic/cbmdirectory.h"
 #include "Logic/T64Reader.h"
 #include "Logic/cbmimageconverter.h"
+
+
+static const wxCmdLineEntryDesc cmdLineDesc[] =
+{
+    { wxCMD_LINE_SWITCH, "q", "quiet",   "don't open a window" },
+
+	{ wxCMD_LINE_OPTION, "f", "format",  "file format: D64 or DFI" },
+    { wxCMD_LINE_OPTION, "o", "output",  "output file" },
+
+    { wxCMD_LINE_PARAM,  NULL, NULL, "input file", wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_MULTIPLE },
+
+    { wxCMD_LINE_NONE }
+};
+
+
+bool beQuiet = false;
+wxLog *logger = NULL;
 
 
 ////@begin XPM images
@@ -150,12 +169,14 @@ CBMImager::CBMImager(void)
 CBMImager::CBMImager( wxWindow* parent, wxWindowID id, long style )
 {
 	Init();
-	Create(parent, id, style);
+	if (!beQuiet)
+		Create(parent, id, style);
 }
 
 CBMImager::~CBMImager(void)
 {
-	writeConfig();
+	if (!beQuiet)
+		writeConfig();
 }
 
 /*!
@@ -208,7 +229,135 @@ void CBMImager::Init()
 	isDragSource = false;
 
 	ptConfigFile = NULL;
+
+	// Parse Command Line
+	wxCmdLineParser parser;
+	CbmImageType imageType = D64;
+	wxString imageFormat = "D64";
+	wxString outputFile;
+	wxArrayString inputFiles;
+
+	// CmdLineParser ist DOOF, bei Fehler zeigt der immer eine MessageBox !  :-(((
+	int argc;
+	wxChar** argv;
+
+	argc = wxTheApp->argc;
+	argv = wxTheApp->argv;
+	for (int i = 1; i < argc; i++)
+	{
+		wxString param = argv[i];
+		if (param.StartsWith("-") || param.StartsWith("/"))
+		{
+			param = param.Right(param.Len() - 1);
+			param.MakeUpper();
+			if (param == "Q")
+			{
+				beQuiet = true;
+			}
+			else if (param == "O")
+			{
+				i++;
+				if (argc > i)
+				{
+					outputFile = argv[i];
+				}
+			}
+			else if (param == "F")
+			{
+				i++;
+				if (argc > i)
+				{
+					imageFormat = argv[i];
+					imageFormat.MakeUpper();
+					if (imageFormat == "D64")
+						imageType = D64;
+					else if (imageFormat == "DFI")
+						imageType = DFI;
+					else
+					{
+						CmdLineUsage();
+						return;
+					}
+				}
+			}
+			else
+			{
+				// Unknown Switch
+				CmdLineUsage();
+				return;
+			}
+		}
+		else
+		{
+			// treat rest of param as input files
+			inputFiles.Add(argv[i]);
+		}
+	}
+
+	if (outputFile.Len() == 0 || inputFiles.GetCount() == 0)
+	{
+		CmdLineUsage();
+		return;
+	}
+
+	logger = new wxLogStderr();
+	wxLog::SetActiveTarget(logger);
+
+	wxLogMessage("Creatíng %s Image", imageFormat);
+
+	switch (imageType)
+	{
+		case DFI:
+			cbmImage = new CDFIImage();
+			break;
+		case D64:
+			cbmImage = new CD64Image();
+			break;
+	}
+	cbmDir = new CCbmDirectory(cbmImage);
+
+	for (size_t i = 0; i < inputFiles.GetCount(); i++)
+	{
+		wxLogMessage("Adding File %s", inputFiles.Item(i));
+		AddFile(inputFiles.Item(i));
+	}
+	wxLogMessage("Writing Image to %s...", outputFile);
+	wxFFile f(outputFile, wxT("wb"));
+	if (f.IsOpened())
+	{
+		int length = cbmImage->GetImageLength();
+		unsigned char *buffer = (unsigned char*)malloc(length);
+		cbmImage->ReadContent(buffer, 0, length);
+		f.Write(buffer, length);
+		f.Close();
+		free(buffer);
+		wxLogMessage("Success");
+	}
+	else
+		wxLogMessage("Failed to open Target File");
+	
+	cbmImage->SetDirty(false);
 }
+
+void CBMImager::CmdLineUsage()
+{
+	logger = new wxLogStderr();
+	wxLog::SetActiveTarget(logger);
+
+	wxLogMessage(wxTRANSLATE("%s V %d.%d.%d (w) 2006-2009 UncleTom & DocBacardi"),
+		wxT(CBMIMAGER_APPLICATION_NAME), CBMIMAGER_VER_MAJ, CBMIMAGER_VER_MIN, CBMIMAGER_VER_SUB);
+	wxLogMessage("Usage: %s <switches> <input files...>");
+	wxLogMessage("Switches:");
+	wxLogMessage("-q\tDo not display the GUI");
+	wxLogMessage("-f\tImage Format (D64 or DFI)");
+	wxLogMessage("-o\tOutput Filename");
+}
+
+bool CBMImager::ShouldAbort()
+{
+	return beQuiet;
+}
+
 /*!
  * Control creation for CBMImager
  */
@@ -1590,6 +1739,11 @@ void CBMImager::AddFile(wxString& filename)
 
 	if (!cbmImage->GetNextFreeSector(1, 0, &track, &sector))
 	{
+		if (beQuiet)
+		{
+			wxLogError(wxT("Failed to add file %s, disk is full"), filename);
+			return;
+		}
 		wxMessageDialog* dialog = new wxMessageDialog(this,
 			wxT("Disk full"), wxT(CBMIMAGER_APPLICATION_NAME), wxOK | wxICON_ERROR);
 		dialog->ShowModal();
@@ -1621,6 +1775,11 @@ void CBMImager::AddFile(wxString& filename)
 	// Check if a File with this name already exist
 	if (cbmDir->SearchFile(cbmImage, (const char*)aucFilenameBuffer, false, false) == true)
 	{
+		if (beQuiet)
+		{
+			wxLogError("%s: File already exist", aucFilenameBuffer);
+			return;
+		}
 		CRenameDialog dialog(this, filename);
 		if (dialog.ShowModal() == wxID_OK)
 		{
@@ -1640,6 +1799,11 @@ void CBMImager::AddFile(wxString& filename)
 	}
 	catch (char *text)
 	{
+		if (beQuiet)
+		{
+			wxLogError("Failed to add File %s: %s", filename, text);
+			return;
+		}
 		wxMessageDialog* dialog = new wxMessageDialog(this,
 			wxString::FromAscii(text), wxT(CBMIMAGER_APPLICATION_NAME), wxOK | wxICON_ERROR);
 		dialog->ShowModal();
@@ -1652,6 +1816,11 @@ void CBMImager::AddFile(wxString& filename)
 	// Maybe we allocated a new Directory Sector in CreateNewEntry(), so check again for free sectors for the file
 	if (!cbmImage->GetNextFreeSector(1, 0, &track, &sector))
 	{
+		if (beQuiet)
+		{
+			wxLogError(wxT("Failed to add file %s, disk is full"), filename);
+			return;
+		}
 		wxMessageDialog* dialog = new wxMessageDialog(this,
 			wxT("Disk full"), wxT(CBMIMAGER_APPLICATION_NAME), wxOK | wxICON_ERROR);
 		dialog->ShowModal();
@@ -1667,6 +1836,11 @@ void CBMImager::AddFile(wxString& filename)
 		entry->SetBlocksUsed(entry->GetBlocksUsed() + 1);
 		if (!cbmImage->AllocateSector(track, sector))
 		{
+			if (beQuiet)
+			{
+				wxLogError(wxT("Failed to add file %s, disk is full"), filename);
+				return;
+			}
 			wxMessageDialog* dialog = new wxMessageDialog(this,
 				wxT("Disk full"), wxT(CBMIMAGER_APPLICATION_NAME), wxOK | wxICON_ERROR);
 			dialog->ShowModal();
@@ -1684,6 +1858,11 @@ void CBMImager::AddFile(wxString& filename)
 		{
 			if (!cbmImage->GetNextFreeSector(track, sector, &newTrack, &newSector))
 			{
+				if (beQuiet)
+				{
+					wxLogError(wxT("Failed to add file %s, disk is full"), filename);
+					return;
+				}
 				wxMessageDialog* dialog = new wxMessageDialog(this,
 					wxT("Disk full"), wxT(CBMIMAGER_APPLICATION_NAME), wxOK | wxICON_ERROR);
 				dialog->ShowModal();
@@ -1724,7 +1903,8 @@ void CBMImager::AddFile(wxString& filename)
 	entry->Write(cbmImage);
 	delete entry;
 
-	ReadCbmDirectory();
+	if (!beQuiet)
+		ReadCbmDirectory();
 }
 
 

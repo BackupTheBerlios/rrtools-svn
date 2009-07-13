@@ -110,6 +110,9 @@ bool CbmImagerApp::OnInit()
 	// create the main window
 	mainWindow = new CBMImager(NULL, ID_CBMIMAGER);
 
+	if (mainWindow->ShouldAbort())
+		return false;
+
 	// show the main window
 	mainWindow->Show(true);
 	SetTopWindow(mainWindow);
@@ -126,7 +129,8 @@ int CbmImagerApp::OnExit()
 
 
 	pConfig = wxConfigBase::Set((wxConfigBase *) NULL);
-	if( pConfig!=NULL ) {
+	if( pConfig!=NULL ) 
+	{
 		delete pConfig;
 	}
 

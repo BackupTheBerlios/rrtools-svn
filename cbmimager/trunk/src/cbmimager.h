@@ -175,6 +175,7 @@ public:
 	CbmImageType GetCurrentImageType();
 	bool IsDragSource();
 	void SetItemUnderCursor(int index);
+	bool ShouldAbort();
 
 private:
 	wxBitmap image;
@@ -191,6 +192,7 @@ private:
 
 	wxString GetApplicationPath(void);
 	void ShowVersionInfo(void);
+	void CmdLineUsage();
 
 	void readConfig(void);
 	void writeConfig(void);
